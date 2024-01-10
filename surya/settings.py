@@ -10,8 +10,7 @@ import os
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
-    MODEL_CHECKPOINT: str = "vikp/line_detector"
-    BATCH_SIZE: int = 4
+    MODEL_CHECKPOINT: str = "vikp/line_detector4"
     IMAGE_DPI: int = 96
 
     # Paths
@@ -29,6 +28,7 @@ class Settings(BaseSettings):
             return "cuda"
 
         # MPS returns garbled results for some reason
+        # Maybe related to https://github.com/pytorch/pytorch/issues/84936
         #if torch.backends.mps.is_available():
         #    return "mps"
 
@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     @property
     def MODEL_DTYPE(self) -> torch.dtype:
         return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
+
+    BATCH_SIZE: int = 2 if TORCH_DEVICE_MODEL == "cpu" else 16
 
 
     class Config:

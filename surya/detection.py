@@ -9,6 +9,7 @@ from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
 from surya.model.processing import prepare_image, split_image
 from surya.settings import settings
+from torch.profiler import profile, record_function, ProfilerActivity
 
 
 def batch_inference(images: List, model, processor):
@@ -39,18 +40,20 @@ def batch_inference(images: List, model, processor):
             pred = model(pixel_values=batch)
 
         logits = pred.logits
-        if logits.shape[-2:] != batch.shape[-2:]:
-            # Upsample logits to orig size if needed
-            logits = nn.functional.interpolate(
-                logits,
-                size=batch.shape[-2:],
-                mode="bilinear",
-                align_corners=False,
-            )
-
         for j in range(logits.shape[0]):
             heatmap = logits[j, 0, :, :].detach().cpu().numpy()
             affinity_map = logits[j, 1, :, :].detach().cpu().numpy()
+
+            heatmap_shape = list(heatmap.shape)
+            correct_shape = [processor.size["height"], processor.size["width"]]
+            cv2_size = [processor.size["width"], processor.size["height"]]
+
+            if heatmap_shape != correct_shape:
+                heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
+
+            affinity_shape = list(affinity_map.shape)
+            if affinity_shape != correct_shape:
+                affinity_map = cv2.resize(affinity_map, cv2_size, interpolation=cv2.INTER_LINEAR)
 
             pred_parts.append((heatmap, affinity_map))
 
@@ -63,7 +66,7 @@ def batch_inference(images: List, model, processor):
             pred_heatmap = pred_parts[i][0]
             pred_affinity = pred_parts[i][1]
 
-            if height != processor.size["height"]:
+            if height < processor.size["height"]:
                 # Cut off padding to get original height
                 pred_heatmap = pred_heatmap[:height, :]
                 pred_affinity = pred_affinity[:height, :]

@@ -22,6 +22,7 @@ def clean_contained_boxes(boxes):
 
 
 def detect_boxes(linemap, text_threshold, low_text):
+    # From CRAFT - https://github.com/clovaai/CRAFT-pytorch
     # prepare data
     linemap = linemap.copy()
     img_h, img_w = linemap.shape

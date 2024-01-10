@@ -5,6 +5,7 @@ experiments
 test_data
 training
 wandb
+notebooks
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
