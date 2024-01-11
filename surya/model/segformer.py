@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union
 import math
+import os
 
 from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerImageProcessor, \
     SegformerDecodeHead, SegformerModel
@@ -66,7 +67,7 @@ class SegformerForRegressionMask(SegformerForSemanticSegmentation):
     def __init__(self, config):
         super().__init__(config)
         self.segformer = SegformerModel(config)
-        self.decode_head = SegformerDecodeHead(config) #SegformerForMaskDecodeHead(config)
+        self.decode_head = SegformerForMaskDecodeHead(config)
 
         # Initialize weights and apply final processing
         self.post_init()

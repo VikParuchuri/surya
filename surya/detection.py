@@ -9,7 +9,6 @@ from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
 from surya.model.processing import prepare_image, split_image
 from surya.settings import settings
-from torch.profiler import profile, record_function, ProfilerActivity
 
 
 def batch_inference(images: List, model, processor):
@@ -46,7 +45,7 @@ def batch_inference(images: List, model, processor):
 
             heatmap_shape = list(heatmap.shape)
             correct_shape = [processor.size["height"], processor.size["width"]]
-            cv2_size = [processor.size["width"], processor.size["height"]]
+            cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
 
             if heatmap_shape != correct_shape:
                 heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)

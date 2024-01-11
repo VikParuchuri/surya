@@ -10,20 +10,21 @@ from surya.settings import settings
 
 def split_image(img, processor):
     img_height = list(img.size)[1]
-    max_height = processor.size["height"]
+    max_height = settings.IMAGE_CHUNK_HEIGHT
+    processor_height = processor.size["height"]
     if img_height > max_height:
-        num_splits = math.ceil(img_height / max_height)
+        num_splits = math.ceil(img_height / processor_height)
         splits = []
         split_heights = []
         for i in range(num_splits):
-            top = i * max_height
-            bottom = (i + 1) * max_height
+            top = i * processor_height
+            bottom = (i + 1) * processor_height
             if bottom > img_height:
                 bottom = img_height
             cropped = img.crop((0, top, img.size[0], bottom))
             height = bottom - top
-            if height < max_height:
-                cropped = ImageOps.pad(cropped, (img.size[0], max_height), color=255, centering=(0, 0))
+            if height < processor_height:
+                cropped = ImageOps.pad(cropped, (img.size[0], processor_height), color=255, centering=(0, 0))
             splits.append(cropped)
             split_heights.append(height)
         return splits, split_heights

@@ -1,9 +1,15 @@
 [tool.poetry]
 name = "surya"
 version = "0.1.0"
-description = ""
+description = "Multilingual document OCR toolkit for text detection and recognition"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/VikParuchuri/surya"
+keywords = ["ocr", "pdf", "text detection", "text recognition"]
+include = [
+    "detect_text.py",
+]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
@@ -22,6 +28,11 @@ filetype = "^1.2.0"
 jupyter = "^1.0.0"
 pytesseract = "^0.3.10"
 pymupdf = "^1.23.8"
+snakeviz = "^2.2.0"
+datasets = "^2.16.1"
+
+[tool.poetry.scripts]
+surya_detect = "detect_text:main"
 
 [build-system]
 requires = ["poetry-core"]

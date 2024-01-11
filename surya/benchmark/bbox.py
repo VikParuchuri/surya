@@ -18,4 +18,5 @@ def get_pdf_lines(pdf_path, img_sizes):
         pwidth, pheight = page_box[2] - page_box[0], page_box[3] - page_box[1]
         line_boxes = [rescale_bbox(bbox, (pwidth, pheight), img_size) for bbox in line_boxes]
         page_lines.append(line_boxes)
+
     return page_lines

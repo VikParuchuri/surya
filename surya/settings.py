@@ -10,13 +10,17 @@ import os
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
-    MODEL_CHECKPOINT: str = "vikp/line_detector4"
+    MODEL_CHECKPOINT: str = "vikp/line_detector_sd2"
     IMAGE_DPI: int = 96
+    IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
 
     # Paths
     BASE_DIR: str = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
     DATA_DIR: str = os.path.join(BASE_DIR, "data")
     RESULT_DIR: str = os.path.join(BASE_DIR, "results")
+
+    # Benchmarking
+    BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
 
     @computed_field
     @property
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
     def MODEL_DTYPE(self) -> torch.dtype:
         return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
 
-    BATCH_SIZE: int = 2 if TORCH_DEVICE_MODEL == "cpu" else 16
+    BATCH_SIZE: int = 1 if TORCH_DEVICE_MODEL == "cpu" else 32
 
 
     class Config:
