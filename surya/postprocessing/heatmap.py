@@ -4,6 +4,7 @@ import math
 from PIL import ImageDraw
 
 from surya.postprocessing.util import rescale_bbox
+from surya.settings import settings
 
 
 def clean_contained_boxes(boxes):
@@ -87,7 +88,7 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, labels
 
 
-def get_detected_boxes(textmap, text_threshold=.6,  low_text=.35):
+def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_NMS_THRESHOLD):
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)

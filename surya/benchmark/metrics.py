@@ -34,16 +34,14 @@ def calculate_coverage(box, other_boxes):
 
     # find total coverage of the box
     covered_pixels = set()
-    double_coverage = 0
+    double_coverage = set()
     for other_box in other_boxes:
         ia = intersection_pixels(box, other_box)
-        covered_pixels_len = len(covered_pixels)
+        double_coverage = double_coverage.union(covered_pixels.intersection(ia))
         covered_pixels = covered_pixels.union(ia)
 
-        # We want to penalize overlapping a region twice, since this can lead to inaccurate OCR
-        double_coverage += (len(ia) + covered_pixels_len) - len(covered_pixels)
-
-    covered_pixels_count = max(0, len(covered_pixels) - double_coverage)
+    # Penalize double coverage - having multiple bboxes overlapping the same pixels
+    covered_pixels_count = max(0, len(covered_pixels) - len(double_coverage) // 2)
     return covered_pixels_count / box_area
 
 

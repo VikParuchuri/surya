@@ -1,6 +1,4 @@
 from typing import Optional, Tuple, Union
-import math
-import os
 
 from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerImageProcessor, \
     SegformerDecodeHead, SegformerModel
@@ -11,7 +9,7 @@ from transformers.modeling_outputs import SemanticSegmenterOutput
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
     config = SegformerConfig.from_pretrained(checkpoint)
     model = SegformerForRegressionMask.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
     if "mps" in device:
@@ -21,15 +19,15 @@ def load_model(checkpoint=settings.MODEL_CHECKPOINT, device=settings.TORCH_DEVIC
     return model
 
 
-def load_processor(checkpoint=settings.MODEL_CHECKPOINT):
+def load_processor(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT):
     processor = SegformerImageProcessor.from_pretrained(checkpoint)
     return processor
 
 
 class SegformerForMaskMLP(nn.Module):
-    def __init__(self, config: SegformerConfig, input_dim):
+    def __init__(self, config: SegformerConfig, input_dim, output_dim):
         super().__init__()
-        self.proj = nn.Linear(input_dim, config.decoder_layer_hidden_size)
+        self.proj = nn.Linear(input_dim, output_dim)
 
     def forward(self, hidden_states: torch.Tensor):
         hidden_states = hidden_states.flatten(2).transpose(1, 2)
@@ -40,16 +38,18 @@ class SegformerForMaskMLP(nn.Module):
 class SegformerForMaskDecodeHead(SegformerDecodeHead):
     def __init__(self, config):
         super().__init__(config)
+        decoder_layer_hidden_size = getattr(config, "decoder_layer_hidden_size", config.decoder_hidden_size)
+
         # linear layers which will unify the channel dimension of each of the encoder blocks to the same config.decoder_hidden_size
         mlps = []
         for i in range(config.num_encoder_blocks):
-            mlp = SegformerForMaskMLP(config, input_dim=config.hidden_sizes[i])
+            mlp = SegformerForMaskMLP(config, input_dim=config.hidden_sizes[i], output_dim=decoder_layer_hidden_size)
             mlps.append(mlp)
         self.linear_c = nn.ModuleList(mlps)
 
         # the following 3 layers implement the ConvModule of the original implementation
         self.linear_fuse = nn.Conv2d(
-            in_channels=config.decoder_layer_hidden_size * config.num_encoder_blocks,
+            in_channels=decoder_layer_hidden_size * config.num_encoder_blocks,
             out_channels=config.decoder_hidden_size,
             kernel_size=1,
             bias=False,

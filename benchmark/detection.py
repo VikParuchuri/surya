@@ -10,6 +10,7 @@ from surya.model.segformer import load_model, load_processor
 from surya.model.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
 from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 import os
 import time
@@ -46,7 +47,11 @@ def main():
         dataset = datasets.load_dataset(settings.BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
         images = [i.convert("RGB") for i in images]
-        correct_boxes = dataset["bboxes"]
+        correct_boxes = []
+        for i, boxes in enumerate(dataset["bboxes"]):
+            img_size = images[i].size
+            # 1000,1000 is bbox size for doclaynet
+            correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
     start = time.time()
     predictions = batch_inference(images, model, processor)
@@ -112,10 +117,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-

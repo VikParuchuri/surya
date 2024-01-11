@@ -19,7 +19,7 @@ def main():
     parser.add_argument("input_path", type=str, help="Path to pdf or image file to detect bboxes in.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "surya"))
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
-    parser.add_argument("--no-images", action="store_true", help="Don't save images of detected bboxes.", default=False)
+    parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
@@ -47,7 +47,7 @@ def main():
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    if not args.no_images:
+    if args.images:
         for idx, (image, pred) in enumerate(zip(images, predictions)):
             bbox_image = draw_bboxes_on_image(pred["bboxes"], copy.deepcopy(image))
             bbox_image.save(os.path.join(result_path, f"{idx}_bbox.png"))

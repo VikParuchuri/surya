@@ -10,7 +10,7 @@ from surya.settings import settings
 
 def split_image(img, processor):
     img_height = list(img.size)[1]
-    max_height = settings.IMAGE_CHUNK_HEIGHT
+    max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
     processor_height = processor.size["height"]
     if img_height > max_height:
         num_splits = math.ceil(img_height / processor_height)

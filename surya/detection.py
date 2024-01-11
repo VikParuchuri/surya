@@ -28,8 +28,8 @@ def batch_inference(images: List, model, processor):
     image_splits = [prepare_image(image, processor) for image in image_splits]
 
     pred_parts = []
-    for i in range(0, len(image_splits), settings.BATCH_SIZE):
-        batch = image_splits[i:i+settings.BATCH_SIZE]
+    for i in range(0, len(image_splits), settings.DETECTOR_BATCH_SIZE):
+        batch = image_splits[i:i+settings.DETECTOR_BATCH_SIZE]
         # Batch images in dim 0
         batch = torch.stack(batch, dim=0)
         batch = batch.to(model.dtype)
@@ -40,8 +40,8 @@ def batch_inference(images: List, model, processor):
 
         logits = pred.logits
         for j in range(logits.shape[0]):
-            heatmap = logits[j, 0, :, :].detach().cpu().numpy()
-            affinity_map = logits[j, 1, :, :].detach().cpu().numpy()
+            heatmap = logits[j, 0, :, :].detach().cpu().numpy().astype(np.float32)
+            affinity_map = logits[j, 1, :, :].detach().cpu().numpy().astype(np.float32)
 
             heatmap_shape = list(heatmap.shape)
             correct_shape = [processor.size["height"], processor.size["width"]]
