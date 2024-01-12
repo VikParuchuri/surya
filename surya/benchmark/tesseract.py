@@ -13,7 +13,7 @@ def tesseract_bboxes(img):
     bboxes = []
     n_boxes = len(ocr['level'])
     for i in range(n_boxes):
-        # TODO: it is possible to merge by line here, but it gives bad results.  Find another way to get line-level.
+        # It is possible to merge by line here with line number, but it gives bad results.
         _, x, y, w, h = ocr['text'][i], ocr['left'][i], ocr['top'][i], ocr['width'][i], ocr['height'][i]
         bbox = (x, y, x + w, y + h)
         bboxes.append(bbox)
@@ -28,7 +28,7 @@ def tesseract_parallel(imgs):
     tess_parallel_cores = min(tess_parallel_cores, cpus)
 
     # Tesseract uses 4 threads per instance
-    tess_parallel = tess_parallel_cores // 4
+    tess_parallel = max(tess_parallel_cores // 4, 1)
 
     with ProcessPoolExecutor(max_workers=tess_parallel) as executor:
         tess_bboxes = executor.map(tesseract_bboxes, imgs)

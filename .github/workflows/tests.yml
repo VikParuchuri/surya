@@ -1,0 +1,33 @@
+name: Integration test
+
+on: [push]
+
+env:
+  TORCH_DEVICE: "cpu"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+      - name: Install python dependencies
+        run: |
+          pip install poetry
+          poetry install
+          poetry remove torch
+          poetry run pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run benchmark test
+        run: |
+          poetry run python benchmark/detection.py --max 2
+          poetry run python scripts/verify_benchmark_scores.py results/benchmark/doclaynet_bench/results.json
+        
+          
+

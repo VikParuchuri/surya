@@ -32,9 +32,8 @@ class Settings(BaseSettings):
     DETECTOR_NMS_THRESHOLD: float = 0.35 # Threshold for non-maximum suppression
 
     # Paths
-    BASE_DIR: str = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-    DATA_DIR: str = os.path.join(BASE_DIR, "data")
-    RESULT_DIR: str = os.path.join(BASE_DIR, "results")
+    DATA_DIR: str = "data"
+    RESULT_DIR: str = "results"
 
     @computed_field
     @property
