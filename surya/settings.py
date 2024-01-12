@@ -24,8 +24,8 @@ class Settings(BaseSettings):
         return "cpu"
 
     # Text detection
-    DETECTOR_BATCH_SIZE: int = 2 if TORCH_DEVICE_MODEL == "cpu" else 32
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector_sd2"
+    DETECTOR_BATCH_SIZE: int = 2 if TORCH_DEVICE_MODEL == "cpu" else 64
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector"
     BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection

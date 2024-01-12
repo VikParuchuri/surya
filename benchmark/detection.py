@@ -5,7 +5,7 @@ import json
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
-from surya.benchmark.tesseract import tesseract_bboxes
+from surya.benchmark.tesseract import tesseract_bboxes, tesseract_parallel
 from surya.model.segformer import load_model, load_processor
 from surya.model.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
@@ -58,7 +58,7 @@ def main():
     surya_time = time.time() - start
 
     start = time.time()
-    tess_predictions = [tesseract_bboxes(img) for img in images]
+    tess_predictions = tesseract_parallel(images)
     tess_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]

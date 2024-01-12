@@ -1,6 +1,9 @@
 import numpy as np
 import pytesseract
 from pytesseract import Output
+from surya.settings import settings
+import os
+from concurrent.futures import ProcessPoolExecutor
 
 
 def tesseract_bboxes(img):
@@ -16,3 +19,18 @@ def tesseract_bboxes(img):
         bboxes.append(bbox)
 
     return bboxes
+
+
+def tesseract_parallel(imgs):
+    # Tesseract uses 4 threads per instance
+    tess_parallel_cores = min(len(imgs), settings.DETECTOR_BATCH_SIZE)
+    cpus = os.cpu_count()
+    tess_parallel_cores = min(tess_parallel_cores, cpus)
+
+    # Tesseract uses 4 threads per instance
+    tess_parallel = tess_parallel_cores // 4
+
+    with ProcessPoolExecutor(max_workers=tess_parallel) as executor:
+        tess_bboxes = executor.map(tesseract_bboxes, imgs)
+        tess_bboxes = list(tess_bboxes)
+    return tess_bboxes

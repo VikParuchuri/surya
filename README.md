@@ -1,12 +1,32 @@
 # Surya
 
-Surya is a multilingual document OCR toolkit.  It can currently do text line detection, but will soon have more functions.  It works on a range of documents and languages (see below for more details).
+Surya is a multilingual document OCR toolkit.  It can do:
+
+- Accurate line-level text detection
+- Line-level text recognition (coming soon)
+- Table and chart detection (coming soon)
+
+It works on a range of documents and languages (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
+
+![New York Times Article Example](static/images/excerpt.png)
 
 Surya is named after the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
 
 ## Community
 
 [Discord](https://discord.gg//KuZwXNGnfH) is where we discuss future development.
+
+## Examples
+
+| Name             | Text Detection                      |
+|------------------|-------------------------------------|
+| New York Times   | [Image](static/images/nyt.png)      |
+| Japanese         | [Image](static/images/japanese.png) |
+| Chinese          | [Image](static/images/chinese.png)  |
+| Hindi            | [Image](static/images/hindi.png)    |
+| Presentation     | [Image](static/images/pres.png)     |
+| Scientific Paper | [Image](static/images/paper.png)    |
+| Scanned Document | [Image](static/images/scanned.png)  |
 
 # Installation
 
@@ -15,7 +35,7 @@ You'll need python 3.9+ and PyTorch. You may need to install the CPU version of 
 Install with:
 
 ```
-`pip install surya-ocr`
+pip install surya-ocr
 ```
 
 Model weights will automatically download the first time you run surya.
@@ -23,16 +43,16 @@ Model weights will automatically download the first time you run surya.
 # Usage
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
-- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`.  Note that the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. Note that the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
 
 ## Text line detection
 
 You can detect text lines in an image or pdf with the following command.  This will write out a json file with the detected bboxes, and optionally save images of the pages with the bboxes.
 
-Setting `DETECTOR_BATCH_SIZE` properly will make a big difference when using a GPU.  Each batch item will use 280MB of VRAM, so very high batch sizes are possible.  Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference there too.
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use 280MB of VRAM, so very high batch sizes are possible.  Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference there too.
 
 ```
-python detect_text.py PDF_PATH --images
+surya_detect PDF_PATH --images
 ```
 
 - `--images` will save images of the pages and detected text lines (optional)
@@ -41,7 +61,23 @@ python detect_text.py PDF_PATH --images
 
 This has worked with every language I've tried.  It will work best with documents, and may not work well with photos or other images.  It will also not work well with handwriting.
 
-You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD=.4` if you don't get good results.
+You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  Try lowering them to detect more text, and vice versa.
+
+*Importing in Python*
+
+You can also do text detection from code with:
+
+```
+from PIL import Image
+from surya.detection import batch_inference
+from surya.model.segformer import load_model, load_processor
+
+image = Image.open(IMAGE_PATH)
+model, processor = load_model(), load_processor()
+
+# predictions is a list of dicts, one per image
+predictions = batch_inference([image], model, processor)
+```
 
 ## Text recognition
 
@@ -61,13 +97,27 @@ If you want to develop surya, you can install it manually:
 
 # Limitations
 
-- This is specialized in document OCR.  It will likely not work on photos or other images.  It will also not work on handwritten text.
+- This is specialized for document OCR.  It will likely not work on photos or other images.  It will also not work on handwritten text.
+- This will currently not detect math well.  It is a limitation of the training data that is being worked on.
 
 # Benchmarks
 
-*Text line detection*
+## Text line detection
 
-Surya predicts line-level bboxes, while tesseract and others predict word-level or character-level.  It's hard to find 100% correct datasets with line-level annotations, also. Merging bboxes can be noisy, so I chose not to use IoU as the metric for evaluation.
+| Model     |   Time (s) |   Time per page (s) |   precision |   recall |
+|-----------|------------|---------------------|-------------|----------|
+| surya     |    73.468  |            0.286984 |    0.921306 | 0.923814 |
+| tesseract |    63.2392 |            0.247028 |    0.869671 | 0.691873 |
+
+
+Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A6000 GPU, and a 32 core CPU.  This was the resource usage:
+
+- tesseract - 32 CPU cores, or 8 workers using 4 cores each
+- surya - 32 batch size, for 9GB VRAM usage
+
+*Methodology*
+
+Surya predicts line-level bboxes, while tesseract and others predict word-level or character-level.  It's also hard to find 100% correct datasets with line-level annotations. Merging bboxes can be noisy, so I chose not to use IoU as the metric for evaluation.
 
 I instead used coverage, which calculates:
 
@@ -90,7 +140,7 @@ You can benchmark the performance of surya on your machine.
 This will evaluate tesseract and surya for text line detection across a randomly sampled set of images from [doclaynet](https://huggingface.co/datasets/vikp/doclaynet_bench).
 
 ```
-python benchmark/detection.py --max 100
+python benchmark/detection.py --max 256
 ```
 
 - `--max` controls how many images to process for the benchmark
@@ -101,15 +151,15 @@ python benchmark/detection.py --max 100
 
 # Training
 
-
+This was trained on 4x A6000s for about 5 days.  It used a diverse set of 1M images as training data.  It was trained from scratch using a modified segformer architecture.
 
 # Commercial usage
 
 *Text detection*
 
-The text detection model was trained from scratch using a modified [segformer](https://arxiv.org/pdf/2105.15203.pdf) architecture, so it is okay for commercial usage.
+The text detection model was trained from scratch, so it's okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $10M in gross revenue in the last 12 months.
 
-If you want to remove the GPL license requirements, please contact me at surya@vikas.sh for dual licensing.
+If you want to remove the GPL license requirements for inference or use the weights commercially over the revenue limit, please contact me at surya@vikas.sh for dual licensing.
 
 # Thanks
 

@@ -1,12 +1,15 @@
 [tool.poetry]
-name = "surya"
+name = "surya-ocr"
 version = "0.1.0"
-description = "Multilingual document OCR toolkit for text detection and recognition"
+description = "Document OCR models for multilingual text detection and recognition"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/VikParuchuri/surya"
 keywords = ["ocr", "pdf", "text detection", "text recognition"]
+packages = [
+    {include = "surya"}
+]
 include = [
     "detect_text.py",
 ]

@@ -1,3 +1,5 @@
+import numpy as np
+
 def intersection_area(box1, box2):
     x_left = max(box1[0], box2[0])
     y_top = max(box1[1], box2[1])
@@ -19,10 +21,11 @@ def intersection_pixels(box1, box2):
     if x_right < x_left or y_bottom < y_top:
         return set()
 
-    pixels = set()
-    for x in range(int(x_left), int(x_right)):
-        for y in range(int(y_top), int(y_bottom)):
-            pixels.add((x, y))
+    x_left, x_right = int(x_left), int(x_right)
+    y_top, y_bottom = int(y_top), int(y_bottom)
+
+    coords = np.meshgrid(np.arange(x_left, x_right), np.arange(y_top, y_bottom))
+    pixels = set(zip(coords[0].flat, coords[1].flat))
 
     return pixels
 
