@@ -1,4 +1,8 @@
+from functools import partial
+from itertools import repeat
+
 import numpy as np
+from concurrent.futures import ProcessPoolExecutor
 
 def intersection_area(box1, box2):
     x_left = max(box1[0], box2[0])
@@ -30,25 +34,28 @@ def intersection_pixels(box1, box2):
     return pixels
 
 
-def calculate_coverage(box, other_boxes):
+def calculate_coverage(box, other_boxes, penalize_double=False):
     box_area = (box[2] - box[0]) * (box[3] - box[1])
     if box_area == 0:
         return 0
 
     # find total coverage of the box
     covered_pixels = set()
-    double_coverage = set()
+    double_coverage = list()
     for other_box in other_boxes:
         ia = intersection_pixels(box, other_box)
-        double_coverage = double_coverage.union(covered_pixels.intersection(ia))
+        double_coverage.append(list(covered_pixels.intersection(ia)))
         covered_pixels = covered_pixels.union(ia)
 
     # Penalize double coverage - having multiple bboxes overlapping the same pixels
-    covered_pixels_count = max(0, len(covered_pixels) - len(double_coverage) // 2)
+    double_coverage_penalty = len(double_coverage)
+    if not penalize_double:
+        double_coverage_penalty = 0
+    covered_pixels_count = max(0, len(covered_pixels) - double_coverage_penalty)
     return covered_pixels_count / box_area
 
 
-def precision_recall(preds, references, threshold=.5):
+def precision_recall(preds, references, threshold=.5, workers=8):
     if len(references) == 0:
         return {
             "precision": 1,
@@ -61,21 +68,16 @@ def precision_recall(preds, references, threshold=.5):
             "recall": 0,
         }
 
-    iou = []
-    for box1 in preds:
-        coverage = calculate_coverage(box1, references)
-        iou.append(coverage)
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        precision_func = partial(calculate_coverage, penalize_double=True)
+        precision_iou = executor.map(precision_func, preds, repeat(references))
+        reference_iou = executor.map(calculate_coverage, references, repeat(preds))
 
-    classes = [1 if i > threshold else 0 for i in iou]
-    precision = sum(classes) / len(classes)
+    precision_classes = [1 if i > threshold else 0 for i in precision_iou]
+    precision = sum(precision_classes) / len(precision_classes)
 
-    iou = []
-    for box1 in references:
-        coverage = calculate_coverage(box1, preds)
-        iou.append(coverage)
-
-    classes = [1 if i > threshold else 0 for i in iou]
-    recall = sum(classes) / len(classes)
+    recall_classes = [1 if i > threshold else 0 for i in reference_iou]
+    recall = sum(recall_classes) / len(recall_classes)
 
     return {
         "precision": precision,
@@ -85,6 +87,7 @@ def precision_recall(preds, references, threshold=.5):
 
 def mean_coverage(preds, references):
     coverages = []
+
     for box1 in references:
         coverage = calculate_coverage(box1, preds)
         coverages.append(coverage)

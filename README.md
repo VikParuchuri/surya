@@ -3,7 +3,7 @@
 Surya is a multilingual document OCR toolkit.  It can do:
 
 - Accurate line-level text detection
-- Line-level text recognition (coming soon)
+- Text recognition (coming soon)
 - Table and chart detection (coming soon)
 
 It works on a range of documents and languages (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
@@ -47,23 +47,28 @@ Model weights will automatically download the first time you run surya.
 
 ## Text line detection
 
-You can detect text lines in an image or pdf with the following command.  This will write out a json file with the detected bboxes, and optionally save images of the pages with the bboxes.
-
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use 280MB of VRAM, so very high batch sizes are possible.  Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference there too.
+You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes, and optionally save images of the pages with the bboxes.
 
 ```
-surya_detect PDF_PATH --images
+surya_detect DATA_PATH --images
 ```
 
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected text lines (optional)
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
 
 This has worked with every language I've tried.  It will work best with documents, and may not work well with photos or other images.  It will also not work well with handwriting.
 
+**Performance tips**
+
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.
+
+Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference there too - the default CPU batch size is `2`.
+
 You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  Try lowering them to detect more text, and vice versa.
 
-*Importing in Python*
+### From Python
 
 You can also do text detection from code with:
 
@@ -98,16 +103,18 @@ If you want to develop surya, you can install it manually:
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.  It will also not work on handwritten text.
-- This will currently not detect math well.  It is a limitation of the training data that is being worked on.
+- Does not work well with images that look like ads or other parts of documents that are usually ignored.
 
 # Benchmarks
 
 ## Text line detection
 
+![Benchmark chart](static/images/benchmark_chart_small.png)
+
 | Model     |   Time (s) |   Time per page (s) |   precision |   recall |
 |-----------|------------|---------------------|-------------|----------|
-| surya     |    73.468  |            0.286984 |    0.921306 | 0.923814 |
-| tesseract |    63.2392 |            0.247028 |    0.869671 | 0.691873 |
+| surya     |    52.6892 |            0.205817 |    0.844426 | 0.937818 |
+| tesseract |    74.4546 |            0.290838 |    0.631498 | 0.997694 |
 
 
 Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A6000 GPU, and a 32 core CPU.  This was the resource usage:
@@ -115,7 +122,7 @@ Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a syst
 - tesseract - 32 CPU cores, or 8 workers using 4 cores each
 - surya - 32 batch size, for 9GB VRAM usage
 
-*Methodology*
+**Methodology**
 
 Surya predicts line-level bboxes, while tesseract and others predict word-level or character-level.  It's also hard to find 100% correct datasets with line-level annotations. Merging bboxes can be noisy, so I chose not to use IoU as the metric for evaluation.
 
@@ -135,7 +142,7 @@ You can benchmark the performance of surya on your machine.
 - Follow the manual install instructions above.
 - `poetry install --group dev` # Installs dev dependencies
 
-*Text line detection*
+**Text line detection**
 
 This will evaluate tesseract and surya for text line detection across a randomly sampled set of images from [doclaynet](https://huggingface.co/datasets/vikp/doclaynet_bench).
 
@@ -151,13 +158,13 @@ python benchmark/detection.py --max 256
 
 # Training
 
-This was trained on 4x A6000s for about 5 days.  It used a diverse set of 1M images as training data.  It was trained from scratch using a modified segformer architecture.
+This was trained on 4x A6000s for about 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
 
 # Commercial usage
 
-*Text detection*
+**Text detection**
 
-The text detection model was trained from scratch, so it's okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $10M in gross revenue in the last 12 months.
+The text detection model was trained from scratch, so it's okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
 
 If you want to remove the GPL license requirements for inference or use the weights commercially over the revenue limit, please contact me at surya@vikas.sh for dual licensing.
 
@@ -167,5 +174,6 @@ This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
 - [transformers](https://github.com/huggingface/transformers) from huggingface
+- [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
 
 Thank you to everyone who makes open source AI possible.
