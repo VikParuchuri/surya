@@ -74,8 +74,6 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    raise NotImplementedError("This script is not yet implemented.")
-
     model = load_model()
     processor = load_processor()
 

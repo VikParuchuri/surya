@@ -18,6 +18,10 @@ def rescale_bbox(bbox, processor_size, image_size):
     width_scaler = img_width / page_width
     height_scaler = img_height / page_height
 
+    print(bbox)
+    print(img_width, page_width)
+    print(img_height, page_height)
+    
     new_bbox = copy.deepcopy(bbox)
     new_bbox[0] = int(new_bbox[0] * width_scaler)
     new_bbox[1] = int(new_bbox[1] * height_scaler)
