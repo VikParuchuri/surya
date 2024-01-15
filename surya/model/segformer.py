@@ -1,19 +1,28 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
-from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerImageProcessor, \
-    SegformerDecodeHead, SegformerModel
 import torch
 from torch import nn
-
+from transformers import (
+    SegformerConfig,
+    SegformerDecodeHead,
+    SegformerForSemanticSegmentation,
+    SegformerImageProcessor,
+    SegformerModel,
+)
 from transformers.modeling_outputs import SemanticSegmenterOutput
+
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(
+    checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE
+):
     config = SegformerConfig.from_pretrained(checkpoint)
     model = SegformerForRegressionMask.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
     if "mps" in device:
-        print("Warning: MPS may have poor results. This is a bug with MPS, see here - https://github.com/pytorch/pytorch/issues/84936")
+        print(
+            "Warning: MPS may have poor results. This is a bug with MPS, see here - https://github.com/pytorch/pytorch/issues/84936"
+        )
     model = model.to(device)
     model = model.eval()
     return model
@@ -79,7 +88,7 @@ class SegformerForRegressionMask(SegformerForSemanticSegmentation):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple, SemanticSegmenterOutput]:
+    ) -> Union[tuple, SemanticSegmenterOutput]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states

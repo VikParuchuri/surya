@@ -1,10 +1,9 @@
-from typing import Dict, Optional
+from typing import Optional
 
+import torch
 from dotenv import find_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
-import torch
-import os
 
 
 class Settings(BaseSettings):
@@ -27,9 +26,9 @@ class Settings(BaseSettings):
     DETECTOR_BATCH_SIZE: int = 2 if TORCH_DEVICE_MODEL == "cpu" else 32
     DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector"
     BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
-    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
-    DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection
-    DETECTOR_NMS_THRESHOLD: float = 0.35 # Threshold for non-maximum suppression
+    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200  # Height at which to slice images vertically
+    DETECTOR_TEXT_THRESHOLD: float = 0.6  # Threshold for text detection
+    DETECTOR_NMS_THRESHOLD: float = 0.35  # Threshold for non-maximum suppression
 
     # Paths
     DATA_DIR: str = "data"

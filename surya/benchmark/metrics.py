@@ -1,8 +1,9 @@
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from itertools import repeat
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+
 
 def intersection_area(box1, box2):
     x_left = max(box1[0], box2[0])
@@ -55,7 +56,7 @@ def calculate_coverage(box, other_boxes, penalize_double=False):
     return covered_pixels_count / box_area
 
 
-def precision_recall(preds, references, threshold=.5, workers=8):
+def precision_recall(preds, references, threshold=0.5, workers=8):
     if len(references) == 0:
         return {
             "precision": 1,

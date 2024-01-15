@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
-
-from PIL import Image, ImageDraw
+from PIL import ImageDraw
 
 from surya.postprocessing.util import get_line_angle, rescale_bbox
 
@@ -16,7 +15,6 @@ def get_detected_lines_sobel(image, vertical=True):
         dy = 1
 
     sobelx = cv2.Sobel(image, cv2.CV_32F, dx, dy, ksize=3)
-
 
     # Absolute Sobel (to capture both edges)
     abs_sobelx = np.absolute(sobelx)
@@ -119,8 +117,12 @@ def get_vertical_lines(image, new_size, orig_size, divisor=20, x_tolerance=40, y
             if line["bbox"][0] != line2["bbox"][0]:
                 continue
 
-            expanded_line1 = [line["bbox"][0], line["bbox"][1] - y_tolerance, line["bbox"][2],
-                              line["bbox"][3] + y_tolerance]
+            expanded_line1 = [
+                line["bbox"][0],
+                line["bbox"][1] - y_tolerance,
+                line["bbox"][2],
+                line["bbox"][3] + y_tolerance,
+            ]
 
             line1_points = set(range(expanded_line1[1], expanded_line1[3]))
             line2_points = set(range(line2["bbox"][1], line2["bbox"][3]))
@@ -165,6 +167,7 @@ def get_vertical_lines(image, new_size, orig_size, divisor=20, x_tolerance=40, y
         vertical_lines[0]["bbox"][1] = 0
 
     return vertical_lines
+
 
 def get_horizontal_lines(affinity_map, processor_size, image_size):
     horizontal_lines = get_detected_lines(affinity_map, horizontal=True)

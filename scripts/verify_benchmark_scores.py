@@ -1,9 +1,9 @@
-import json
 import argparse
+import json
 
 
 def verify_scores(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path) as file:
         data = json.load(file)
 
     scores = data["metrics"]["surya"]

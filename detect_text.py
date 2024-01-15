@@ -1,18 +1,18 @@
 import argparse
 import copy
 import json
+import os
 from collections import defaultdict
 
+import filetype
 from PIL import Image
 
-from surya.model.segformer import load_model, load_processor
-from surya.model.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
+from surya.model.processing import get_page_images, open_pdf
+from surya.model.segformer import load_model, load_processor
 from surya.postprocessing.affinity import draw_lines_on_image
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
-import os
-import filetype
 
 
 def get_name_from_path(path):
@@ -68,7 +68,12 @@ def load_from_folder(folder_path, max_pages=None):
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in an input file or folder (PDFs or image).")
     parser.add_argument("input_path", type=str, help="Path to pdf or image file to detect bboxes in.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "surya"))
+    parser.add_argument(
+        "--results_dir",
+        type=str,
+        help="Path to JSON file with OCR results.",
+        default=os.path.join(settings.RESULT_DIR, "surya"),
+    )
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
@@ -121,10 +126,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-

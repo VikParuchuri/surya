@@ -1,6 +1,7 @@
-import numpy as np
-import cv2
 import math
+
+import cv2
+import numpy as np
 from PIL import ImageDraw
 
 from surya.postprocessing.util import rescale_bbox
@@ -31,7 +32,9 @@ def detect_boxes(linemap, text_threshold, low_text):
     ret, text_score = cv2.threshold(linemap, low_text, 1, 0)
 
     text_score_comb = np.clip(text_score, 0, 1)
-    label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
+    label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        text_score_comb.astype(np.uint8), connectivity=4
+    )
 
     det = []
     for k in range(1, label_count):
@@ -62,11 +65,11 @@ def detect_boxes(linemap, text_threshold, low_text):
         if ey >= img_h:
             ey = img_h
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1 + niter, 1 + niter))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1 + niter, 1 + niter))
         segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
 
         # make box
-        np_contours = np.roll(np.array(np.where(segmap != 0)),1, axis=0).transpose().reshape(-1,2)
+        np_contours = np.roll(np.array(np.where(segmap != 0)), 1, axis=0).transpose().reshape(-1, 2)
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
 
@@ -80,7 +83,7 @@ def detect_boxes(linemap, text_threshold, low_text):
 
         # make clock-wise order
         startidx = box.sum(axis=1).argmin()
-        box = np.roll(box, 4-startidx, 0)
+        box = np.roll(box, 4 - startidx, 0)
         box = np.array(box)
 
         det.append(box)
@@ -88,15 +91,14 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, labels
 
 
-def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_NMS_THRESHOLD):
+def get_detected_boxes(
+    textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD, low_text=settings.DETECTOR_NMS_THRESHOLD
+):
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [
-        [box[0][0], box[0][1], box[1][0], box[2][1]]
-        for box in boxes
-    ]
+    boxes = [[box[0][0], box[0][1], box[1][0], box[2][1]] for box in boxes]
 
     # Ensure correct box format
     for box in boxes:
@@ -121,4 +123,3 @@ def draw_bboxes_on_image(bboxes, image):
         draw.rectangle(bbox, outline="red", width=1)
 
     return image
-
