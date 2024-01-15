@@ -4,6 +4,7 @@ import math
 from PIL import ImageDraw
 
 from surya.postprocessing.util import rescale_bbox
+from surya.schema import PolygonBox
 from surya.settings import settings
 
 
@@ -93,24 +94,14 @@ def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [
-        [box[0][0], box[0][1], box[1][0], box[2][1]]
-        for box in boxes
-    ]
-
-    # Ensure correct box format
-    for box in boxes:
-        if box[0] > box[2]:
-            box[0], box[2] = box[2], box[0]
-        if box[1] > box[3]:
-            box[1], box[3] = box[3], box[1]
+    boxes = [PolygonBox(corners=box) for box in boxes]
     return boxes
 
 
 def get_and_clean_boxes(textmap, processor_size, image_size):
     bboxes = get_detected_boxes(textmap)
-    bboxes = [rescale_bbox(bbox, processor_size, image_size) for bbox in bboxes]
-    bboxes = clean_contained_boxes(bboxes)
+    for bbox in bboxes:
+        bbox.rescale(processor_size, image_size)
     return bboxes
 
 
@@ -121,4 +112,15 @@ def draw_bboxes_on_image(bboxes, image):
         draw.rectangle(bbox, outline="red", width=1)
 
     return image
+
+
+def draw_polys_on_image(corners, image):
+    draw = ImageDraw.Draw(image)
+
+    for poly in corners:
+        poly = [(p[0], p[1]) for p in poly]
+        draw.polygon(poly, outline='red', width=1)
+
+    return image
+
 

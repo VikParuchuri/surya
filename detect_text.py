@@ -9,7 +9,7 @@ from surya.model.segformer import load_model, load_processor
 from surya.model.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
 from surya.postprocessing.affinity import draw_lines_on_image
-from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.postprocessing.heatmap import draw_bboxes_on_image, draw_polys_on_image
 from surya.settings import settings
 import os
 import filetype
@@ -90,7 +90,7 @@ def main():
 
     if args.images:
         for idx, (image, pred, name) in enumerate(zip(images, predictions, names)):
-            bbox_image = draw_bboxes_on_image(pred["bboxes"], copy.deepcopy(image))
+            bbox_image = draw_polys_on_image(pred["polygons"], copy.deepcopy(image))
             bbox_image.save(os.path.join(result_path, f"{name}_{idx}_bbox.png"))
 
             column_image = draw_lines_on_image(pred["vertical_lines"], copy.deepcopy(image))
