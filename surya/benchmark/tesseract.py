@@ -1,9 +1,11 @@
+import os
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 import pytesseract
 from pytesseract import Output
+
 from surya.settings import settings
-import os
-from concurrent.futures import ProcessPoolExecutor
 
 
 def tesseract_bboxes(img):
@@ -11,10 +13,10 @@ def tesseract_bboxes(img):
     ocr = pytesseract.image_to_data(arr_img, output_type=Output.DICT)
 
     bboxes = []
-    n_boxes = len(ocr['level'])
+    n_boxes = len(ocr["level"])
     for i in range(n_boxes):
         # It is possible to merge by line here with line number, but it gives bad results.
-        _, x, y, w, h = ocr['text'][i], ocr['left'][i], ocr['top'][i], ocr['width'][i], ocr['height'][i]
+        _, x, y, w, h = ocr["text"][i], ocr["left"][i], ocr["top"][i], ocr["width"][i], ocr["height"][i]
         bbox = (x, y, x + w, y + h)
         bboxes.append(bbox)
 

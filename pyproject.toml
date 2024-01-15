@@ -33,9 +33,29 @@ pytesseract = "^0.3.10"
 pymupdf = "^1.23.8"
 snakeviz = "^2.2.0"
 datasets = "^2.16.1"
+ruff = "^0.1.13"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"
+
+[tool.ruff]
+select = [
+    # Pyflakes
+    "F",
+    # pycodestyle
+    "E",
+    "W",
+    # isort
+    "I",
+    # pyupgrade
+    "UP",
+]
+ignore = ["E501", "E203"]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.isort]
+known-first-party = ["surya"]
 
 [build-system]
 requires = ["poetry-core"]

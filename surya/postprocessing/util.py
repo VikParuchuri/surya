@@ -1,5 +1,5 @@
-import math
 import copy
+import math
 
 
 def get_line_angle(x1, y1, x2, y2):

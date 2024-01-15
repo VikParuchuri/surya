@@ -1,10 +1,10 @@
-from typing import List
+import math
 
 import numpy as np
-import math
 import pypdfium2
-from PIL import Image, ImageOps
 import torch
+from PIL import Image, ImageOps
+
 from surya.settings import settings
 
 
@@ -34,8 +34,8 @@ def split_image(img, processor):
 def prepare_image(img, processor):
     new_size = (processor.size["width"], processor.size["height"])
 
-    img.thumbnail(new_size, Image.Resampling.LANCZOS) # Shrink largest dimension to fit new size
-    img = img.resize(new_size, Image.Resampling.LANCZOS) # Stretch smaller dimension to fit new size
+    img.thumbnail(new_size, Image.Resampling.LANCZOS)  # Shrink largest dimension to fit new size
+    img = img.resize(new_size, Image.Resampling.LANCZOS)  # Stretch smaller dimension to fit new size
 
     img = np.asarray(img, dtype=np.uint8)
     img = processor(img)["pixel_values"][0]
@@ -47,7 +47,7 @@ def open_pdf(pdf_filepath):
     return pypdfium2.PdfDocument(pdf_filepath)
 
 
-def get_page_images(doc, indices: List, dpi=96):
+def get_page_images(doc, indices: list, dpi=96):
     renderer = doc.render(
         pypdfium2.PdfBitmap.to_pil,
         page_indices=indices,

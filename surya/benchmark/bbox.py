@@ -1,4 +1,5 @@
 import fitz as pymupdf
+
 from surya.postprocessing.util import rescale_bbox
 
 
@@ -7,7 +8,11 @@ def get_pdf_lines(pdf_path, img_sizes):
     page_lines = []
     for idx, img_size in enumerate(img_sizes):
         page = doc[idx]
-        blocks = page.get_text("dict", sort=True, flags=pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_LIGATURES & ~pymupdf.TEXT_PRESERVE_IMAGES)["blocks"]
+        blocks = page.get_text(
+            "dict",
+            sort=True,
+            flags=pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_LIGATURES & ~pymupdf.TEXT_PRESERVE_IMAGES,
+        )["blocks"]
 
         line_boxes = []
         for block_idx, block in enumerate(blocks):

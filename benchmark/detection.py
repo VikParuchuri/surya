@@ -2,26 +2,32 @@ import argparse
 import collections
 import copy
 import json
+import os
+import time
+
+import datasets
+from tabulate import tabulate
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
-from surya.benchmark.tesseract import tesseract_bboxes, tesseract_parallel
-from surya.model.segformer import load_model, load_processor
-from surya.model.processing import open_pdf, get_page_images
+from surya.benchmark.tesseract import tesseract_parallel
 from surya.detection import batch_inference
+from surya.model.processing import get_page_images, open_pdf
+from surya.model.segformer import load_model, load_processor
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
-import os
-import time
-from tabulate import tabulate
-import datasets
 
 
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
     parser.add_argument("--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None)
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
+    parser.add_argument(
+        "--results_dir",
+        type=str,
+        help="Path to JSON file with OCR results.",
+        default=os.path.join(settings.RESULT_DIR, "benchmark"),
+    )
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
@@ -34,7 +40,7 @@ def main():
         doc = open_pdf(args.pdf_path)
         page_count = len(doc)
         page_indices = list(range(page_count))
-        page_indices = page_indices[:args.max]
+        page_indices = page_indices[: args.max]
 
         images = get_page_images(doc, page_indices)
         doc.close()
@@ -72,10 +78,7 @@ def main():
         surya_metrics = precision_recall(surya_boxes, cb)
         tess_metrics = precision_recall(tb, cb)
 
-        page_metrics[idx] = {
-            "surya": surya_metrics,
-            "tesseract": tess_metrics
-        }
+        page_metrics[idx] = {"surya": surya_metrics, "tesseract": tess_metrics}
 
         if args.debug:
             bbox_image = draw_bboxes_on_image(surya_boxes, copy.deepcopy(images[idx]))
@@ -93,12 +96,9 @@ def main():
             mean_metrics[k][m] = sum(metric) / len(metric)
 
     out_data = {
-        "times": {
-            "surya": surya_time,
-            "tesseract": tess_time
-        },
+        "times": {"surya": surya_time, "tesseract": tess_time},
         "metrics": mean_metrics,
-        "page_metrics": page_metrics
+        "page_metrics": page_metrics,
     }
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
@@ -107,11 +107,13 @@ def main():
     table_headers = ["Model", "Time (s)", "Time per page (s)"] + metric_types
     table_data = [
         ["surya", surya_time, surya_time / len(images)] + [mean_metrics["surya"][m] for m in metric_types],
-        ["tesseract", tess_time, tess_time / len(images)] + [mean_metrics["tesseract"][m] for m in metric_types]
+        ["tesseract", tess_time, tess_time / len(images)] + [mean_metrics["tesseract"][m] for m in metric_types],
     ]
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
-    print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.  There is a precision penalty for multiple boxes overlapping reference lines.")
+    print(
+        "Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.  There is a precision penalty for multiple boxes overlapping reference lines."
+    )
     print(f"Wrote results to {result_path}")
 
 

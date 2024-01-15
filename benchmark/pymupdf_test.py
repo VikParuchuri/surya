@@ -2,16 +2,20 @@ import argparse
 import os
 
 from surya.benchmark.bbox import get_pdf_lines
+from surya.model.processing import get_page_images, open_pdf
 from surya.postprocessing.heatmap import draw_bboxes_on_image
-
-from surya.model.processing import open_pdf, get_page_images
 from surya.settings import settings
 
 
 def main():
     parser = argparse.ArgumentParser(description="Draw pymupdf line bboxes on images.")
     parser.add_argument("pdf_path", type=str, help="Path to PDF to detect bboxes in.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "pymupdf"))
+    parser.add_argument(
+        "--results_dir",
+        type=str,
+        help="Path to JSON file with OCR results.",
+        default=os.path.join(settings.RESULT_DIR, "pymupdf"),
+    )
     args = parser.parse_args()
 
     doc = open_pdf(args.pdf_path)
@@ -34,6 +38,6 @@ def main():
 
     print(f"Wrote results to {result_path}")
 
+
 if __name__ == "__main__":
     main()
-

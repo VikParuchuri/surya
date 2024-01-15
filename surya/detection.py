@@ -1,17 +1,15 @@
-from typing import List
-
 import cv2
-import torch
-from torch import nn
 import numpy as np
+import torch
 from PIL import Image
-from surya.postprocessing.heatmap import get_and_clean_boxes
-from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
+
 from surya.model.processing import prepare_image, split_image
+from surya.postprocessing.affinity import get_horizontal_lines, get_vertical_lines
+from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.settings import settings
 
 
-def batch_inference(images: List, model, processor):
+def batch_inference(images: list, model, processor):
     assert all([isinstance(image, Image.Image) for image in images])
 
     images = [image.copy().convert("RGB") for image in images]
@@ -29,7 +27,7 @@ def batch_inference(images: List, model, processor):
 
     pred_parts = []
     for i in range(0, len(image_splits), settings.DETECTOR_BATCH_SIZE):
-        batch = image_splits[i:i+settings.DETECTOR_BATCH_SIZE]
+        batch = image_splits[i : i + settings.DETECTOR_BATCH_SIZE]
         # Batch images in dim 0
         batch = torch.stack(batch, dim=0)
         batch = batch.to(model.dtype)
@@ -45,7 +43,7 @@ def batch_inference(images: List, model, processor):
 
             heatmap_shape = list(heatmap.shape)
             correct_shape = [processor.size["height"], processor.size["width"]]
-            cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
+            cv2_size = list(reversed(correct_shape))  # opencv uses (width, height) instead of (height, width)
 
             if heatmap_shape != correct_shape:
                 heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
@@ -87,18 +85,14 @@ def batch_inference(images: List, model, processor):
         vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
         horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
 
-        results.append({
-            "bboxes": bboxes,
-            "vertical_lines": vertical_lines,
-            "horizontal_lines": horizontal_lines,
-            "heatmap": heat_img,
-            "affinity_map": aff_img,
-        })
+        results.append(
+            {
+                "bboxes": bboxes,
+                "vertical_lines": vertical_lines,
+                "horizontal_lines": horizontal_lines,
+                "heatmap": heat_img,
+                "affinity_map": aff_img,
+            }
+        )
 
     return results
-
-
-
-
-
-
