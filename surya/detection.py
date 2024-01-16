@@ -84,11 +84,13 @@ def batch_inference(images: List, model, processor):
         affinity_size = list(reversed(affinity_map.shape))
         heatmap_size = list(reversed(heatmap.shape))
         bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes[i])
+        bbox_data = [bbox.model_dump() for bbox in bboxes]
         vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
         horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
 
         results.append({
-            "bboxes": bboxes,
+            "bboxes": [bbd["bbox"] for bbd in bbox_data],
+            "polygons": [bbd["corners"] for bbd in bbox_data],
             "vertical_lines": vertical_lines,
             "horizontal_lines": horizontal_lines,
             "heatmap": heat_img,

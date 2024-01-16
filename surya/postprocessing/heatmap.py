@@ -1,24 +1,32 @@
+from typing import List
+
 import numpy as np
 import cv2
 import math
 from PIL import ImageDraw
 
 from surya.postprocessing.util import rescale_bbox
+from surya.schema import PolygonBox
 from surya.settings import settings
 
 
-def clean_contained_boxes(boxes):
+def clean_contained_boxes(boxes: List[PolygonBox]):
     new_boxes = []
-    for box in boxes:
+    for box_obj in boxes:
+        box = box_obj.bbox
         contained = False
-        for other_box in boxes:
+        for other_box_obj in boxes:
+            if other_box_obj.corners == box_obj.corners:
+                continue
+
+            other_box = other_box_obj.bbox
             if box == other_box:
                 continue
             if box[0] >= other_box[0] and box[1] >= other_box[1] and box[2] <= other_box[2] and box[3] <= other_box[3]:
                 contained = True
                 break
         if not contained:
-            new_boxes.append(box)
+            new_boxes.append(box_obj)
     return new_boxes
 
 
@@ -93,23 +101,14 @@ def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [
-        [box[0][0], box[0][1], box[1][0], box[2][1]]
-        for box in boxes
-    ]
-
-    # Ensure correct box format
-    for box in boxes:
-        if box[0] > box[2]:
-            box[0], box[2] = box[2], box[0]
-        if box[1] > box[3]:
-            box[1], box[3] = box[3], box[1]
+    boxes = [PolygonBox(corners=box) for box in boxes]
     return boxes
 
 
 def get_and_clean_boxes(textmap, processor_size, image_size):
     bboxes = get_detected_boxes(textmap)
-    bboxes = [rescale_bbox(bbox, processor_size, image_size) for bbox in bboxes]
+    for bbox in bboxes:
+        bbox.rescale(processor_size, image_size)
     bboxes = clean_contained_boxes(bboxes)
     return bboxes
 
@@ -121,4 +120,15 @@ def draw_bboxes_on_image(bboxes, image):
         draw.rectangle(bbox, outline="red", width=1)
 
     return image
+
+
+def draw_polys_on_image(corners, image):
+    draw = ImageDraw.Draw(image)
+
+    for poly in corners:
+        poly = [(p[0], p[1]) for p in poly]
+        draw.polygon(poly, outline='red', width=1)
+
+    return image
+
 

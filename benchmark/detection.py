@@ -9,7 +9,7 @@ from surya.benchmark.tesseract import tesseract_bboxes, tesseract_parallel
 from surya.model.segformer import load_model, load_processor
 from surya.model.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
-from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.postprocessing.heatmap import draw_bboxes_on_image, draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 import os
@@ -68,6 +68,7 @@ def main():
     page_metrics = collections.OrderedDict()
     for idx, (tb, sb, cb) in enumerate(zip(tess_predictions, predictions, correct_boxes)):
         surya_boxes = sb["bboxes"]
+        surya_polys = sb["polygons"]
 
         surya_metrics = precision_recall(surya_boxes, cb)
         tess_metrics = precision_recall(tb, cb)
@@ -78,7 +79,7 @@ def main():
         }
 
         if args.debug:
-            bbox_image = draw_bboxes_on_image(surya_boxes, copy.deepcopy(images[idx]))
+            bbox_image = draw_polys_on_image(surya_polys, copy.deepcopy(images[idx]))
             bbox_image.save(os.path.join(result_path, f"{idx}_bbox.png"))
 
     mean_metrics = {}

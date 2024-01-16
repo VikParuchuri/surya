@@ -27,6 +27,7 @@ Surya is named after the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), w
 | Presentation     | [Image](static/images/pres.png)     |
 | Scientific Paper | [Image](static/images/paper.png)    |
 | Scanned Document | [Image](static/images/scanned.png)  |
+| Scanned Form | [Image](static/images/funsd.png)    |
 
 # Installation
 
@@ -58,7 +59,13 @@ surya_detect DATA_PATH --images
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
 
-This has worked with every language I've tried.  It will work best with documents, and may not work well with photos or other images.  It will also not work well with handwriting.
+The `results.json` file will contain these keys for each page of the input document(s):
+
+- `polygons` - polygons for each detected text line (these are more accurate than the bboxes) in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+- `bboxes` - axis-aligned rectangles for each detected text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+- `vertical_lines` - vertical lines detected in the document in (x1, y1, x2, y2) format.
+- `horizontal_lines` - horizontal lines detected in the document in (x1, y1, x2, y2) format.
+- `page_number` - the page number of the document
 
 **Performance tips**
 
@@ -102,8 +109,10 @@ If you want to develop surya, you can install it manually:
 
 # Limitations
 
-- This is specialized for document OCR.  It will likely not work on photos or other images.  It will also not work on handwritten text.
-- Does not work well with images that look like ads or other parts of documents that are usually ignored.
+- This is specialized for document OCR.  It will likely not work on photos or other images.
+- It is for printed text, not handwriting.
+- The model has trained itself to ignore advertisements.
+- This has worked for every language I've tried, but languages with very different character sets may not work well.
 
 # Benchmarks
 
