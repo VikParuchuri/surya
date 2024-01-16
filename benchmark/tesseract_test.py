@@ -4,7 +4,7 @@ import os
 from surya.benchmark.tesseract import tesseract_bboxes
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 
-from surya.model.processing import open_pdf, get_page_images
+from surya.input.processing import open_pdf, get_page_images
 from surya.settings import settings
 
 

@@ -5,11 +5,11 @@ import json
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
-from surya.benchmark.tesseract import tesseract_bboxes, tesseract_parallel
+from surya.benchmark.tesseract import tesseract_parallel
 from surya.model.segformer import load_model, load_processor
-from surya.model.processing import open_pdf, get_page_images
+from surya.input.processing import open_pdf, get_page_images
 from surya.detection import batch_inference
-from surya.postprocessing.heatmap import draw_bboxes_on_image, draw_polys_on_image
+from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 import os

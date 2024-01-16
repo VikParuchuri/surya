@@ -91,20 +91,6 @@ model, processor = load_model(), load_processor()
 predictions = batch_inference([image], model, processor)
 ```
 
-### Gradio Demo
-
-Install Gradio
-
-```python
-pip install gradio
-```
-
-Run the app gradio_demo.py
-
-```python
-python gradio_demo.py
-```
-
 ## Text recognition
 
 Coming soon.
@@ -123,6 +109,7 @@ If you want to develop surya, you can install it manually:
 
 # Limitations
 
+- Math will not be detected well with the main model.  Use `DETECTOR_MODEL_CHECKPOINT=vikp/line_detector_math` for better results.
 - This is specialized for document OCR.  It will likely not work on photos or other images.
 - It is for printed text, not handwriting.
 - The model has trained itself to ignore advertisements.

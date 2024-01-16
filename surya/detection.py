@@ -2,12 +2,11 @@ from typing import List
 
 import cv2
 import torch
-from torch import nn
 import numpy as np
 from PIL import Image
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
-from surya.model.processing import prepare_image, split_image
+from surya.input.processing import prepare_image, split_image
 from surya.settings import settings
 
 
