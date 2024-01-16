@@ -91,6 +91,20 @@ model, processor = load_model(), load_processor()
 predictions = batch_inference([image], model, processor)
 ```
 
+### Gradio Demo
+
+Install Gradio
+
+```python
+pip install gradio
+```
+
+Run the app gradio_demo.py
+
+```python
+python gradio_demo.py
+```
+
 ## Text recognition
 
 Coming soon.
