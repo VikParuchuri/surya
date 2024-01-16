@@ -68,7 +68,7 @@ def main():
     page_metrics = collections.OrderedDict()
     for idx, (tb, sb, cb) in enumerate(zip(tess_predictions, predictions, correct_boxes)):
         surya_boxes = sb["bboxes"]
-        surya_polys = sb["polys"]
+        surya_polys = sb["polygons"]
 
         surya_metrics = precision_recall(surya_boxes, cb)
         tess_metrics = precision_recall(tb, cb)

@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 import cv2
 import math
@@ -8,18 +10,23 @@ from surya.schema import PolygonBox
 from surya.settings import settings
 
 
-def clean_contained_boxes(boxes):
+def clean_contained_boxes(boxes: List[PolygonBox]):
     new_boxes = []
-    for box in boxes:
+    for box_obj in boxes:
+        box = box_obj.bbox
         contained = False
-        for other_box in boxes:
+        for other_box_obj in boxes:
+            if other_box_obj.corners == box_obj.corners:
+                continue
+
+            other_box = other_box_obj.bbox
             if box == other_box:
                 continue
             if box[0] >= other_box[0] and box[1] >= other_box[1] and box[2] <= other_box[2] and box[3] <= other_box[3]:
                 contained = True
                 break
         if not contained:
-            new_boxes.append(box)
+            new_boxes.append(box_obj)
     return new_boxes
 
 
@@ -102,6 +109,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size):
     bboxes = get_detected_boxes(textmap)
     for bbox in bboxes:
         bbox.rescale(processor_size, image_size)
+    bboxes = clean_contained_boxes(bboxes)
     return bboxes
 
 
