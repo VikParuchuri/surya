@@ -182,7 +182,7 @@ If you want to remove the GPL license requirements for inference or use the weig
 This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
-- [transformers](https://github.com/huggingface/transformers) from huggingface
+- [transformers](https://github.com/huggingface/transformers) from Hugging Face
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
 
 Thank you to everyone who makes open source AI possible.
