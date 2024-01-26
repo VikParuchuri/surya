@@ -16,7 +16,7 @@ from surya.settings import settings
 def load_processor():
     processor = SuryaProcessor()
     processor.image_processor.train = False
-    processor.image_processor.max_size = {"height": 180, "width": 900}
+    processor.image_processor.max_size = settings.RECOGNITION_IMAGE_SIZE
     processor.tokenizer.model_max_length = settings.RECOGNITION_MAX_TOKENS
     return processor
 

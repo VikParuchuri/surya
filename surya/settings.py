@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     TORCH_DEVICE: Optional[str] = None
     IMAGE_DPI: int = 96
 
+    # Paths
+    DATA_DIR: str = "data"
+    RESULT_DIR: str = "results"
+    BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    FONT_DIR: str = os.path.join(BASE_DIR, "static", "fonts")
+
     @computed_field
     @property
     def TORCH_DEVICE_MODEL(self) -> str:
@@ -47,13 +53,11 @@ class Settings(BaseSettings):
     DETECTOR_NMS_THRESHOLD: float = 0.35 # Threshold for non-maximum suppression
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test"
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test_gqa"
     RECOGNITION_MAX_TOKENS: int = 512
-    RECOGNITION_BATCH_SIZE: int = 128 if TORCH_DEVICE_MODEL == "cuda" else 8
-
-    # Paths
-    DATA_DIR: str = "data"
-    RESULT_DIR: str = "results"
+    RECOGNITION_BATCH_SIZE: int = 8 if TORCH_DEVICE_MODEL in ["cpu", "mps"] else 128
+    RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
+    RECOGNITION_RENDER_FONT: str = os.path.join(FONT_DIR, "GoNotoKurrent-Regular.ttf")
 
     @computed_field
     @property

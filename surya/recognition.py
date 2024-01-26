@@ -3,6 +3,7 @@ import torch
 from PIL import Image
 from surya.settings import settings
 from tqdm import tqdm
+import numpy as np
 
 
 def batch_recognition(images: List, languages: List[List[str]], model, processor):
@@ -17,9 +18,9 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         batch_pixel_values = model_inputs["pixel_values"][i:i+settings.RECOGNITION_BATCH_SIZE]
         batch_decoder_input = [[model.config.decoder_start_token_id] + lang for lang in batch_langs]
 
-        batch_langs = torch.tensor(batch_langs, dtype=torch.long).to(model.device)
-        batch_pixel_values = torch.tensor(batch_pixel_values, dtype=model.dtype).to(model.device)
-        batch_decoder_input = torch.tensor(batch_decoder_input, dtype=torch.long).to(model.device)
+        batch_langs = torch.from_numpy(np.array(batch_langs, dtype=np.int64)).to(model.device)
+        batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
+        batch_decoder_input = torch.from_numpy(np.array(batch_decoder_input, dtype=np.int64)).to(model.device)
 
         with torch.inference_mode():
             generated_ids = model.generate(
