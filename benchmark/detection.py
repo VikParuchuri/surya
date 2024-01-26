@@ -6,9 +6,9 @@ import json
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
-from surya.model.segformer import load_model, load_processor
+from surya.model.detection.segformer import load_model, load_processor
 from surya.input.processing import open_pdf, get_page_images
-from surya.detection import batch_inference
+from surya.detection import batch_detection
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
@@ -54,7 +54,7 @@ def main():
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
     start = time.time()
-    predictions = batch_inference(images, model, processor)
+    predictions = batch_detection(images, model, processor)
     surya_time = time.time() - start
 
     start = time.time()

@@ -1,6 +1,6 @@
 import gradio as gr
-from surya.detection import batch_inference
-from surya.model.segformer import load_model, load_processor
+from surya.detection import batch_detection
+from surya.model.detection.segformer import load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 
 model, processor = load_model(), load_processor()
@@ -18,7 +18,7 @@ Learn more [here](https://github.com/VikParuchuri/surya).
 """.strip()
 
 def text_detection(img):
-    preds = batch_inference([img], model, processor)[0]
+    preds = batch_detection([img], model, processor)[0]
     img = draw_polys_on_image(preds["polygons"], img)
     return img, preds
 

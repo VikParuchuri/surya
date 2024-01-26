@@ -81,14 +81,14 @@ You can also do text detection from code with:
 
 ```
 from PIL import Image
-from surya.detection import batch_inference
+from surya.detection import batch_detection
 from surya.model.segformer import load_model, load_processor
 
 image = Image.open(IMAGE_PATH)
 model, processor = load_model(), load_processor()
 
 # predictions is a list of dicts, one per image
-predictions = batch_inference([image], model, processor)
+predictions = batch_detection([image], model, processor)
 ```
 
 ## Text recognition
