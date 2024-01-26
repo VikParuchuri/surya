@@ -5,6 +5,7 @@ import torch
 from torch import nn
 import numpy as np
 from PIL import Image
+from rich.progress import track
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
 from surya.model.processing import prepare_image, split_image
@@ -19,7 +20,9 @@ def batch_inference(images: List, model, processor):
     split_index = []
     split_heights = []
     image_splits = []
-    for i, image in enumerate(images):
+    for i, image in track(
+        enumerate(images), total=len(images), description="Image preprocessing"
+    ):
         image_parts, split_height = split_image(image, processor)
         image_splits.extend(image_parts)
         split_index.extend([i] * len(image_parts))
@@ -28,8 +31,11 @@ def batch_inference(images: List, model, processor):
     image_splits = [prepare_image(image, processor) for image in image_splits]
 
     pred_parts = []
-    for i in range(0, len(image_splits), settings.DETECTOR_BATCH_SIZE):
-        batch = image_splits[i:i+settings.DETECTOR_BATCH_SIZE]
+    for i in track(
+        range(0, len(image_splits), settings.DETECTOR_BATCH_SIZE),
+        description="Batch inference",
+    ):
+        batch = image_splits[i : i + settings.DETECTOR_BATCH_SIZE]
         # Batch images in dim 0
         batch = torch.stack(batch, dim=0)
         batch = batch.to(model.dtype)
@@ -45,19 +51,27 @@ def batch_inference(images: List, model, processor):
 
             heatmap_shape = list(heatmap.shape)
             correct_shape = [processor.size["height"], processor.size["width"]]
-            cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
+            cv2_size = list(
+                reversed(correct_shape)
+            )  # opencv uses (width, height) instead of (height, width)
 
             if heatmap_shape != correct_shape:
                 heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
 
             affinity_shape = list(affinity_map.shape)
             if affinity_shape != correct_shape:
-                affinity_map = cv2.resize(affinity_map, cv2_size, interpolation=cv2.INTER_LINEAR)
+                affinity_map = cv2.resize(
+                    affinity_map, cv2_size, interpolation=cv2.INTER_LINEAR
+                )
 
             pred_parts.append((heatmap, affinity_map))
 
     preds = []
-    for i, (idx, height) in enumerate(zip(split_index, split_heights)):
+    for i, (idx, height) in track(
+        enumerate(zip(split_index, split_heights)),
+        total=len(split_index),
+        description="Stitching predictions",
+    ):
         if len(preds) <= idx:
             preds.append(pred_parts[i])
         else:
@@ -76,7 +90,7 @@ def batch_inference(images: List, model, processor):
 
     assert len(preds) == len(images)
     results = []
-    for i in range(len(images)):
+    for i in track(range(len(images)), description="Generating results"):
         heatmap, affinity_map = preds[i]
         heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
         aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
@@ -86,21 +100,19 @@ def batch_inference(images: List, model, processor):
         bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes[i])
         bbox_data = [bbox.model_dump() for bbox in bboxes]
         vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
-        horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
+        horizontal_lines = get_horizontal_lines(
+            affinity_map, affinity_size, orig_sizes[i]
+        )
 
-        results.append({
-            "bboxes": [bbd["bbox"] for bbd in bbox_data],
-            "polygons": [bbd["corners"] for bbd in bbox_data],
-            "vertical_lines": vertical_lines,
-            "horizontal_lines": horizontal_lines,
-            "heatmap": heat_img,
-            "affinity_map": aff_img,
-        })
+        results.append(
+            {
+                "bboxes": [bbd["bbox"] for bbd in bbox_data],
+                "polygons": [bbd["corners"] for bbd in bbox_data],
+                "vertical_lines": vertical_lines,
+                "horizontal_lines": horizontal_lines,
+                "heatmap": heat_img,
+                "affinity_map": aff_img,
+            }
+        )
 
     return results
-
-
-
-
-
-
