@@ -10,8 +10,10 @@ class VariableDonutSwinConfig(DonutSwinConfig):
 
 
 # Config specific to the model, needed for the tokenizer
-TOTAL_TOKENS = 256
+TOTAL_TOKENS = 65536
 TOKEN_OFFSET = 3 # Pad, eos, bos
+SPECIAL_TOKENS = 253
+TOTAL_VOCAB_SIZE = TOTAL_TOKENS + TOKEN_OFFSET + SPECIAL_TOKENS
 LANGUAGE_MAP = {
     'af': 0,
     'am': 1,

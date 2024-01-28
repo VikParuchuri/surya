@@ -404,7 +404,7 @@ class MBartMoEDecoder(MBartDecoder):
             config.d_model,
         )
         # Language-specific MoE goes at second and second-to-last layer
-        self.layers = nn.ModuleList([MBartMoEDecoderLayer(config, has_moe=(bool(i == 1) or bool(i == 4)) and config.use_moe) for i in range(config.decoder_layers)])
+        self.layers = nn.ModuleList([MBartMoEDecoderLayer(config, has_moe=(i in config.moe_layers) and config.use_moe) for i in range(config.decoder_layers)])
         self._use_flash_attention_2 = config._attn_implementation == "flash_attention_2"
         self.layernorm_embedding = nn.LayerNorm(config.d_model)
         self.layer_norm = nn.LayerNorm(config.d_model)

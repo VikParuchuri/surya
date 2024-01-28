@@ -5,13 +5,35 @@ import numpy as np
 import torch
 from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
 
-def _tokenize(text: str, langs: List[str], eos_token_id: int = 1, add_eos: bool = True, add_bos: bool = True):
-    byte_codes = []
-    for char in text:
-        # Add 3 to account for special tokens
-        byte_codes.append([byte + TOKEN_OFFSET for byte in char.encode('utf-8')])
 
-    tokens = list(chain.from_iterable(byte_codes))
+def text_to_utf16_numbers(text):
+    utf16_bytes = text.encode('utf-16le')  # Little-endian to simplify byte order handling
+
+    numbers = []
+
+    # Iterate through each pair of bytes and combine them into a single number
+    for i in range(0, len(utf16_bytes), 2):
+        # Combine two adjacent bytes into a single number
+        number = utf16_bytes[i] + (utf16_bytes[i + 1] << 8)
+        numbers.append(number)
+
+    return numbers
+
+
+def utf16_numbers_to_text(numbers):
+    byte_array = bytearray()
+    for number in numbers:
+        # Extract the two bytes from the number and add them to the byte array
+        byte_array.append(number & 0xFF)         # Lower byte
+        byte_array.append((number >> 8) & 0xFF)  # Upper byte
+
+    text = byte_array.decode('utf-16le', errors="ignore")
+    return text
+
+
+def _tokenize(text: str, langs: List[str], eos_token_id: int = 1, add_eos: bool = True, add_bos: bool = True):
+    tokens = text_to_utf16_numbers(text)
+    tokens = [t + TOKEN_OFFSET for t in tokens] # Account for special pad, etc, tokens
 
     lang_list = []
     for lang in langs:
@@ -91,5 +113,5 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         token_ids = [t for t in token_ids if TOKEN_OFFSET <= t < self.special_token_start]
         token_ids = [t - TOKEN_OFFSET for t in token_ids]
-        text = bytes(token_ids).decode('utf-8', errors='ignore')
+        text = utf16_numbers_to_text(token_ids)
         return text

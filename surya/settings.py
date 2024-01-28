@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     FONT_DIR: str = os.path.join(BASE_DIR, "static", "fonts")
 
     @computed_field
-    @property
     def TORCH_DEVICE_MODEL(self) -> str:
         if self.TORCH_DEVICE is not None:
             return self.TORCH_DEVICE
@@ -33,7 +32,6 @@ class Settings(BaseSettings):
         return "cpu"
 
     @computed_field
-    @property
     def TORCH_DEVICE_DETECTION(self) -> str:
         if self.TORCH_DEVICE is not None:
             return self.TORCH_DEVICE
@@ -45,7 +43,7 @@ class Settings(BaseSettings):
         return "cpu"
 
     # Text detection
-    DETECTOR_BATCH_SIZE: int = 2 if TORCH_DEVICE_DETECTION == "cpu" else 32
+    DETECTOR_BATCH_SIZE: Optional[int] = None # Set to 2 for CPU, 32 otherwise
     DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector"
     BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
@@ -53,9 +51,9 @@ class Settings(BaseSettings):
     DETECTOR_NMS_THRESHOLD: float = 0.35 # Threshold for non-maximum suppression
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test_gqa"
-    RECOGNITION_MAX_TOKENS: int = 512
-    RECOGNITION_BATCH_SIZE: int = 8 if TORCH_DEVICE_MODEL in ["cpu", "mps"] else 128
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test_utf16"
+    RECOGNITION_MAX_TOKENS: int = 160
+    RECOGNITION_BATCH_SIZE: Optional[int] = None # Set to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
     RECOGNITION_RENDER_FONT: str = os.path.join(FONT_DIR, "GoNotoKurrent-Regular.ttf")
 

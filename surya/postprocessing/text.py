@@ -9,26 +9,29 @@ def get_text_size(text, font):
     return width, height
 
 
-def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=settings.RECOGNITION_RENDER_FONT, font_size=14):
-    image = Image.new('RGB', image_size, color='white')
+def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=settings.RECOGNITION_RENDER_FONT, font_size=24, res_upscale=2):
+    new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)
+    image = Image.new('RGB', new_image_size, color='white')
     draw = ImageDraw.Draw(image)
 
     for bbox, text in zip(bboxes, texts):
-        bbox_width = bbox[2] - bbox[0]
-        bbox_height = bbox[3] - bbox[1]
+        s_bbox = [coord * res_upscale for coord in bbox]
+        bbox_width = s_bbox[2] - s_bbox[0]
+        bbox_height = s_bbox[3] - s_bbox[1]
 
         # Shrink the text to fit in the bbox if needed
-        font = ImageFont.truetype(font_path, font_size)
+        box_font_size = font_size
+        font = ImageFont.truetype(font_path, box_font_size)
         text_width, text_height = get_text_size(text, font)
-        while (text_width > bbox_width or text_height > bbox_height) and font_size > 6:
-            font_size -= 1
-            font = ImageFont.truetype(font_path, font_size)
+        while (text_width > bbox_width or text_height > bbox_height) and box_font_size > 6:
+            box_font_size = min(int(box_font_size * 0.8), box_font_size - 1)
+            font = ImageFont.truetype(font_path, box_font_size)
             text_width, text_height = get_text_size(text, font)
 
         # Calculate text position (centered in bbox)
         text_width, text_height = get_text_size(text, font)
-        x = bbox[0] + (bbox_width - text_width) / 2
-        y = bbox[1] + (bbox_height - text_height) / 2
+        x = s_bbox[0] + (bbox_width - text_width) / 2
+        y = s_bbox[1] + (bbox_height - text_height) / 2
 
         draw.text((x, y), text, fill="black", font=font)
 
