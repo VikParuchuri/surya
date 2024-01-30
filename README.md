@@ -79,7 +79,7 @@ You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don
 
 You can also do text detection from code with:
 
-```
+```py
 from PIL import Image
 from surya.detection import batch_inference
 from surya.model.segformer import load_model, load_processor
