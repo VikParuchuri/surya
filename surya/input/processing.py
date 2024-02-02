@@ -9,6 +9,7 @@ from surya.settings import settings
 
 
 def split_image(img, processor):
+    # This will not modify/return the original image - it will either crop, or copy the image
     img_height = list(img.size)[1]
     max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
     processor_height = processor.size["height"]
@@ -28,7 +29,7 @@ def split_image(img, processor):
             splits.append(cropped)
             split_heights.append(height)
         return splits, split_heights
-    return [img], [img_height]
+    return [img.copy()], [img_height]
 
 
 def prepare_image(img, processor):
@@ -58,6 +59,14 @@ def get_page_images(doc, indices: List, dpi=96):
     return images
 
 
+def slice_bboxes_from_image(image: Image.Image, bboxes):
+    lines = []
+    for bbox in bboxes:
+        line = image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        lines.append(line)
+    return lines
+
+
 def slice_polys_from_image(image: Image.Image, polys):
     lines = []
     for poly in polys:
@@ -66,30 +75,15 @@ def slice_polys_from_image(image: Image.Image, polys):
 
 
 def slice_and_pad_poly(image: Image.Image, coordinates):
-    # Create a mask for the polygon
-    mask = Image.new('L', image.size, 0)
-
-    # coordinates must be in tuple form for PIL
     coordinates = [(corner[0], corner[1]) for corner in coordinates]
+
+    mask = Image.new('L', image.size, 0)
     ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=1)
-    mask = np.array(mask)
-
-    # Extract the polygonal area from the image
-    polygon_image = np.array(image)
-    polygon_image[~mask] = 0
-    polygon_image = Image.fromarray(polygon_image)
-
-    bbox_image = Image.new('L', image.size, 0)
-    ImageDraw.Draw(bbox_image).polygon(coordinates, outline=1, fill=1)
-    bbox = bbox_image.getbbox()
-
-    rectangle = Image.new('RGB', (bbox[2] - bbox[0], bbox[3] - bbox[1]), 'white')
-
-    # Paste the polygon into the rectangle
-    polygon_center = (bbox[2] + bbox[0]) // 2, (bbox[3] + bbox[1]) // 2
-    rectangle_center = rectangle.width // 2, rectangle.height // 2
-    paste_position = (rectangle_center[0] - polygon_center[0] + bbox[0],
-                      rectangle_center[1] - polygon_center[1] + bbox[1])
-    rectangle.paste(polygon_image.crop(bbox), paste_position)
+    bbox = mask.getbbox()
+    mask = mask.crop(bbox)
+    cropped_image = image.crop(bbox)
+    mask = mask.convert('1')
+    rectangle = Image.new('RGB', cropped_image.size, 'white')
+    rectangle.paste(cropped_image, (0, 0), mask)
 
     return rectangle

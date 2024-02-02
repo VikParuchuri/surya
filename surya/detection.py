@@ -24,7 +24,7 @@ def batch_detection(images: List, model, processor):
     assert all([isinstance(image, Image.Image) for image in images])
     batch_size = get_batch_size()
 
-    images = [image.copy().convert("RGB") for image in images]
+    images = [image.convert("RGB") for image in images]
     orig_sizes = [image.size for image in images]
     split_index = []
     split_heights = []

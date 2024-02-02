@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         return "cpu"
 
     # Text detection
-    DETECTOR_BATCH_SIZE: Optional[int] = None # Set to 2 for CPU, 32 otherwise
+    DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU, 32 otherwise
     DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test_utf16m"
     RECOGNITION_MAX_TOKENS: int = 160
-    RECOGNITION_BATCH_SIZE: Optional[int] = None # Set to 8 for CPU/MPS, 256 otherwise
+    RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
     RECOGNITION_RENDER_FONT: str = os.path.join(FONT_DIR, "GoNotoKurrent-Regular.ttf")
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"

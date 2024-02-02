@@ -16,7 +16,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
-transformers = "^4.36.2"
+transformers = "4.36.2"
 torch = "^2.1.2"
 pydantic = "^2.5.3"
 pydantic-settings = "^2.1.0"
