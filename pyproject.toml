@@ -33,6 +33,7 @@ pytesseract = "^0.3.10"
 pymupdf = "^1.23.8"
 snakeviz = "^2.2.0"
 datasets = "^2.16.1"
+rapidfuzz = "^3.6.1"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"

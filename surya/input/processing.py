@@ -58,14 +58,14 @@ def get_page_images(doc, indices: List, dpi=96):
     return images
 
 
-def slice_polys_from_image(image: Image, polys):
+def slice_polys_from_image(image: Image.Image, polys):
     lines = []
     for poly in polys:
         lines.append(slice_and_pad_poly(image, poly))
     return lines
 
 
-def slice_and_pad_poly(image: Image, coordinates):
+def slice_and_pad_poly(image: Image.Image, coordinates):
     # Create a mask for the polygon
     mask = Image.new('L', image.size, 0)
 

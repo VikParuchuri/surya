@@ -44,7 +44,7 @@ def main():
     else:
         pathname = "doclaynet_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
-        dataset = datasets.load_dataset(settings.BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
         images = [i.convert("RGB") for i in images]
         correct_boxes = []

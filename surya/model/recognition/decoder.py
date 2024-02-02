@@ -692,12 +692,14 @@ class MBartMoE(MBartForCausalLM):
         }
 
     def prune_moe_experts(self, keep_keys: List[int]):
-        keep_keys = [str(key) for key in keep_keys]
+        # Remove experts not specified in keep_keys
+        str_keep_keys = [str(key) for key in keep_keys]
         for layer in self.model.decoder.layers:
             if not layer.has_moe:
                 continue
 
             lang_keys = list(layer.moe.experts.keys())
             for lang in lang_keys:
-                if lang not in keep_keys:
+                if lang not in str_keep_keys:
                     layer.moe.experts.pop(lang)
+            layer.lang_codes = keep_keys

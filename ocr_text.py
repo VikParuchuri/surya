@@ -3,14 +3,12 @@ import json
 from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
-from surya.input.processing import slice_polys_from_image
 from surya.model.detection.segformer import load_model as load_detection_model, load_processor as load_detection_processor
 from surya.model.recognition.model import load_model as load_recognition_model
 from surya.model.recognition.processor import load_processor as load_recognition_processor
 from surya.model.recognition.tokenizer import _tokenize
+from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
-from surya.detection import batch_detection
-from surya.recognition import batch_recognition
 from surya.settings import settings
 import os
 
@@ -26,8 +24,12 @@ def main():
     args = parser.parse_args()
 
     langs = args.lang.split(",")
-    detection_processor = load_detection_processor()
-    detection_model = load_detection_model()
+    det_processor = load_detection_processor()
+    det_model = load_detection_model()
+
+    _, lang_tokens = _tokenize("", langs)
+    rec_model = load_recognition_model(langs=lang_tokens) # Prune model moes to only include languages we need
+    rec_processor = load_recognition_processor()
 
     if os.path.isdir(args.input_path):
         images, names = load_from_folder(args.input_path, args.max, args.start_page)
@@ -36,50 +38,25 @@ def main():
         images, names = load_from_file(args.input_path, args.max, args.start_page)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
-    det_predictions = batch_detection(images, detection_model, detection_processor)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    del detection_processor
-    del detection_model
+    image_langs = [langs] * len(images)
+    predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
 
-    _, lang_tokens = _tokenize("", langs)
-    recognition_model = load_recognition_model(langs=lang_tokens) # Prune model moes to only include languages we need
-    recognition_processor = load_recognition_processor()
+    page_num = defaultdict(int)
+    for i, pred in enumerate(predictions_by_image):
+        pred["name"] = names[i]
+        pred["page"] = page_num[names[i]]
+        page_num[names[i]] += 1
 
-    slice_map = []
-    all_slices = []
-    all_langs = []
-    for idx, (image, pred, name) in enumerate(zip(images, det_predictions, names)):
-        slices = slice_polys_from_image(image, pred["polygons"])
-        slice_map.append(len(slices))
-        all_slices.extend(slices)
-        all_langs.extend([langs] * len(slices))
-
-    rec_predictions = batch_recognition(all_slices, all_langs, recognition_model, recognition_processor)
-
-    predictions_by_page = defaultdict(list)
-    slice_start = 0
-    for idx, (image, det_pred, name) in enumerate(zip(images, det_predictions, names)):
-        slice_end = slice_start + slice_map[idx]
-        image_lines = rec_predictions[slice_start:slice_end]
-        slice_start = slice_end
-
-        assert len(image_lines) == len(det_pred["polygons"]) == len(det_pred["bboxes"])
-        predictions_by_page[name].append({
-            "lines": image_lines,
-            "polys": det_pred["polygons"],
-            "bboxes": det_pred["bboxes"],
-            "name": name,
-            "page_number": len(predictions_by_page[name]) + 1
-        })
-
-        if args.images:
-            page_image = draw_text_on_image(det_pred["bboxes"], image_lines, image.size)
+    if args.images:
+        for idx, (name, image, pred) in enumerate(zip(names, images, predictions_by_image)):
+            page_image = draw_text_on_image(pred["bboxes"], pred["text_lines"], image.size)
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
-        json.dump(predictions_by_page, f)
+        json.dump(predictions_by_image, f)
 
     print(f"Wrote results to {result_path}")
 
