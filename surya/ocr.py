@@ -57,7 +57,7 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
     slice_map = []
     all_slices = []
     all_langs = []
-    for idx, (image, det_pred, lang) in tqdm(enumerate(zip(images, det_predictions, langs)), desc="Slicing images"):
+    for idx, (image, det_pred, lang) in enumerate(zip(images, det_predictions, langs)):
         slices = slice_polys_from_image(image, det_pred["polygons"])
         slice_map.append(len(slices))
         all_slices.extend(slices)

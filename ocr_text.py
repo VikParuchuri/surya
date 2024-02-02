@@ -10,6 +10,7 @@ from surya.model.recognition.tokenizer import _tokenize
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
+from surya.languages import LANGUAGE_TO_CODE, CODE_TO_LANGUAGE
 import os
 
 
@@ -23,7 +24,14 @@ def main():
     parser.add_argument("--lang", type=str, help="Language to use for OCR. Comma separate for multiple.", default="en")
     args = parser.parse_args()
 
+    # Split and validate language codes
     langs = args.lang.split(",")
+    for i in range(len(langs)):
+        if langs[i] in LANGUAGE_TO_CODE:
+            langs[i] = LANGUAGE_TO_CODE[langs[i]]
+        if langs[i] not in CODE_TO_LANGUAGE:
+            raise ValueError(f"Language code {langs[i]} not found.")
+
     det_processor = load_detection_processor()
     det_model = load_detection_model()
 

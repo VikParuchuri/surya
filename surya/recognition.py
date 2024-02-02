@@ -19,15 +19,19 @@ def get_batch_size():
 
 def batch_recognition(images: List, languages: List[List[str]], model, processor):
     assert all([isinstance(image, Image.Image) for image in images])
+    assert len(images) == len(languages)
     batch_size = get_batch_size()
 
     images = [image.convert("RGB") for image in images]
-    model_inputs = processor(text=[""] * len(languages), images=images, lang=languages)
 
     output_text = []
-    for i in tqdm(range(0, len(model_inputs["pixel_values"]), batch_size), desc="Recognizing Text"):
-        batch_langs = model_inputs["langs"][i:i+batch_size]
-        batch_pixel_values = model_inputs["pixel_values"][i:i+batch_size]
+    for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
+        batch_langs = languages[i:i+batch_size]
+        batch_images = images[i:i+batch_size]
+        model_inputs = processor(text=[""] * len(batch_langs), images=batch_images, lang=batch_langs)
+
+        batch_pixel_values = model_inputs["pixel_values"]
+        batch_langs = model_inputs["langs"]
         batch_decoder_input = [[model.config.decoder_start_token_id] + lang for lang in batch_langs]
 
         batch_langs = torch.from_numpy(np.array(batch_langs, dtype=np.int64)).to(model.device)

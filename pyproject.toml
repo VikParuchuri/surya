@@ -34,6 +34,7 @@ pymupdf = "^1.23.8"
 snakeviz = "^2.2.0"
 datasets = "^2.16.1"
 rapidfuzz = "^3.6.1"
+arabic-reshaper = "^3.0.0"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"

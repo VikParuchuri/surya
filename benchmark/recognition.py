@@ -7,6 +7,8 @@ from surya.model.recognition.processor import load_processor as load_recognition
 from surya.ocr import run_ocr, run_recognition
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
+from surya.languages import CODE_TO_LANGUAGE, is_arabic
+import arabic_reshaper
 import os
 import datasets
 import json
@@ -46,9 +48,12 @@ def main():
 
     image_scores = defaultdict(list)
     for idx, (pred, ref_text, lang) in enumerate(zip(predictions_by_image, line_text, lang_list)):
+        if any(is_arabic(l) for l in lang):
+            ref_text = [arabic_reshaper.reshape(t) for t in ref_text]
+            pred["text_lines"] = [arabic_reshaper.reshape(t) for t in pred["text_lines"]]
         image_score = overlap_score(pred["text_lines"], ref_text)
         for l in lang:
-            image_scores[l].append(image_score)
+            image_scores[CODE_TO_LANGUAGE[l]].append(image_score)
 
     image_avgs = {l: sum(scores) / len(scores) for l, scores in image_scores.items()}
     print(image_avgs)
