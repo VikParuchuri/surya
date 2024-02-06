@@ -4,6 +4,7 @@ from pytesseract import Output
 from surya.settings import settings
 import os
 from concurrent.futures import ProcessPoolExecutor
+from surya.detection import get_batch_size
 
 
 def tesseract_bboxes(img):
@@ -23,7 +24,7 @@ def tesseract_bboxes(img):
 
 def tesseract_parallel(imgs):
     # Tesseract uses 4 threads per instance
-    tess_parallel_cores = min(len(imgs), settings.DETECTOR_BATCH_SIZE)
+    tess_parallel_cores = min(len(imgs), get_batch_size())
     cpus = os.cpu_count()
     tess_parallel_cores = min(tess_parallel_cores, cpus)
 

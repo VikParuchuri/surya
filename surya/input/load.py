@@ -2,6 +2,7 @@ from surya.input.processing import open_pdf, get_page_images
 import os
 import filetype
 from PIL import Image
+import json
 
 
 def get_name_from_path(path):
@@ -58,3 +59,9 @@ def load_from_folder(folder_path, max_pages=None, start_page=None):
             images.extend(image)
             names.extend(name)
     return images, names
+
+
+def load_lang_file(lang_path, names):
+    with open(lang_path, "r") as f:
+        lang_dict = json.load(f)
+    return [lang_dict[name].copy() for name in names]

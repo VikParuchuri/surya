@@ -38,6 +38,7 @@ arabic-reshaper = "^3.0.0"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"
+surya_ocr = "ocr_text:main"
 
 [build-system]
 requires = ["poetry-core"]

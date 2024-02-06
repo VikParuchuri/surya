@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in an input file or folder (PDFs or image).")
-    parser.add_argument("input_path", type=str, help="Path to pdf or image file to detect bboxes in.")
+    parser.add_argument("input_path", type=str, help="Path to pdf or image file or folder to detect bboxes in.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "surya"))
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)

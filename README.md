@@ -2,11 +2,11 @@
 
 Surya is a multilingual document OCR toolkit.  It can do:
 
-- Accurate line-level text detection
-- Text recognition (coming soon)
+- Accurate line-level text detection in any language
+- Text recognition in 90+ languages
 - Table and chart detection (coming soon)
 
-It works on a range of documents and languages (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
+It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
 ![New York Times Article Example](static/images/excerpt.png)
 
@@ -46,6 +46,62 @@ Model weights will automatically download the first time you run surya.
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
 - Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. Note that the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
 
+## OCR (text recognition)
+
+You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
+
+```
+surya_ocr DATA_PATH --images --lang hi,en
+```
+
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
+- `--lang` specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
+- `--lang_file` if you want to use a different language for different PDFs/images, you can specify languages here.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
+- `--images` will save images of the pages and detected text lines (optional)
+- `--results_dir` specifies the directory to save results to instead of the default
+- `--max` specifies the maximum number of pages to process if you don't want to process everything
+- `--start_page` specifies the page number to start processing from
+
+The `results.json` file will contain these keys for each page of the input document(s):
+
+- `text_lines` - the detected text in each line
+- `polys` - the polygons for each detected text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+- `bboxes` - the axis-aligned rectangles for each detected text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+- `language` - the languages specified for the page
+- `name` - the name of the file
+- `page_number` - the page number in the file
+
+**Performance tips**
+
+Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `40MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 10GB of VRAM.
+
+Depending on your CPU core count, `RECOGNITION_BATCH_SIZE` might make a difference there too - the default CPU batch size is `32`.
+
+
+### From Python
+
+You can also do OCR from code with:
+
+```
+from PIL import Image
+from surya.ocr import run_ocr
+from surya.model.detection.segformer import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.recognition.model import load_model as load_rec_model
+from surya.model.recognition.processor import load_processor as load_rec_processor
+
+image = Image.open(IMAGE_PATH)
+langs = ["en"] # Replace with your languages
+
+det_processor = load_det_processor()
+det_model = load_det_model()
+
+rec_model = load_rec_model()
+rec_processor = load_rec_processor()
+
+predictions = run_ocr([image], langs, det_model, det_processor, rec_model, rec_processor)
+```
+
+
 ## Text line detection
 
 You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes, and optionally save images of the pages with the bboxes.
@@ -75,6 +131,7 @@ Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference 
 
 You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  Try lowering them to detect more text, and vice versa.
 
+
 ### From Python
 
 You can also do text detection from code with:
@@ -90,10 +147,6 @@ model, processor = load_model(), load_processor()
 # predictions is a list of dicts, one per image
 predictions = batch_detection([image], model, processor)
 ```
-
-## Text recognition
-
-Coming soon.
 
 ## Table and chart detection
 
@@ -113,9 +166,13 @@ If you want to develop surya, you can install it manually:
 - This is specialized for document OCR.  It will likely not work on photos or other images.
 - It is for printed text, not handwriting.
 - The model has trained itself to ignore advertisements.
-- This has worked for every language I've tried, but languages with very different character sets may not work well.
+- You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
 
 # Benchmarks
+
+## OCR
+
+Coming soon.
 
 ## Text line detection
 
@@ -168,13 +225,13 @@ python benchmark/detection.py --max 256
 
 # Training
 
-This was trained on 4x A6000s for about 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
+The text detection was trained on 4x A6000s for about 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
+
+Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a modified donut model (GQA, MoE layer, UTF-16 decoding, layer config changes).
 
 # Commercial usage
 
-**Text detection**
-
-The text detection model was trained from scratch, so it's okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
+The text detection and OCR models were trained from scratch, so they're okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
 
 If you want to remove the GPL license requirements for inference or use the weights commercially over the revenue limit, please contact me at surya@vikas.sh for dual licensing.
 
@@ -183,6 +240,7 @@ If you want to remove the GPL license requirements for inference or use the weig
 This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
+- [Donut](https://github.com/clovaai/donut) from Naver
 - [transformers](https://github.com/huggingface/transformers) from huggingface
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
 
