@@ -1,3 +1,6 @@
+import os
+
+import requests
 from PIL import Image, ImageDraw, ImageFont
 from surya.settings import settings
 
@@ -21,6 +24,14 @@ def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=setting
 
         # Shrink the text to fit in the bbox if needed
         box_font_size = font_size
+
+        # Download font if it doesn't exist
+        if not os.path.exists(font_path):
+            with requests.get(settings.RECOGNITION_FONT_DL_PATH, stream=True) as r, open(font_path, 'wb') as f:
+                r.raise_for_status()
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
         font = ImageFont.truetype(font_path, box_font_size)
         text_width, text_height = get_text_size(text, font)
         while (text_width > bbox_width or text_height > bbox_height) and box_font_size > 6:
