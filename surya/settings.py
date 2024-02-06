@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     DETECTOR_NMS_THRESHOLD: float = 0.35 # Threshold for non-maximum suppression
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/rec_test_utf16m"
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/text_recognizer_test"
     RECOGNITION_MAX_TOKENS: int = 160
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
