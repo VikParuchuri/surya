@@ -1,9 +1,9 @@
 # Surya
 
-Surya is a multilingual document OCR toolkit.  It can do:
+Surya is for multilingual document OCR.  It can do:
 
-- Accurate line-level text detection in any language
-- Text recognition in 90+ languages
+- Accurate OCR in 90+ languages
+- Line-level text detection in any language
 - Table and chart detection (coming soon)
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
@@ -39,23 +39,23 @@ Install with:
 pip install surya-ocr
 ```
 
-Model weights will automatically download the first time you run surya.
+Model weights will automatically download the first time you run surya.  Note that this does not work with the latest version of transformers `4.37+` [yet](https://github.com/huggingface/transformers/issues/28846#issuecomment-1926109135), so you will need to keep `4.36.2`, which is installed with surya.
 
 # Usage
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
-- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. Note that the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. For text detection, the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
 
 ## OCR (text recognition)
 
-You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
+You can detect text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
 
 ```
 surya_ocr DATA_PATH --images --langs hi,en
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
-- `--langs` specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
+- `--langs` specifies the language(s) to use for OCR.  You can comma separate multiple languages (I don't recommend using more than `4`). Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
 - `--lang_file` if you want to use a different language for different PDFs/images, you can specify languages here.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
 - `--images` will save images of the pages and detected text lines (optional)
 - `--results_dir` specifies the directory to save results to instead of the default
@@ -158,15 +158,17 @@ If you want to develop surya, you can install it manually:
 
 - `git clone https://github.com/VikParuchuri/surya.git`
 - `cd surya`
-- `poetry install` # Installs main and dev dependencies
+- `poetry install` - installs main and dev dependencies
+- `poetry shell` - activates the virtual environment
 
 # Limitations
 
-- Math will not be detected well with the main model.  Use `DETECTOR_MODEL_CHECKPOINT=vikp/line_detector_math` for better results.
 - This is specialized for document OCR.  It will likely not work on photos or other images.
 - It is for printed text, not handwriting.
 - The model has trained itself to ignore advertisements.
 - You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
+- Math will not be detected well with the main detector model.  Use `DETECTOR_MODEL_CHECKPOINT=vikp/line_detector_math` for better results.
+
 
 # Benchmarks
 
@@ -207,7 +209,7 @@ Then we calculate precision and recall for the whole dataset.
 You can benchmark the performance of surya on your machine.  
 
 - Follow the manual install instructions above.
-- `poetry install --group dev` # Installs dev dependencies
+- `poetry install --group dev` - installs dev dependencies
 
 **Text line detection**
 
@@ -222,10 +224,23 @@ python benchmark/detection.py --max 256
 - `--pdf_path` will let you specify a pdf to benchmark instead of the default data
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
+**Text recognition**
+
+This will evaluate surya and optionally tesseract on multilingual pdfs from common crawl.
+
+```
+python benchmark/recognition.py --max 256
+```
+
+- `--max` controls how many images to process for the benchmark
+- `--debug` will render images with detected text
+- `--results_dir` will let you specify a directory to save results to instead of the default one
+- `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
+
 
 # Training
 
-The text detection was trained on 4x A6000s for about 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
+Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
 
 Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a modified donut model (GQA, MoE layer, UTF-16 decoding, layer config changes).
 

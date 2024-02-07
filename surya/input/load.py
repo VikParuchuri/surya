@@ -19,8 +19,8 @@ def load_pdf(pdf_path, max_pages=None, start_page=None):
         start_page = 0
 
     if max_pages:
-        assert max_pages + start_page <= last_page and max_pages >= 0, f"Max pages must be between 0 and {last_page}"
-        last_page = start_page + max_pages
+        assert max_pages >= 0, f"Max pages must be greater than 0"
+        last_page = min(start_page + max_pages, last_page)
 
     page_indices = list(range(start_page, last_page))
     images = get_page_images(doc, page_indices)

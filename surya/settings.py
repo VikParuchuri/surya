@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     RECOGNITION_FONT_DL_PATH: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf"
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
 
+    # Tesseract (for benchmarks only)
+    TESSDATA_PREFIX: Optional[str] = None
+
     @computed_field
     @property
     def MODEL_DTYPE(self) -> torch.dtype:

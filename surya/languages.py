@@ -61,7 +61,7 @@ CODE_TO_LANGUAGE = {
     'nl': 'Dutch',
     'no': 'Norwegian',
     'om': 'Oromo',
-    'or': 'Odia',
+    'or': 'Oriya',
     'pa': 'Punjabi',
     'pl': 'Polish',
     'ps': 'Pashto',

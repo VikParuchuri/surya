@@ -1,8 +1,10 @@
 import math
+from typing import List
+
 from rapidfuzz import fuzz
 
 
-def overlap_score(pred_lines, reference_lines):
+def overlap_score(pred_lines: List[str], reference_lines: List[str]):
     line_scores = []
     line_weights = []
     for i, pred_line in enumerate(pred_lines):

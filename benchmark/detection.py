@@ -42,7 +42,7 @@ def main():
         image_sizes = [img.size for img in images]
         correct_boxes = get_pdf_lines(args.pdf_path, image_sizes)
     else:
-        pathname = "doclaynet_bench"
+        pathname = "det_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
         dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
