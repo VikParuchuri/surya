@@ -12,7 +12,7 @@ def get_text_size(text, font):
     return width, height
 
 
-def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=settings.RECOGNITION_RENDER_FONT, font_size=18, res_upscale=2):
+def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=settings.RECOGNITION_RENDER_FONT, max_font_size=60, res_upscale=2):
     new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)
     image = Image.new('RGB', new_image_size, color='white')
     draw = ImageDraw.Draw(image)
@@ -23,7 +23,7 @@ def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=setting
         bbox_height = s_bbox[3] - s_bbox[1]
 
         # Shrink the text to fit in the bbox if needed
-        box_font_size = font_size
+        box_font_size = min(int(.75 * bbox_height), max_font_size)
 
         # Download font if it doesn't exist
         if not os.path.exists(font_path):

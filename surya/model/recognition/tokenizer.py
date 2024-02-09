@@ -73,7 +73,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         super().__init__()
 
-    def __call__(self, texts: List[str] | str, langs: List[List[str]] | List[str], pad_token_id: int = 0, **kwargs):
+    def __call__(self, texts: Union[List[str], str], langs: Union[List[List[str]], List[str]], pad_token_id: int = 0, **kwargs):
         tokenized = []
         all_langs = []
 

@@ -30,13 +30,35 @@ def clean_contained_boxes(boxes: List[PolygonBox]):
     return new_boxes
 
 
+def get_dynamic_thresholds(linemap, text_threshold, low_text, typical_top10_avg=.7):
+    # Find average intensity of top 10% pixels
+    # Do top 10% to account for pdfs that are mostly whitespace, etc.
+    flat_map = linemap.flatten()
+    sorted_map = np.sort(flat_map)[::-1]
+    top_10_count = int(np.ceil(len(flat_map) * 0.1))
+    top_10 = sorted_map[:top_10_count]
+    avg_intensity = np.mean(top_10)
+
+    # Adjust thresholds based on normalized intensityy
+    scaling_factor = min(1, avg_intensity / typical_top10_avg) ** (1 / 2)
+
+    low_text = max(low_text * scaling_factor, 0.1)
+    text_threshold = max(text_threshold * scaling_factor, 0.15)
+
+    low_text = min(low_text, 0.6)
+    text_threshold = min(text_threshold, 0.8)
+    return text_threshold, low_text
+
+
 def detect_boxes(linemap, text_threshold, low_text):
     # From CRAFT - https://github.com/clovaai/CRAFT-pytorch
     # prepare data
     linemap = linemap.copy()
     img_h, img_w = linemap.shape
 
-    ret, text_score = cv2.threshold(linemap, low_text, 1, 0)
+    text_threshold, low_text = get_dynamic_thresholds(linemap, text_threshold, low_text)
+
+    ret, text_score = cv2.threshold(linemap, low_text, 1, cv2.THRESH_BINARY)
 
     text_score_comb = np.clip(text_score, 0, 1)
     label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
@@ -96,7 +118,7 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, labels
 
 
-def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_NMS_THRESHOLD):
+def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_BLANK_THRESHOLD):
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)

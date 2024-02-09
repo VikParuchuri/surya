@@ -25,14 +25,16 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 
 | Name             |           Text Detection            |                                      OCR |
 |------------------|:-----------------------------------:|-----------------------------------------:|
+| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) |
+| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) |
+| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) |
+| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) |
+| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |
+| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |
+| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |
 | New York Times   |   [Image](static/images/nyt.png)    |      [Image](static/images/nyt_text.png) |
-| Japanese         | [Image](static/images/japanese.png) | [Image](static/images/japanese_text.png) |
-| Chinese          | [Image](static/images/chinese.png)  |  [Image](static/images/chinese_text.png) |
-| Hindi            |  [Image](static/images/hindi.png)   |    [Image](static/images/hindi_text.png) |
-| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.png) |
-| Scientific Paper |  [Image](static/images/paper.png)   |    [Image](static/images/paper_text.png) |
-| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.png) |
-| Scanned Form     |  [Image](static/images/funsd.png)   |                                          |
+| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |
+| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) |
 
 # Installation
 
@@ -50,6 +52,15 @@ Model weights will automatically download the first time you run surya.  Note th
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
 - Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. For text detection, the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+
+## Interactive App
+
+I've included a streamlit app that lets you interactively try Surya on images or PDF files.  Run it with:
+
+```
+pip install streamlit
+surya_gui
+```
 
 ## OCR (text recognition)
 
@@ -78,10 +89,7 @@ The `results.json` file will contain these keys for each page of the input docum
 
 **Performance tips**
 
-Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `40MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 10GB of VRAM.
-
-Depending on your CPU core count, `RECOGNITION_BATCH_SIZE` might make a difference there too - the default CPU batch size is `32`.
-
+Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `40MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 10GB of VRAM.  Depending on your CPU core count, it may help, too - the default CPU batch size is `32`.
 
 ### From python
 
@@ -94,20 +102,15 @@ from surya.model.recognition.processor import load_processor as load_rec_process
 
 image = Image.open(IMAGE_PATH)
 langs = ["en"] # Replace with your languages
-
-det_processor = load_det_processor()
-det_model = load_det_model()
-
-rec_model = load_rec_model()
-rec_processor = load_rec_processor()
+det_processor, det_model = load_det_processor(), load_det_model()
+rec_model, rec_processor = load_rec_model(), load_rec_processor()
 
 predictions = run_ocr([image], langs, det_model, det_processor, rec_model, rec_processor)
 ```
 
-
 ## Text line detection
 
-You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes, and optionally save images of the pages with the bboxes.
+You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes.
 
 ```
 surya_detect DATA_PATH --images
@@ -128,12 +131,7 @@ The `results.json` file will contain these keys for each page of the input docum
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.
-
-Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference there too - the default CPU batch size is `2`.
-
-You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  Try lowering them to detect more text, and vice versa.
-
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
 
 ### From python
 
@@ -149,9 +147,20 @@ model, processor = load_model(), load_processor()
 predictions = batch_detection([image], model, processor)
 ```
 
-## Table and chart detection
+# Limitations
 
-Coming soon.
+- This is specialized for document OCR.  It will likely not work on photos or other images.
+- It is for printed text, not handwriting (though it may work on some handwriting).
+- The model has trained itself to ignore advertisements.
+- You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
+
+## Troubleshooting
+
+If OCR isn't working properly:
+
+- If the lines aren't detected properly, try increasing resolution of the image if the width is below `896px`, and vice versa.  Very high width images don't work well with the detector.
+- You can adjust `DETECTOR_BLANK_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  `DETECTOR_BLANK_THRESHOLD` controls the space between lines - any prediction below this number will be considered blank space.  `DETECTOR_TEXT_THRESHOLD` controls how text is joined - any number above this is considered text.  `DETECTOR_TEXT_THRESHOLD` should always be higher than `DETECTOR_BLANK_THRESHOLD`, and both should be in the 0-1 range.  Looking at the heatmap from the debug output of the detector can tell you how to adjust these (if you see faint things that look like boxes, lower the thresholds, and if you see bboxes being joined together, raise the thresholds).
+
 
 # Manual install
 
@@ -161,13 +170,6 @@ If you want to develop surya, you can install it manually:
 - `cd surya`
 - `poetry install` - installs main and dev dependencies
 - `poetry shell` - activates the virtual environment
-
-# Limitations
-
-- This is specialized for document OCR.  It will likely not work on photos or other images.
-- It is for printed text, not handwriting (though it may work on some handwriting).
-- The model has trained itself to ignore advertisements.
-- You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
 
 # Benchmarks
 

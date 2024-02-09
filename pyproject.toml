@@ -12,10 +12,13 @@ packages = [
 ]
 include = [
     "detect_text.py",
+    "ocr_text.py",
+    "ocr_app.py",
+    "run_ocr_app.py"
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.9,<3.13,!=3.9.7"
 transformers = "4.36.2"
 torch = "^2.1.2"
 pydantic = "^2.5.3"
@@ -35,10 +38,12 @@ snakeviz = "^2.2.0"
 datasets = "^2.16.1"
 rapidfuzz = "^3.6.1"
 arabic-reshaper = "^3.0.0"
+streamlit = "^1.31.0"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"
 surya_ocr = "ocr_text:main"
+surya_gui = "run_ocr_app:run_app"
 
 [build-system]
 requires = ["poetry-core"]

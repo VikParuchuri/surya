@@ -6,7 +6,7 @@ CODE_TO_LANGUAGE = {
     'az': 'Azerbaijani',
     'be': 'Belarusian',
     'bg': 'Bulgarian',
-    'bn': 'Bangla',
+    'bn': 'Bengali',
     'br': 'Breton',
     'bs': 'Bosnian',
     'ca': 'Catalan',
