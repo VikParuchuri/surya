@@ -22,7 +22,7 @@ def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=None)
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
+    parser.add_argument("--debug", type=int, help="Debug level - 1 dumps bad detection info, 2 writes out images.", default=0)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
     args = parser.parse_args()
 
@@ -54,8 +54,10 @@ def main():
     surya_time = time.time() - start
 
     surya_scores = defaultdict(list)
+    img_surya_scores = []
     for idx, (pred, ref_text, lang) in enumerate(zip(predictions_by_image, line_text, lang_list)):
         image_score = overlap_score(pred["text_lines"], ref_text)
+        img_surya_scores.append(image_score)
         for l in lang:
             surya_scores[CODE_TO_LANGUAGE[l]].append(image_score)
 
@@ -118,7 +120,16 @@ def main():
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
     print("Only a few major languages are displayed. See the result path for additional languages.")
 
-    if args.debug:
+    if args.debug >= 1:
+        bad_detections = []
+        for idx, (score, lang) in enumerate(zip(flat_surya_scores, lang_list)):
+            if score < .8:
+                bad_detections.append((idx, lang, score))
+        print(f"Found {len(bad_detections)} bad detections. Writing to file...")
+        with open(os.path.join(result_path, "bad_detections.json"), "w+") as f:
+            json.dump(bad_detections, f)
+
+    if args.debug == 2:
         for idx, (image, pred, ref_text, bbox, lang) in enumerate(zip(images, predictions_by_image, line_text, bboxes, lang_list)):
             pred_image_name = f"{'_'.join(lang)}_{idx}_pred.png"
             ref_image_name = f"{'_'.join(lang)}_{idx}_ref.png"

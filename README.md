@@ -8,9 +8,14 @@ Surya is for multilingual document OCR.  It can do:
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
-![New York Times Article Example](static/images/excerpt.png)
+Detection and OCR example:
 
-Surya is named after the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
+|                            Detection                             |                                   OCR                                   |
+|:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|
+|  ![New York Times Article Detection](static/images/excerpt.png)  |  ![New York Times Article Recognition](static/images/excerpt_text.png)  |
+
+
+Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
 
 ## Community
 
@@ -18,16 +23,16 @@ Surya is named after the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), w
 
 ## Examples
 
-| Name             | Text Detection                      |
-|------------------|-------------------------------------|
-| New York Times   | [Image](static/images/nyt.png)      |
-| Japanese         | [Image](static/images/japanese.png) |
-| Chinese          | [Image](static/images/chinese.png)  |
-| Hindi            | [Image](static/images/hindi.png)    |
-| Presentation     | [Image](static/images/pres.png)     |
-| Scientific Paper | [Image](static/images/paper.png)    |
-| Scanned Document | [Image](static/images/scanned.png)  |
-| Scanned Form | [Image](static/images/funsd.png)    |
+| Name             |           Text Detection            |                                      OCR |
+|------------------|:-----------------------------------:|-----------------------------------------:|
+| New York Times   |   [Image](static/images/nyt.png)    |      [Image](static/images/nyt_text.png) |
+| Japanese         | [Image](static/images/japanese.png) | [Image](static/images/japanese_text.png) |
+| Chinese          | [Image](static/images/chinese.png)  |  [Image](static/images/chinese_text.png) |
+| Hindi            |  [Image](static/images/hindi.png)   |    [Image](static/images/hindi_text.png) |
+| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.png) |
+| Scientific Paper |  [Image](static/images/paper.png)   |    [Image](static/images/paper_text.png) |
+| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.png) |
+| Scanned Form     |  [Image](static/images/funsd.png)   |                                          |
 
 # Installation
 
@@ -78,9 +83,7 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 Depending on your CPU core count, `RECOGNITION_BATCH_SIZE` might make a difference there too - the default CPU batch size is `32`.
 
 
-### From Python
-
-You can also do OCR from code with:
+### From python
 
 ```
 from PIL import Image
@@ -132,9 +135,7 @@ Depending on your CPU core count, `DETECTOR_BATCH_SIZE` might make a difference 
 You can adjust `DETECTOR_NMS_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  Try lowering them to detect more text, and vice versa.
 
 
-### From Python
-
-You can also do text detection from code with:
+### From python
 
 ```
 from PIL import Image
@@ -164,11 +165,9 @@ If you want to develop surya, you can install it manually:
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
-- It is for printed text, not handwriting.
+- It is for printed text, not handwriting (though it may work on some handwriting).
 - The model has trained itself to ignore advertisements.
 - You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
-- Math will not be detected well with the main detector model.  Use `DETECTOR_MODEL_CHECKPOINT=vikp/line_detector_math` for better results.
-
 
 # Benchmarks
 
@@ -193,11 +192,11 @@ Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a syst
 
 **Methodology**
 
-Surya predicts line-level bboxes, while tesseract and others predict word-level or character-level.  It's also hard to find 100% correct datasets with line-level annotations. Merging bboxes can be noisy, so I chose not to use IoU as the metric for evaluation.
+Surya predicts line-level bboxes, while tesseract and others predict word-level or character-level.  It's hard to find 100% correct datasets with line-level annotations. Merging bboxes can be noisy, so I chose not to use IoU as the metric for evaluation.
 
 I instead used coverage, which calculates:
 
-- Precision - how well predicted bboxes cover ground truth bboxes
+- Precision - how well the predicted bboxes cover ground truth bboxes
 - Recall - how well ground truth bboxes cover predicted bboxes
 
 First calculate coverage for each bbox, then add a small penalty for double coverage, since we want the detection to have non-overlapping bboxes.  Anything with a coverage of 0.5 or higher is considered a match.

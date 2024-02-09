@@ -3,6 +3,7 @@ from typing import List, Optional
 import numpy as np
 import pytesseract
 from pytesseract import Output
+from tqdm import tqdm
 
 from surya.input.processing import slice_bboxes_from_image
 from surya.settings import settings
@@ -37,11 +38,12 @@ def tesseract_ocr_parallel(imgs, bboxes, langs: List[str]):
     cpus = os.cpu_count()
     tess_parallel_cores = min(tess_parallel_cores, cpus)
 
-    # Tesseract uses 4 threads per instance
-    tess_parallel = max(tess_parallel_cores // 4, 1)
+    # Tesseract uses up to 4 processes per instance
+    # Divide by 2 because tesseract doesn't seem to saturate all 4 cores with these small images
+    tess_parallel = max(tess_parallel_cores // 2, 1)
 
     with ProcessPoolExecutor(max_workers=tess_parallel) as executor:
-        tess_text = executor.map(tesseract_ocr, imgs, bboxes, langs)
+        tess_text = tqdm(executor.map(tesseract_ocr, imgs, bboxes, langs), total=len(imgs), desc="Running tesseract OCR")
         tess_text = list(tess_text)
     return tess_text
 
@@ -71,7 +73,7 @@ def tesseract_parallel(imgs):
     tess_parallel = max(tess_parallel_cores // 4, 1)
 
     with ProcessPoolExecutor(max_workers=tess_parallel) as executor:
-        tess_bboxes = executor.map(tesseract_bboxes, imgs)
+        tess_bboxes = tqdm(executor.map(tesseract_bboxes, imgs), total=len(imgs), desc="Running tesseract bbox detection")
         tess_bboxes = list(tess_bboxes)
     return tess_bboxes
 
@@ -163,7 +165,6 @@ TESS_CODE_TO_LANGUAGE = {
     "tam": "Tamil",
     "tel": "Telugu",
     "tgk": "Tajik",
-    "tgl": "Tagalog",
     "tha": "Thai",
     "tir": "Tigrinya",
     "tur": "Turkish",

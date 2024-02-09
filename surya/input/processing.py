@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import numpy as np
@@ -69,37 +70,30 @@ def slice_bboxes_from_image(image: Image.Image, bboxes):
 
 def slice_polys_from_image(image: Image.Image, polys):
     lines = []
-    for poly in polys:
-        lines.append(slice_and_pad_poly(image, poly))
+    for idx, poly in enumerate(polys):
+        lines.append(slice_and_pad_poly(image, poly, idx))
     return lines
 
 
-def slice_and_pad_poly(image: Image.Image, coordinates):
+def slice_and_pad_poly(image: Image.Image, coordinates, idx):
     # Create a mask for the polygon
     mask = Image.new('L', image.size, 0)
 
     # coordinates must be in tuple form for PIL
     coordinates = [(corner[0], corner[1]) for corner in coordinates]
     ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=1)
+    bbox = mask.getbbox()
     mask = np.array(mask)
 
     # Extract the polygonal area from the image
     polygon_image = np.array(image)
-    polygon_image[~mask] = 0
+    polygon_image[mask == 0] = 0
     polygon_image = Image.fromarray(polygon_image)
-
-    bbox_image = Image.new('L', image.size, 0)
-    ImageDraw.Draw(bbox_image).polygon(coordinates, outline=1, fill=1)
-    bbox = bbox_image.getbbox()
 
     rectangle = Image.new('RGB', (bbox[2] - bbox[0], bbox[3] - bbox[1]), 'white')
 
     # Paste the polygon into the rectangle
-    polygon_center = (bbox[2] + bbox[0]) // 2, (bbox[3] + bbox[1]) // 2
-    rectangle_center = rectangle.width // 2, rectangle.height // 2
-    paste_position = (rectangle_center[0] - polygon_center[0] + bbox[0],
-                      rectangle_center[1] - polygon_center[1] + bbox[1])
-    rectangle.paste(polygon_image.crop(bbox), paste_position)
+    rectangle.paste(polygon_image.crop(bbox), (0, 0))
 
     return rectangle
 

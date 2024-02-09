@@ -16,7 +16,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
     slice_map = []
     all_slices = []
     all_langs = []
-    for idx, (image, lang) in tqdm(enumerate(zip(images, langs)), desc="Slicing images"):
+    for idx, (image, lang) in enumerate(zip(images, langs)):
         if polygons is not None:
             slices = slice_polys_from_image(image, polygons[idx])
         else:
