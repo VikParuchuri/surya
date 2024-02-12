@@ -5,11 +5,11 @@ import json
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
-from surya.benchmark.tesseract import tesseract_bboxes, tesseract_parallel
-from surya.model.segformer import load_model, load_processor
-from surya.model.processing import open_pdf, get_page_images
-from surya.detection import batch_inference
-from surya.postprocessing.heatmap import draw_bboxes_on_image, draw_polys_on_image
+from surya.benchmark.tesseract import tesseract_parallel
+from surya.model.detection.segformer import load_model, load_processor
+from surya.input.processing import open_pdf, get_page_images
+from surya.detection import batch_detection
+from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 import os
@@ -42,9 +42,9 @@ def main():
         image_sizes = [img.size for img in images]
         correct_boxes = get_pdf_lines(args.pdf_path, image_sizes)
     else:
-        pathname = "doclaynet_bench"
+        pathname = "det_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
-        dataset = datasets.load_dataset(settings.BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
         images = [i.convert("RGB") for i in images]
         correct_boxes = []
@@ -54,7 +54,7 @@ def main():
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
     start = time.time()
-    predictions = batch_inference(images, model, processor)
+    predictions = batch_detection(images, model, processor)
     surya_time = time.time() - start
 
     start = time.time()

@@ -24,10 +24,14 @@ jobs:
           poetry install
           poetry remove torch
           poetry run pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Run benchmark test
+      - name: Run detection benchmark test
         run: |
           poetry run python benchmark/detection.py --max 2
-          poetry run python scripts/verify_benchmark_scores.py results/benchmark/doclaynet_bench/results.json
+          poetry run python scripts/verify_benchmark_scores.py results/benchmark/det_bench/results.json --bench_type detection
+      - name: Run recognition benchmark test
+        run: |
+          poetry run python benchmark/recognition.py --max 2
+          poetry run python scripts/verify_benchmark_scores.py results/benchmark/rec_bench/results.json --bench_type recognition
         
           
 

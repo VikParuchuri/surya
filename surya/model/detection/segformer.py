@@ -9,13 +9,14 @@ from transformers.modeling_outputs import SemanticSegmenterOutput
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
     config = SegformerConfig.from_pretrained(checkpoint)
     model = SegformerForRegressionMask.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
     if "mps" in device:
         print("Warning: MPS may have poor results. This is a bug with MPS, see here - https://github.com/pytorch/pytorch/issues/84936")
     model = model.to(device)
     model = model.eval()
+    print(f"Loading detection model {checkpoint} on device {device} with dtype {dtype}")
     return model
 
 

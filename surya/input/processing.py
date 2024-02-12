@@ -1,14 +1,17 @@
+import os
+import random
 from typing import List
 
 import numpy as np
 import math
 import pypdfium2
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 import torch
 from surya.settings import settings
 
 
 def split_image(img, processor):
+    # This will not modify/return the original image - it will either crop, or copy the image
     img_height = list(img.size)[1]
     max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
     processor_height = processor.size["height"]
@@ -28,7 +31,7 @@ def split_image(img, processor):
             splits.append(cropped)
             split_heights.append(height)
         return splits, split_heights
-    return [img], [img_height]
+    return [img.copy()], [img_height]
 
 
 def prepare_image(img, processor):
@@ -56,3 +59,42 @@ def get_page_images(doc, indices: List, dpi=96):
     images = list(renderer)
     images = [image.convert("RGB") for image in images]
     return images
+
+
+def slice_bboxes_from_image(image: Image.Image, bboxes):
+    lines = []
+    for bbox in bboxes:
+        line = image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        lines.append(line)
+    return lines
+
+
+def slice_polys_from_image(image: Image.Image, polys):
+    lines = []
+    for idx, poly in enumerate(polys):
+        lines.append(slice_and_pad_poly(image, poly, idx))
+    return lines
+
+
+def slice_and_pad_poly(image: Image.Image, coordinates, idx):
+    # Create a mask for the polygon
+    mask = Image.new('L', image.size, 0)
+
+    # coordinates must be in tuple form for PIL
+    coordinates = [(corner[0], corner[1]) for corner in coordinates]
+    ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=1)
+    bbox = mask.getbbox()
+    mask = np.array(mask)
+
+    # Extract the polygonal area from the image
+    polygon_image = np.array(image)
+    polygon_image[mask == 0] = 0
+    polygon_image = Image.fromarray(polygon_image)
+
+    rectangle = Image.new('RGB', (bbox[2] - bbox[0], bbox[3] - bbox[1]), 'white')
+
+    # Paste the polygon into the rectangle
+    rectangle.paste(polygon_image.crop(bbox), (0, 0))
+
+    return rectangle
+

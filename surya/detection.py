@@ -2,19 +2,29 @@ from typing import List
 
 import cv2
 import torch
-from torch import nn
 import numpy as np
 from PIL import Image
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
-from surya.model.processing import prepare_image, split_image
+from surya.input.processing import prepare_image, split_image
 from surya.settings import settings
+from tqdm import tqdm
 
 
-def batch_inference(images: List, model, processor):
+def get_batch_size():
+    batch_size = settings.DETECTOR_BATCH_SIZE
+    if batch_size is None:
+        batch_size = 8
+        if settings.TORCH_DEVICE_MODEL == "cuda":
+            batch_size = 32
+    return batch_size
+
+
+def batch_detection(images: List, model, processor):
     assert all([isinstance(image, Image.Image) for image in images])
+    batch_size = get_batch_size()
 
-    images = [image.copy().convert("RGB") for image in images]
+    images = [image.convert("RGB") for image in images]
     orig_sizes = [image.size for image in images]
     split_index = []
     split_heights = []
@@ -28,8 +38,8 @@ def batch_inference(images: List, model, processor):
     image_splits = [prepare_image(image, processor) for image in image_splits]
 
     pred_parts = []
-    for i in range(0, len(image_splits), settings.DETECTOR_BATCH_SIZE):
-        batch = image_splits[i:i+settings.DETECTOR_BATCH_SIZE]
+    for i in tqdm(range(0, len(image_splits), batch_size), desc="Detecting bboxes"):
+        batch = image_splits[i:i+batch_size]
         # Batch images in dim 0
         batch = torch.stack(batch, dim=0)
         batch = batch.to(model.dtype)

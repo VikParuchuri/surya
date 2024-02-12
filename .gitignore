@@ -8,6 +8,7 @@ wandb
 notebooks
 results
 data
+slices
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
