@@ -33,9 +33,10 @@ def tesseract_ocr(img, bboxes, lang: str):
     return lines
 
 
-def tesseract_ocr_parallel(imgs, bboxes, langs: List[str]):
+def tesseract_ocr_parallel(imgs, bboxes, langs: List[str], cpus=None):
     tess_parallel_cores = min(len(imgs), get_rec_batch_size())
-    cpus = os.cpu_count()
+    if not cpus:
+        cpus = os.cpu_count()
     tess_parallel_cores = min(tess_parallel_cores, cpus)
 
     # Tesseract uses up to 4 processes per instance
@@ -129,7 +130,6 @@ TESS_CODE_TO_LANGUAGE = {
     "khm": "Khmer",
     "kir": "Kyrgyz",
     "kor": "Korean",
-    "kur": "Kurdish",
     "lao": "Lao",
     "lat": "Latin",
     "lav": "Latvian",

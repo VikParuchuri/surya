@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--debug", type=int, help="Debug level - 1 dumps bad detection info, 2 writes out images.", default=0)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
+    parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
     args = parser.parse_args()
 
     rec_model = load_recognition_model()
@@ -76,6 +77,12 @@ def main():
         }
     }
 
+    result_path = os.path.join(args.results_dir, "rec_bench")
+    os.makedirs(result_path, exist_ok=True)
+
+    with open(os.path.join(result_path, "surya_scores.json"), "w+") as f:
+        json.dump(surya_scores, f)
+
     if args.tesseract:
         tess_valid = []
         tess_langs = []
@@ -92,7 +99,7 @@ def main():
         tess_bboxes = [bboxes[i] for i in tess_valid]
         tess_reference = [line_text[i] for i in tess_valid]
         start = time.time()
-        tess_predictions = tesseract_ocr_parallel(tess_imgs, tess_bboxes, tess_langs)
+        tess_predictions = tesseract_ocr_parallel(tess_imgs, tess_bboxes, tess_langs, cpus=args.tess_cpus)
         tesseract_time = time.time() - start
 
         tess_scores = defaultdict(list)
@@ -107,8 +114,8 @@ def main():
             "time_per_img": tesseract_time / len(tess_imgs)
         }
 
-    result_path = os.path.join(args.results_dir, "rec_bench")
-    os.makedirs(result_path, exist_ok=True)
+        with open(os.path.join(result_path, "tesseract_scores.json"), "w+") as f:
+            json.dump(tess_scores, f)
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
         json.dump(benchmark_stats, f)

@@ -76,8 +76,9 @@ This app will let you try surya, a multilingual OCR model. It supports text dete
 
 Notes:
 - This works best on documents with printed text.
-- Try to keep the image width around 1024, especially if you have large text.
-- This supports 90+ languages, see [here](https://github.com/VikParuchuri/surya/tree/master/surya/languages.py) for a full list of codes.
+- Preprocessing the image (e.g. increasing contrast) can improve results.
+- If OCR doesn't work, try changing the resolution of your image (increase if below 2048px width, otherwise decrease).
+- This supports 90+ languages, see [here](https://github.com/VikParuchuri/surya/tree/master/surya/languages.py) for a full list.
 
 Find the project [here](https://github.com/VikParuchuri/surya).
 """)

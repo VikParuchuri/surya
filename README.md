@@ -175,12 +175,20 @@ If you want to develop surya, you can install it manually:
 
 ## OCR
 
+![Benchmark chart](static/images/benchmark_rec_chart.png)
+
+| Model     | Time per page (s) | Avg similarity (⬆) |
+|-----------|-------------------|--------------------|
+| surya     | .62               | 0.97               |
+| tesseract | .45               | 0.88               |
+
+[Full language results](static/images/rec_acc_table.png)
 
 Tesseract is CPU-based, and surya is CPU or GPU.  I tried to cost-match the resources used, so I used a 1xA6000 (48GB VRAM) for surya, and 28 CPU cores for Tesseract (same price on Lambda Labs/DigitalOcean).
 
 **Methodology**
 
-I measured normalized edit distance (0-1, lower is better) based on a set of real-world and synthetic pdfs.  I sampled PDFs from common crawl, then filtered out the ones with bad OCR.  I couldn't find PDFs for some languages, so I also generated simple synthetic PDFs for those.
+I measured normalized sentence similarity (0-1, higher is better) based on a set of real-world and synthetic pdfs.  I sampled PDFs from common crawl, then filtered out the ones with bad OCR.  I couldn't find PDFs for some languages, so I also generated simple synthetic PDFs for those.
 
 I used the reference line bboxes from the PDFs with both tesseract and surya, to just evaluate the OCR quality.
 
@@ -234,16 +242,17 @@ python benchmark/detection.py --max 256
 
 **Text recognition**
 
-This will evaluate surya and optionally tesseract on multilingual pdfs from common crawl.
+This will evaluate surya and optionally tesseract on multilingual pdfs from common crawl (with synthetic data for missing languages).
 
 ```
-python benchmark/recognition.py --max 256
+python benchmark/recognition.py --tesseract
 ```
 
 - `--max` controls how many images to process for the benchmark
-- `--debug` will render images with detected text
+- `--debug 2` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
+- Set `RECOGNITION_BATCH_SIZE=864` to use the same batch size as the benchmark.
 
 
 # Training
