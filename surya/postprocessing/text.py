@@ -27,6 +27,7 @@ def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=setting
 
         # Download font if it doesn't exist
         if not os.path.exists(font_path):
+            os.makedirs(os.path.dirname(font_path), exist_ok=True)
             with requests.get(settings.RECOGNITION_FONT_DL_PATH, stream=True) as r, open(font_path, 'wb') as f:
                 r.raise_for_status()
                 for chunk in r.iter_content(chunk_size=8192):
