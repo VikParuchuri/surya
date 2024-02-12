@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=None)
     parser.add_argument("--debug", type=int, help="Debug level - 1 dumps bad detection info, 2 writes out images.", default=0)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
+    parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     args = parser.parse_args()
 
     rec_model = load_recognition_model()
@@ -34,6 +35,11 @@ def main():
         split = f"train[:{args.max}]"
 
     dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split)
+
+    if args.langs:
+        langs = args.langs.split(",")
+        dataset = dataset.filter(lambda x: x["language"] in langs)
+
     images = list(dataset["image"])
     images = [i.convert("RGB") for i in images]
     bboxes = list(dataset["bboxes"])

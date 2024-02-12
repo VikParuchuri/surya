@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--lang_file", type=str, help="Path to file with languages to use for OCR. Should be a JSON dict with file names as keys, and the value being a list of language codes/names.", default=None)
     args = parser.parse_args()
 
-    assert args.langs or args.lang_file, "Must provide either --lang or --lang_file"
+    assert args.langs or args.lang_file, "Must provide either --langs or --lang_file"
 
     if os.path.isdir(args.input_path):
         images, names = load_from_folder(args.input_path, args.max, args.start_page)

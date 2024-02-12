@@ -1,14 +1,12 @@
 # Surya
 
-Surya is for multilingual document OCR.  It can do:
+Surya is a document OCR toolkit that does:
 
 - Accurate OCR in 90+ languages
 - Line-level text detection in any language
 - Table and chart detection (coming soon)
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
-
-Detection and OCR example:
 
 |                            Detection                             |                                   OCR                                   |
 |:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|
@@ -29,10 +27,11 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 | Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) |
 | Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) |
 | Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) |
+| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) |
 | Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |
 | Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |
 | Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |
-| New York Times   |   [Image](static/images/nyt.png)    |      [Image](static/images/nyt_text.png) |
+| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |
 | Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |
 | Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) |
 
@@ -64,7 +63,7 @@ surya_gui
 
 ## OCR (text recognition)
 
-You can detect text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
+You can OCR text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
 
 ```
 surya_ocr DATA_PATH --images --langs hi,en
@@ -89,7 +88,7 @@ The `results.json` file will contain these keys for each page of the input docum
 
 **Performance tips**
 
-Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `40MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 10GB of VRAM.  Depending on your CPU core count, it may help, too - the default CPU batch size is `32`.
+Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `50MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 12.8GB of VRAM.  Depending on your CPU core count, it may help, too - the default CPU batch size is `32`.
 
 ### From python
 
@@ -158,7 +157,8 @@ predictions = batch_detection([image], model, processor)
 
 If OCR isn't working properly:
 
-- If the lines aren't detected properly, try increasing resolution of the image if the width is below `896px`, and vice versa.  Very high width images don't work well with the detector.
+- Try increasing resolution of the image so the text is bigger.  If the resolution is already very high, try decreasing it to no more than a `2048px` width.
+- Preprocessing the image (binarizing, deskewing, etc) can help with very old/blurry images.
 - You can adjust `DETECTOR_BLANK_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  `DETECTOR_BLANK_THRESHOLD` controls the space between lines - any prediction below this number will be considered blank space.  `DETECTOR_TEXT_THRESHOLD` controls how text is joined - any number above this is considered text.  `DETECTOR_TEXT_THRESHOLD` should always be higher than `DETECTOR_BLANK_THRESHOLD`, and both should be in the 0-1 range.  Looking at the heatmap from the debug output of the detector can tell you how to adjust these (if you see faint things that look like boxes, lower the thresholds, and if you see bboxes being joined together, raise the thresholds).
 
 
@@ -175,7 +175,14 @@ If you want to develop surya, you can install it manually:
 
 ## OCR
 
-Coming soon.
+
+Tesseract is CPU-based, and surya is CPU or GPU.  I tried to cost-match the resources used, so I used a 1xA6000 (48GB VRAM) for surya, and 28 CPU cores for Tesseract (same price on Lambda Labs/DigitalOcean).
+
+**Methodology**
+
+I measured normalized edit distance (0-1, lower is better) based on a set of real-world and synthetic pdfs.  I sampled PDFs from common crawl, then filtered out the ones with bad OCR.  I couldn't find PDFs for some languages, so I also generated simple synthetic PDFs for those.
+
+I used the reference line bboxes from the PDFs with both tesseract and surya, to just evaluate the OCR quality.
 
 ## Text line detection
 
