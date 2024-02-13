@@ -84,7 +84,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
             is_list = False
 
         if isinstance(langs[0], str):
-            langs = [langs]
+            langs = [[lang] for lang in langs]
 
         # One language input per text input
         assert len(langs) == len(texts)
