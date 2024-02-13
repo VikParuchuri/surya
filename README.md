@@ -104,7 +104,7 @@ langs = ["en"] # Replace with your languages
 det_processor, det_model = load_det_processor(), load_det_model()
 rec_model, rec_processor = load_rec_model(), load_rec_processor()
 
-predictions = run_ocr([image], langs, det_model, det_processor, rec_model, rec_processor)
+predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
 ```
 
 ## Text line detection

@@ -23,7 +23,7 @@ def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=setting
         bbox_height = s_bbox[3] - s_bbox[1]
 
         # Shrink the text to fit in the bbox if needed
-        box_font_size = min(int(.75 * bbox_height), max_font_size)
+        box_font_size = max(6, min(int(.75 * bbox_height), max_font_size))
 
         # Download font if it doesn't exist
         if not os.path.exists(font_path):
