@@ -62,7 +62,7 @@ def main():
         predictions_by_page[name].append(pred)
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
-        json.dump(predictions_by_page, f)
+        json.dump(predictions_by_page, f, ensure_ascii=False)
 
     print(f"Wrote results to {result_path}")
 

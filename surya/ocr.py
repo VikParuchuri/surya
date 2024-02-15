@@ -7,6 +7,7 @@ from PIL import Image
 
 from surya.detection import batch_detection
 from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image
+from surya.postprocessing.text import truncate_repetitions
 from surya.recognition import batch_recognition
 
 
@@ -73,6 +74,9 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
         slice_start = slice_end
 
         assert len(image_lines) == len(det_pred["polygons"]) == len(det_pred["bboxes"])
+
+        # Remove repeated characters
+        image_lines = [truncate_repetitions(l) for l in image_lines]
         predictions_by_image.append({
             "text_lines": image_lines,
             "polys": det_pred["polygons"],
