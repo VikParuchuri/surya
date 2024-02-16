@@ -58,19 +58,21 @@ def main():
 
     predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
 
-    page_num = defaultdict(int)
-    for i, pred in enumerate(predictions_by_image):
-        pred["name"] = names[i]
-        pred["page"] = page_num[names[i]]
-        page_num[names[i]] += 1
-
     if args.images:
         for idx, (name, image, pred) in enumerate(zip(names, images, predictions_by_image)):
-            page_image = draw_text_on_image(pred["bboxes"], pred["text_lines"], image.size)
+            bboxes = [l.bbox for l in pred.text_lines]
+            pred_text = [l.text for l in pred.text_lines]
+            page_image = draw_text_on_image(bboxes, pred_text, image.size)
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
+    out_preds = defaultdict(list)
+    for name, pred, image in zip(names, predictions_by_image, images):
+        out_pred = pred.model_dump()
+        out_pred["page"] = len(out_preds[name]) + 1
+        out_preds[name].append(out_pred)
+
     with open(os.path.join(result_path, "results.json"), "w+") as f:
-        json.dump(predictions_by_image, f)
+        json.dump(out_preds, f, ensure_ascii=False)
 
     print(f"Wrote results to {result_path}")
 

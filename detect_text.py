@@ -38,31 +38,28 @@ def main():
 
     if args.images:
         for idx, (image, pred, name) in enumerate(zip(images, predictions, names)):
-            bbox_image = draw_polys_on_image(pred["polygons"], copy.deepcopy(image))
+            polygons = [p.polygon for p in pred.bboxes]
+            bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image))
             bbox_image.save(os.path.join(result_path, f"{name}_{idx}_bbox.png"))
 
-            column_image = draw_lines_on_image(pred["vertical_lines"], copy.deepcopy(image))
+            column_image = draw_lines_on_image(pred.vertical_lines, copy.deepcopy(image))
             column_image.save(os.path.join(result_path, f"{name}_{idx}_column.png"))
 
             if args.debug:
-                heatmap = pred["heatmap"]
+                heatmap = pred.heatmap
                 heatmap.save(os.path.join(result_path, f"{name}_{idx}_heat.png"))
 
-                affinity_map = pred["affinity_map"]
+                affinity_map = pred.affinity_map
                 affinity_map.save(os.path.join(result_path, f"{name}_{idx}_affinity.png"))
 
-    # Remove all the images from the predictions
-    for pred in predictions:
-        pred.pop("heatmap", None)
-        pred.pop("affinity_map", None)
-
     predictions_by_page = defaultdict(list)
-    for idx, (pred, name) in enumerate(zip(predictions, names)):
-        pred["page_number"] = len(predictions_by_page[name]) + 1
-        predictions_by_page[name].append(pred)
+    for idx, (pred, name, image) in enumerate(zip(predictions, names, images)):
+        out_pred = pred.model_dump(exclude=["heatmap", "affinity_map"])
+        out_pred["page"] = len(predictions_by_page[name]) + 1
+        predictions_by_page[name].append(out_pred)
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
-        json.dump(predictions_by_page, f)
+        json.dump(predictions_by_page, f, ensure_ascii=False)
 
     print(f"Wrote results to {result_path}")
 

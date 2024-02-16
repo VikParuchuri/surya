@@ -1,8 +1,61 @@
 import os
+from typing import List
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
+
+from surya.schema import TextLine
 from surya.settings import settings
+
+
+def sort_text_lines(lines: List[TextLine], tolerance=1.25):
+    # Sorts in reading order.  Not 100% accurate, this should only
+    # be used as a starting point for more advanced sorting.
+    vertical_groups = {}
+    for line in lines:
+        group_key = round(line.bbox[1] / tolerance) * tolerance
+        if group_key not in vertical_groups:
+            vertical_groups[group_key] = []
+        vertical_groups[group_key].append(line)
+
+    # Sort each group horizontally and flatten the groups into a single list
+    sorted_lines = []
+    for _, group in sorted(vertical_groups.items()):
+        sorted_group = sorted(group, key=lambda x: x.bbox[0])
+        sorted_lines.extend(sorted_group)
+
+    return sorted_lines
+
+
+def truncate_repetitions(text: str, min_len=15):
+    # From nougat, with some cleanup
+    if len(text) < 2 * min_len:
+        return text
+
+    # try to find a length at which the tail is repeating
+    max_rep_len = None
+    for rep_len in range(min_len, int(len(text) / 2)):
+        # check if there is a repetition at the end
+        same = True
+        for i in range(0, rep_len):
+            if text[len(text) - rep_len - i - 1] != text[len(text) - i - 1]:
+                same = False
+                break
+
+        if same:
+            max_rep_len = rep_len
+
+    if max_rep_len is None:
+        return text
+
+    lcs = text[-max_rep_len:]
+
+    # remove all but the last repetition
+    text_to_truncate = text
+    while text_to_truncate.endswith(lcs):
+        text_to_truncate = text_to_truncate[:-max_rep_len]
+
+    return text[:len(text_to_truncate)]
 
 
 def get_text_size(text, font):

@@ -12,6 +12,7 @@ from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
+from surya.schema import OCRResult, DetectionResult
 
 
 @st.cache_resource()
@@ -24,18 +25,22 @@ def load_rec_cached():
     return load_rec_model(), load_rec_processor()
 
 
-def text_detection(img):
-    preds = batch_detection([img], det_model, det_processor)[0]
-    det_img = draw_polys_on_image(preds["polygons"], img.copy())
-    return det_img, preds
+def text_detection(img) -> DetectionResult:
+    pred = batch_detection([img], det_model, det_processor)[0]
+    polygons = [p.polygon for p in pred.bboxes]
+    det_img = draw_polys_on_image(polygons, img.copy())
+    return det_img, pred
 
 
 # Function for OCR
-def ocr(img, langs):
+def ocr(img, langs) -> OCRResult:
     replace_lang_with_code(langs)
-    pred = run_ocr([img], [langs], det_model, det_processor, rec_model, rec_processor)[0]
-    rec_img = draw_text_on_image(pred["bboxes"], pred["text_lines"], img.size)
-    return rec_img, pred
+    img_pred = run_ocr([img], [langs], det_model, det_processor, rec_model, rec_processor)[0]
+
+    bboxes = [l.bbox for l in img_pred.text_lines]
+    text = [l.text for l in img_pred.text_lines]
+    rec_img = draw_text_on_image(bboxes, text, img.size)
+    return rec_img, img_pred
 
 
 def open_pdf(pdf_file):
@@ -104,21 +109,21 @@ text_rec = st.sidebar.button("Run OCR")
 
 # Run Text Detection
 if text_det and pil_image is not None:
-    det_img, preds = text_detection(pil_image)
+    det_img, pred = text_detection(pil_image)
     with col1:
         st.image(det_img, caption="Detected Text", use_column_width=True)
-        st.json(preds, expanded=True)
+        st.json(pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
 
 # Run OCR
 if text_rec and pil_image is not None:
     rec_img, pred = ocr(pil_image, languages)
     with col1:
         st.image(rec_img, caption="OCR Result", use_column_width=True)
-        json_tab, text_tab = st.tabs(["JSON", "Full Text"])
+        json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])
         with json_tab:
-            st.json(pred, expanded=True)
+            st.json(pred.model_dump(), expanded=True)
         with text_tab:
-            st.text("\n".join(pred["text_lines"]))
+            st.text("\n".join([p.text for p in pred.text_lines]))
 
 with col2:
     st.image(pil_image, caption="Uploaded Image", use_column_width=True)

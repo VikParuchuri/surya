@@ -77,14 +77,15 @@ surya_ocr DATA_PATH --images --langs hi,en
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--start_page` specifies the page number to start processing from
 
-The `results.json` file will contain these keys for each page of the input document(s):
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
-- `text_lines` - the detected text in each line
-- `polys` - the polygons for each detected text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
-- `bboxes` - the axis-aligned rectangles for each detected text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-- `language` - the languages specified for the page
-- `name` - the name of the file
-- `page_number` - the page number in the file
+- `text_lines` - the detected text and bounding boxes for each line
+  - `text` - the text in the line
+  - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+- `languages` - the languages specified for the page
+- `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
 **Performance tips**
 
@@ -120,13 +121,17 @@ surya_detect DATA_PATH --images
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
 
-The `results.json` file will contain these keys for each page of the input document(s):
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
-- `polygons` - polygons for each detected text line (these are more accurate than the bboxes) in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
-- `bboxes` - axis-aligned rectangles for each detected text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-- `vertical_lines` - vertical lines detected in the document in (x1, y1, x2, y2) format.
-- `horizontal_lines` - horizontal lines detected in the document in (x1, y1, x2, y2) format.
-- `page_number` - the page number of the document
+- `bboxes` - detected bounding boxes for text
+  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+  - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+- `vertical_lines` - vertical lines detected in the document
+  - `bbox` - the axis-aligned line coordinates.
+- `horizontal_lines` - horizontal lines detected in the document
+  - `bbox` - the axis-aligned line coordinates.
+- `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
 **Performance tips**
 
@@ -149,6 +154,7 @@ predictions = batch_detection([image], model, processor)
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
+- Surya is for OCR - the goal is to recognize the text lines correctly, not sort them into reading order. Surya will attempt to sort the lines, which will work in many cases, but use something like [marker](https://github.com/VikParuchuri/marker) or other postprocessing if you need to order the text.
 - It is for printed text, not handwriting (though it may work on some handwriting).
 - The model has trained itself to ignore advertisements.
 - You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.

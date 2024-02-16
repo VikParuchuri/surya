@@ -63,7 +63,8 @@ def main():
     surya_scores = defaultdict(list)
     img_surya_scores = []
     for idx, (pred, ref_text, lang) in enumerate(zip(predictions_by_image, line_text, lang_list)):
-        image_score = overlap_score(pred["text_lines"], ref_text)
+        pred_text = [l.text for l in pred.text_lines]
+        image_score = overlap_score(pred_text, ref_text)
         img_surya_scores.append(image_score)
         for l in lang:
             surya_scores[CODE_TO_LANGUAGE[l]].append(image_score)
@@ -146,7 +147,8 @@ def main():
         for idx, (image, pred, ref_text, bbox, lang) in enumerate(zip(images, predictions_by_image, line_text, bboxes, lang_list)):
             pred_image_name = f"{'_'.join(lang)}_{idx}_pred.png"
             ref_image_name = f"{'_'.join(lang)}_{idx}_ref.png"
-            pred_image = draw_text_on_image(bbox, pred["text_lines"], image.size)
+            pred_text = [l.text for l in pred.text_lines]
+            pred_image = draw_text_on_image(bbox, pred_text, image.size)
             pred_image.save(os.path.join(result_path, pred_image_name))
             ref_image = draw_text_on_image(bbox, ref_text, image.size)
             ref_image.save(os.path.join(result_path, ref_image_name))
