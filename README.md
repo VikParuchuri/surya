@@ -85,6 +85,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
 - `languages` - the languages specified for the page
 - `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
 **Performance tips**
 
@@ -130,6 +131,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 - `horizontal_lines` - horizontal lines detected in the document
   - `bbox` - the axis-aligned line coordinates.
 - `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
 **Performance tips**
 

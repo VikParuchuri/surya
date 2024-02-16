@@ -53,7 +53,7 @@ def main():
                 affinity_map.save(os.path.join(result_path, f"{name}_{idx}_affinity.png"))
 
     predictions_by_page = defaultdict(list)
-    for idx, (pred, name) in enumerate(zip(predictions, names)):
+    for idx, (pred, name, image) in enumerate(zip(predictions, names, images)):
         out_pred = pred.model_dump(exclude=["heatmap", "affinity_map"])
         out_pred["page"] = len(predictions_by_page[name]) + 1
         predictions_by_page[name].append(out_pred)

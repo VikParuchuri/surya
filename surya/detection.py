@@ -103,8 +103,8 @@ def batch_detection(images: List, model, processor) -> List[DetectionResult]:
             vertical_lines=vertical_lines,
             horizontal_lines=horizontal_lines,
             heatmap=heat_img,
-            affinity_map=aff_img
-
+            affinity_map=aff_img,
+            image_bbox=[0, 0, orig_sizes[i][0], orig_sizes[i][1]]
         )
 
         results.append(result)

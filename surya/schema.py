@@ -99,6 +99,7 @@ class TextLine(PolygonBox):
 class OCRResult(BaseModel):
     text_lines: List[TextLine]
     languages: List[str]
+    image_bbox: List[float]
 
 
 class DetectionResult(BaseModel):
@@ -107,3 +108,4 @@ class DetectionResult(BaseModel):
     horizontal_lines: List[ColumnLine]
     heatmap: Any
     affinity_map: Any
+    image_bbox: List[float]

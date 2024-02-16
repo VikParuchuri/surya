@@ -51,7 +51,8 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
 
         pred = OCRResult(
             text_lines=text_lines,
-            languages=lang
+            languages=lang,
+            image_bbox=[0, 0, image.size[0], image.size[1]]
         )
         predictions_by_image.append(pred)
 
@@ -98,7 +99,8 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
 
         predictions_by_image.append(OCRResult(
             text_lines=lines,
-            languages=lang
+            languages=lang,
+            image_bbox=det_pred.image_bbox
         ))
 
     return predictions_by_image

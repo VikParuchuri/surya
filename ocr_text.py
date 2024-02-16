@@ -66,12 +66,10 @@ def main():
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
     out_preds = defaultdict(list)
-    page_num = defaultdict(int)
-    for i, pred in enumerate(predictions_by_image):
+    for name, pred, image in zip(names, predictions_by_image, images):
         out_pred = pred.model_dump()
-        out_pred["page"] = page_num[names[i]]
-        page_num[names[i]] += 1
-        out_preds[names[i]].append(out_pred)
+        out_pred["page"] = len(out_preds[name]) + 1
+        out_preds[name].append(out_pred)
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
         json.dump(out_preds, f, ensure_ascii=False)

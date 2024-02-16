@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "surya-ocr"
-version = "0.2.1"
-description = "Document OCR models for multilingual text detection and recognition"
+version = "0.2.2"
+description = "OCR and line detection in 90+ languages"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
 license = "GPL-3.0-or-later"
