@@ -7,6 +7,7 @@ from PIL import Image
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
 from surya.input.processing import prepare_image, split_image
+from surya.schema import DetectionResult
 from surya.settings import settings
 from tqdm import tqdm
 
@@ -20,7 +21,7 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model, processor):
+def batch_detection(images: List, model, processor) -> List[DetectionResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     batch_size = get_batch_size()
 
@@ -94,18 +95,19 @@ def batch_detection(images: List, model, processor):
         affinity_size = list(reversed(affinity_map.shape))
         heatmap_size = list(reversed(heatmap.shape))
         bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes[i])
-        bbox_data = [bbox.model_dump() for bbox in bboxes]
         vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
         horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
 
-        results.append({
-            "bboxes": [bbd["bbox"] for bbd in bbox_data],
-            "polygons": [bbd["corners"] for bbd in bbox_data],
-            "vertical_lines": vertical_lines,
-            "horizontal_lines": horizontal_lines,
-            "heatmap": heat_img,
-            "affinity_map": aff_img,
-        })
+        result = DetectionResult(
+            bboxes=bboxes,
+            vertical_lines=vertical_lines,
+            horizontal_lines=horizontal_lines,
+            heatmap=heat_img,
+            affinity_map=aff_img
+
+        )
+
+        results.append(result)
 
     return results
 

@@ -1,9 +1,12 @@
+from typing import List
+
 import cv2
 import numpy as np
 
 from PIL import Image, ImageDraw
 
 from surya.postprocessing.util import get_line_angle, rescale_bbox
+from surya.schema import ColumnLine
 
 
 def get_detected_lines_sobel(image, vertical=True):
@@ -31,7 +34,7 @@ def get_detected_lines_sobel(image, vertical=True):
     return scaled_sobel
 
 
-def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False):
+def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False) -> List[ColumnLine]:
     assert not (vertical and horizontal)
     new_image = image.astype(np.float32) * 255  # Convert to 0-255 range
     if vertical or horizontal:
@@ -71,44 +74,39 @@ def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False)
                 bbox[1], bbox[3] = bbox[3], bbox[1]
             if bbox[2] < bbox[0]:
                 bbox[0], bbox[2] = bbox[2], bbox[0]
-            row = {
-                "bbox": bbox,
-                "vertical": vertical_line,
-                "horizontal": horizontal_line,
-            }
+            row = ColumnLine(bbox=bbox, vertical=vertical_line, horizontal=horizontal_line)
             line_info.append(row)
 
     if vertical:
-        line_info = [line for line in line_info if line["vertical"]]
+        line_info = [line for line in line_info if line.vertical]
 
     if horizontal:
-        line_info = [line for line in line_info if line["horizontal"]]
+        line_info = [line for line in line_info if line.horizontal]
 
     return line_info
 
 
-def draw_lines_on_image(line_info, img):
+def draw_lines_on_image(line_info: List[ColumnLine], img):
     draw = ImageDraw.Draw(img)
 
     for line in line_info:
         divisor = 20
-        if line["horizontal"]:
+        if line.horizontal:
             divisor = 200
-        line["bbox"] = [x // divisor * divisor for x in line["bbox"]]
-        x1, y1, x2, y2 = line["bbox"]
-        if line["vertical"]:
+        x1, y1, x2, y2 = [x // divisor * divisor for x in line.bbox]
+        if line.vertical:
             draw.line((x1, y1, x2, y2), fill="red", width=3)
 
     return img
 
 
-def get_vertical_lines(image, new_size, orig_size, divisor=20, x_tolerance=40, y_tolerance=20):
+def get_vertical_lines(image, processor_size, image_size, divisor=20, x_tolerance=40, y_tolerance=20) -> List[ColumnLine]:
     vertical_lines = get_detected_lines(image, vertical=True)
     for line in vertical_lines:
-        line["bbox"] = rescale_bbox(line["bbox"], new_size, orig_size)
-    vertical_lines = sorted(vertical_lines, key=lambda x: x["bbox"][0])
+        line.rescale_bbox(processor_size, image_size)
+    vertical_lines = sorted(vertical_lines, key=lambda x: x.bbox[0])
     for line in vertical_lines:
-        line["bbox"] = [x // divisor * divisor for x in line["bbox"]]
+        line.round_bbox(divisor)
 
     # Merge adjacent line segments together
     to_remove = []
@@ -116,19 +114,19 @@ def get_vertical_lines(image, new_size, orig_size, divisor=20, x_tolerance=40, y
         for j, line2 in enumerate(vertical_lines):
             if j <= i:
                 continue
-            if line["bbox"][0] != line2["bbox"][0]:
+            if line.bbox[0] != line2.bbox[0]:
                 continue
 
-            expanded_line1 = [line["bbox"][0], line["bbox"][1] - y_tolerance, line["bbox"][2],
-                              line["bbox"][3] + y_tolerance]
+            expanded_line1 = [line.bbox[0], line.bbox[1] - y_tolerance, line.bbox[2],
+                              line.bbox[3] + y_tolerance]
 
-            line1_points = set(range(expanded_line1[1], expanded_line1[3]))
-            line2_points = set(range(line2["bbox"][1], line2["bbox"][3]))
+            line1_points = set(range(int(expanded_line1[1]), int(expanded_line1[3])))
+            line2_points = set(range(int(line2.bbox[1]), int(line2.bbox[3])))
             intersect_y = len(line1_points.intersection(line2_points)) > 0
 
             if intersect_y:
-                vertical_lines[j]["bbox"][1] = min(line["bbox"][1], line2["bbox"][1])
-                vertical_lines[j]["bbox"][3] = max(line["bbox"][3], line2["bbox"][3])
+                vertical_lines[j].bbox[1] = min(line.bbox[1], line2.bbox[1])
+                vertical_lines[j].bbox[3] = max(line.bbox[3], line2.bbox[3])
                 to_remove.append(i)
 
     vertical_lines = [line for i, line in enumerate(vertical_lines) if i not in to_remove]
@@ -141,33 +139,34 @@ def get_vertical_lines(image, new_size, orig_size, divisor=20, x_tolerance=40, y
         for j, line2 in enumerate(vertical_lines):
             if j <= i or j in to_remove:
                 continue
-            close_in_x = abs(line["bbox"][0] - line2["bbox"][0]) < x_tolerance
-            line1_points = set(range(line["bbox"][1], line["bbox"][3]))
-            line2_points = set(range(line2["bbox"][1], line2["bbox"][3]))
+            close_in_x = abs(line.bbox[0] - line2.bbox[0]) < x_tolerance
+            line1_points = set(range(int(line.bbox[1]), int(line.bbox[3])))
+            line2_points = set(range(int(line2.bbox[1]), int(line2.bbox[3])))
 
             intersect_y = len(line1_points.intersection(line2_points)) > 0
 
             if close_in_x and intersect_y:
                 # Keep the longer line and extend it
                 if len(line2_points) > len(line1_points):
-                    vertical_lines[j]["bbox"][1] = min(line["bbox"][1], line2["bbox"][1])
-                    vertical_lines[j]["bbox"][3] = max(line["bbox"][3], line2["bbox"][3])
+                    vertical_lines[j].bbox[1] = min(line.bbox[1], line2.bbox[1])
+                    vertical_lines[j].bbox[3] = max(line.bbox[3], line2.bbox[3])
                     to_remove.append(i)
                 else:
-                    vertical_lines[i]["bbox"][1] = min(line["bbox"][1], line2["bbox"][1])
-                    vertical_lines[i]["bbox"][3] = max(line["bbox"][3], line2["bbox"][3])
+                    vertical_lines[i].bbox[1] = min(line.bbox[1], line2.bbox[1])
+                    vertical_lines[i].bbox[3] = max(line.bbox[3], line2.bbox[3])
                     to_remove.append(j)
 
     vertical_lines = [line for i, line in enumerate(vertical_lines) if i not in to_remove]
 
     if len(vertical_lines) > 0:
         # Always start with top left of page
-        vertical_lines[0]["bbox"][1] = 0
+        vertical_lines[0].bbox[1] = 0
 
     return vertical_lines
 
-def get_horizontal_lines(affinity_map, processor_size, image_size):
+
+def get_horizontal_lines(affinity_map, processor_size, image_size) -> List[ColumnLine]:
     horizontal_lines = get_detected_lines(affinity_map, horizontal=True)
     for line in horizontal_lines:
-        line["bbox"] = rescale_bbox(line["bbox"], processor_size, image_size)
+        line.rescale_bbox(processor_size, image_size)
     return horizontal_lines

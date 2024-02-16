@@ -1,13 +1,15 @@
 import copy
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 from pydantic import BaseModel, field_validator, computed_field
 
+from surya.postprocessing.util import rescale_bbox
+
 
 class PolygonBox(BaseModel):
-    corners: List[List[float]]
+    polygon: List[List[float]]
 
-    @field_validator('corners')
+    @field_validator('polygon')
     @classmethod
     def check_elements(cls, v: List[List[float]]) -> List[List[float]]:
         if len(v) != 4:
@@ -20,11 +22,11 @@ class PolygonBox(BaseModel):
 
     @property
     def height(self):
-        return self.corners[1][1] - self.corners[0][1]
+        return self.polygon[1][1] - self.polygon[0][1]
 
     @property
     def width(self):
-        return self.corners[1][0] - self.corners[0][0]
+        return self.polygon[1][0] - self.polygon[0][0]
 
     @property
     def area(self):
@@ -33,13 +35,12 @@ class PolygonBox(BaseModel):
     @computed_field
     @property
     def bbox(self) -> List[float]:
-        box = [self.corners[0][0], self.corners[0][1], self.corners[1][0], self.corners[2][1]]
+        box = [self.polygon[0][0], self.polygon[0][1], self.polygon[1][0], self.polygon[2][1]]
         if box[0] > box[2]:
             box[0], box[2] = box[2], box[0]
         if box[1] > box[3]:
             box[1], box[3] = box[3], box[1]
         return box
-
 
     def rescale(self, processor_size, image_size):
         # Point is in x, y format
@@ -49,11 +50,11 @@ class PolygonBox(BaseModel):
         width_scaler = img_width / page_width
         height_scaler = img_height / page_height
 
-        new_corners = copy.deepcopy(self.corners)
+        new_corners = copy.deepcopy(self.polygon)
         for corner in new_corners:
             corner[0] = int(corner[0] * width_scaler)
             corner[1] = int(corner[1] * height_scaler)
-        self.corners = new_corners
+        self.polygon = new_corners
 
 
 
@@ -67,6 +68,12 @@ class Bbox(BaseModel):
             raise ValueError('bbox must have 4 elements')
         return v
 
+    def rescale_bbox(self, orig_size, new_size):
+        self.bbox = rescale_bbox(self.bbox, orig_size, new_size)
+
+    def round_bbox(self, divisor):
+        self.bbox = [x // divisor * divisor for x in self.bbox]
+
     @property
     def height(self):
         return self.bbox[3] - self.bbox[1]
@@ -78,3 +85,25 @@ class Bbox(BaseModel):
     @property
     def area(self):
         return self.width * self.height
+
+
+class ColumnLine(Bbox):
+    vertical: bool
+    horizontal: bool
+
+
+class TextLine(PolygonBox):
+    text: str
+
+
+class OCRResult(BaseModel):
+    text_lines: List[TextLine]
+    languages: List[str]
+
+
+class DetectionResult(BaseModel):
+    bboxes: List[PolygonBox]
+    vertical_lines: List[ColumnLine]
+    horizontal_lines: List[ColumnLine]
+    heatmap: Any
+    affinity_map: Any

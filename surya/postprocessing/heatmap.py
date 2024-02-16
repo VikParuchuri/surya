@@ -10,13 +10,13 @@ from surya.schema import PolygonBox
 from surya.settings import settings
 
 
-def clean_contained_boxes(boxes: List[PolygonBox]):
+def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     new_boxes = []
     for box_obj in boxes:
         box = box_obj.bbox
         contained = False
         for other_box_obj in boxes:
-            if other_box_obj.corners == box_obj.corners:
+            if other_box_obj.polygon == box_obj.polygon:
                 continue
 
             other_box = other_box_obj.bbox
@@ -118,16 +118,16 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, labels
 
 
-def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_BLANK_THRESHOLD):
+def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_BLANK_THRESHOLD) -> List[PolygonBox]:
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [PolygonBox(corners=box) for box in boxes]
+    boxes = [PolygonBox(polygon=box) for box in boxes]
     return boxes
 
 
-def get_and_clean_boxes(textmap, processor_size, image_size):
+def get_and_clean_boxes(textmap, processor_size, image_size) -> List[PolygonBox]:
     bboxes = get_detected_boxes(textmap)
     for bbox in bboxes:
         bbox.rescale(processor_size, image_size)
