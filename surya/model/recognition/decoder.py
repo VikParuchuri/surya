@@ -15,9 +15,9 @@ import math
 
 
 class MBartExpertMLP(nn.Module):
-    def __init__(self, config: MBartConfig):
+    def __init__(self, config: MBartConfig, is_lg=False):
         super().__init__()
-        self.ffn_dim = config.d_expert
+        self.ffn_dim = config.d_expert_lg if is_lg else config.d_expert
         self.hidden_dim = config.d_model
 
         self.w1 = nn.Linear(self.hidden_dim, self.ffn_dim, bias=False)
@@ -41,10 +41,11 @@ class MBartExpertLayer(nn.Module):
         self.dropout = nn.Dropout(config.activation_dropout)
 
         self.hidden_dim = config.d_model
+        self.lg_lang_codes = sorted(config.lg_langs.values())
         self.lang_codes = sorted(config.langs.values())
         self.num_experts = len(self.lang_codes)
 
-        self.experts = nn.ModuleDict({str(lang): MBartExpertMLP(config) for lang in self.lang_codes})
+        self.experts = nn.ModuleDict({str(lang): MBartExpertMLP(config, is_lg=(lang in self.lg_lang_codes)) for lang in self.lang_codes})
 
     def forward(self, hidden_states: torch.Tensor, langs: torch.LongTensor) -> torch.Tensor:
         batch_size, sequence_length, hidden_dim = hidden_states.shape

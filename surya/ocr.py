@@ -85,8 +85,6 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
 
         assert len(image_lines) == len(det_pred.bboxes)
 
-        # Remove repeated characters
-        image_lines = [truncate_repetitions(l) for l in image_lines]
         lines = []
         for text_line, bbox in zip(image_lines, det_pred.bboxes):
             lines.append(TextLine(

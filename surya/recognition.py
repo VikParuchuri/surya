@@ -1,6 +1,9 @@
 from typing import List
 import torch
 from PIL import Image
+
+from surya.postprocessing.math.latex import fix_math
+from surya.postprocessing.text import truncate_repetitions
 from surya.settings import settings
 from tqdm import tqdm
 import numpy as np
@@ -27,6 +30,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     output_text = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
         batch_langs = languages[i:i+batch_size]
+        has_math = ["_math" in lang for lang in batch_langs]
         batch_images = images[i:i+batch_size]
         model_inputs = processor(text=[""] * len(batch_langs), images=batch_images, lang=batch_langs)
 
@@ -47,7 +51,11 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                 max_new_tokens=settings.RECOGNITION_MAX_TOKENS
             )
 
-        output_text.extend(processor.tokenizer.batch_decode(generated_ids))
+        detected_text = processor.tokenizer.batch_decode(generated_ids)
+        detected_text = [truncate_repetitions(dt) for dt in detected_text]
+        # Postprocess to fix LaTeX output (add $$ signs, etc)
+        detected_text = [fix_math(text) if math else text for text, math in zip(detected_text, has_math)]
+        output_text.extend(detected_text)
 
     return output_text
 

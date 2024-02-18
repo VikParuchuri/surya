@@ -1,4 +1,5 @@
 import io
+from typing import List
 
 import pypdfium2
 import streamlit as st
@@ -33,13 +34,13 @@ def text_detection(img) -> DetectionResult:
 
 
 # Function for OCR
-def ocr(img, langs) -> OCRResult:
+def ocr(img, langs: List[str]) -> OCRResult:
     replace_lang_with_code(langs)
     img_pred = run_ocr([img], [langs], det_model, det_processor, rec_model, rec_processor)[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
-    rec_img = draw_text_on_image(bboxes, text, img.size)
+    rec_img = draw_text_on_image(bboxes, text, img.size, has_math="_math" in langs)
     return rec_img, img_pred
 
 

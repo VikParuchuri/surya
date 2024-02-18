@@ -59,10 +59,10 @@ def main():
     predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
 
     if args.images:
-        for idx, (name, image, pred) in enumerate(zip(names, images, predictions_by_image)):
+        for idx, (name, image, pred, langs) in enumerate(zip(names, images, predictions_by_image, image_langs)):
             bboxes = [l.bbox for l in pred.text_lines]
             pred_text = [l.text for l in pred.text_lines]
-            page_image = draw_text_on_image(bboxes, pred_text, image.size)
+            page_image = draw_text_on_image(bboxes, pred_text, image.size, has_math="_math" in langs)
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
     out_preds = defaultdict(list)

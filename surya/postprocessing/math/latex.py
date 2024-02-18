@@ -1,0 +1,117 @@
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from PIL import Image
+import io
+import re
+from ftfy import fix_text
+
+
+def fix_math(text):
+    # Fix any issues with the text
+    text = fix_text(text)
+
+    # Remove LaTeX labels and references
+    text = remove_labels(text)
+    text = replace_katex_invalid(text)
+    text = append_fences(text)
+    """
+    chunks = slice_latex(text)
+    for chunk in chunks:
+        if is_latex(chunk["text"]):
+            # Ensure we have $...$ around the LaTeX for rendering
+            if not chunk["text"].startswith("$"):
+                chunk["text"] = f"$${chunk['text']}"
+            if not chunk["text"].endswith("$"):
+                chunk["text"] = f"{chunk['text']}$$"
+    text = "".join([chunk["text"] for chunk in chunks])
+    """
+    return text
+
+
+def remove_labels(text):
+    pattern = r'\\label\{[^}]*\}'
+    text = re.sub(pattern, '', text)
+
+    ref_pattern = r'\\ref\{[^}]*\}'
+    text = re.sub(ref_pattern, '', text)
+
+    pageref_pattern = r'\\pageref\{[^}]*\}'
+    text = re.sub(pageref_pattern, '', text)
+    return text
+
+
+def replace_katex_invalid(string):
+    # KaTeX cannot render all LaTeX, so we need to replace some things
+    string = re.sub(r'\\tag\{.*?\}', '', string)
+    string = re.sub(r'\\(?:Bigg?|bigg?)\{(.*?)\}', r'\1', string)
+    string = re.sub(r'\\quad\\mbox\{(.*?)\}', r'\1', string)
+    string = re.sub(r'\\mbox\{(.*?)\}', r'\1', string)
+    string = remove_inner_dollars(string)
+    return string
+
+
+def remove_inner_dollars(text):
+    def replace_dollar(match):
+        # Replace single $ with nothing, keep $$ intact
+        math_block = match.group(1)
+        return '$$' + math_block.replace('$', '') + '$$'
+
+    # Regex to find $$...$$ blocks, including new lines
+    pattern = r'\$\$(.*?)\$\$'
+
+    return re.sub(pattern, replace_dollar, text, flags=re.DOTALL)
+
+
+def extract_latex_with_positions(text):
+    pattern = r'(\$\$.*?\$\$|\$.*?\$)'
+    matches = []
+    for match in re.finditer(pattern, text, re.DOTALL):
+        matches.append((match.group(), match.start(), match.end()))
+    return matches
+
+
+def slice_latex(text):
+    # Extract LaTeX blocks along with their positions
+    latex_blocks_with_positions = extract_latex_with_positions(text)
+
+    chunks = []
+    last_position = 0
+    for block, start, end in latex_blocks_with_positions:
+        # Add text before the current LaTeX block, if any
+        if start > last_position:
+            chunks.append({"text": text[last_position:start], "type": "text"})
+        # Add the LaTeX block
+        chunks.append({"text": block, "type": "latex"})
+        last_position = end
+    # Add remaining text after the last LaTeX block, if any
+    if last_position < len(text):
+        chunks.append({"text": text[last_position:], "type": "text"})
+
+    return chunks
+
+
+def is_latex(text):
+    latex_patterns = [
+        r'\\(?:begin|end)\{[a-zA-Z]*\}',
+        r'\$.*?\$',
+        r'\$\$.*?\$\$',
+        r'\\[a-zA-Z]+',
+        r'\\[^a-zA-Z]',
+    ]
+
+    combined_pattern = '|'.join(latex_patterns)
+    if re.search(combined_pattern, text, re.DOTALL):
+        return True
+
+    return False
+
+
+def append_fences(text):
+    fence_count = text.count("$")
+    if text.count("$$") % 2 != 0:
+        text += "$$"
+    elif fence_count % 2 != 0:
+        text += "$"
+    return text
+
+
