@@ -3,7 +3,7 @@ from typing import List
 
 import pypdfium2
 import streamlit as st
-from surya.detection import batch_detection
+from surya.detection import batch_text_detection
 from surya.model.detection.segformer import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
@@ -13,7 +13,7 @@ from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, DetectionResult
+from surya.schema import OCRResult, TextDetectionResult
 
 
 @st.cache_resource()
@@ -26,8 +26,8 @@ def load_rec_cached():
     return load_rec_model(), load_rec_processor()
 
 
-def text_detection(img) -> DetectionResult:
-    pred = batch_detection([img], det_model, det_processor)[0]
+def text_detection(img) -> TextDetectionResult:
+    pred = batch_text_detection([img], det_model, det_processor)[0]
     polygons = [p.polygon for p in pred.bboxes]
     det_img = draw_polys_on_image(polygons, img.copy())
     return det_img, pred
@@ -40,7 +40,7 @@ def ocr(img, langs: List[str]) -> OCRResult:
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
-    rec_img = draw_text_on_image(bboxes, text, img.size, has_math="_math" in langs)
+    rec_img = draw_text_on_image(bboxes, text, img.size, langs, has_math="_math" in langs)
     return rec_img, img_pred
 
 

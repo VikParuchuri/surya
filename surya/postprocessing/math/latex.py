@@ -1,12 +1,15 @@
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from PIL import Image
-import io
 import re
 from ftfy import fix_text
 
 
+def contains_math(text):
+    return text.startswith("$") or text.endswith("$")
+
+
 def fix_math(text):
+    if "\\" not in text:
+        return strip_fences(text)
+
     # Fix any issues with the text
     text = fix_text(text)
 
@@ -14,17 +17,6 @@ def fix_math(text):
     text = remove_labels(text)
     text = replace_katex_invalid(text)
     text = append_fences(text)
-    """
-    chunks = slice_latex(text)
-    for chunk in chunks:
-        if is_latex(chunk["text"]):
-            # Ensure we have $...$ around the LaTeX for rendering
-            if not chunk["text"].startswith("$"):
-                chunk["text"] = f"$${chunk['text']}"
-            if not chunk["text"].endswith("$"):
-                chunk["text"] = f"{chunk['text']}$$"
-    text = "".join([chunk["text"] for chunk in chunks])
-    """
     return text
 
 
@@ -112,6 +104,14 @@ def append_fences(text):
         text += "$$"
     elif fence_count % 2 != 0:
         text += "$"
+    return text
+
+
+def strip_fences(text):
+    while text.startswith("$"):
+        text = text[1:]
+    while text.endswith("$"):
+        text = text[:-1]
     return text
 
 

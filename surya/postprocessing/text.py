@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Tuple
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from surya.schema import TextLine
 from surya.settings import settings
 from surya.postprocessing.math.latex import is_latex, slice_latex
-from surya.postprocessing.math.render import latex_to_pil
+from surya.postprocessing.math.render import latex_to_pil, text_to_pil
 
 
 def sort_text_lines(lines: List[TextLine], tolerance=1.25):
@@ -71,7 +71,8 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
     # Download font if it doesn't exist
     if not os.path.exists(font_path):
         os.makedirs(os.path.dirname(font_path), exist_ok=True)
-        with requests.get(settings.RECOGNITION_FONT_DL_PATH, stream=True) as r, open(font_path, 'wb') as f:
+        font_dl_path = f"{settings.RECOGNITION_FONT_DL_BASE}/{os.path.basename(font_path)}"
+        with requests.get(font_dl_path, stream=True) as r, open(font_path, 'wb') as f:
             r.raise_for_status()
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
@@ -91,17 +92,25 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
     draw.text((x, y), text, fill="black", font=font)
 
 
-def render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size):
+def render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path):
         try:
-            img = latex_to_pil(text, bbox_width, bbox_height, fontsize=10)
+            box_font_size = max(10, min(int(.2 * bbox_height), 24))
+            img = latex_to_pil(text, bbox_width, bbox_height, fontsize=box_font_size)
             img.thumbnail((bbox_width, bbox_height))
             image.paste(img, (s_bbox[0], s_bbox[1]))
         except Exception as e:
             print(f"Failed to render math: {e}")
-            render_text(draw, text, [s_bbox[0], s_bbox[1]], bbox_width, bbox_height, font_path, box_font_size)
+            box_font_size = max(10, min(int(.75 * bbox_height), 24))
+            render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size)
 
 
-def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=settings.RECOGNITION_RENDER_FONT, max_font_size=60, res_upscale=2, has_math=False):
+def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], langs: List[str], font_path=None, max_font_size=60, res_upscale=2, has_math=False):
+    if font_path is None:
+        font_path = settings.RECOGNITION_RENDER_FONTS["all"]
+        for k in settings.RECOGNITION_RENDER_FONTS:
+            if k in langs and len(langs) == 1:
+                font_path = settings.RECOGNITION_RENDER_FONTS[k]
+                break
     new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)
     image = Image.new('RGB', new_image_size, color='white')
     draw = ImageDraw.Draw(image)
@@ -112,10 +121,10 @@ def draw_text_on_image(bboxes, texts, image_size=(1024, 1024), font_path=setting
         bbox_height = s_bbox[3] - s_bbox[1]
 
         # Shrink the text to fit in the bbox if needed
-        box_font_size = max(6, min(int(.75 * bbox_height), max_font_size))
         if has_math and is_latex(text):
-            render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size)
+            render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path)
         else:
+            box_font_size = max(6, min(int(.75 * bbox_height), max_font_size))
             render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size)
 
     return image

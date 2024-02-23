@@ -62,7 +62,7 @@ def main():
         for idx, (name, image, pred, langs) in enumerate(zip(names, images, predictions_by_image, image_langs)):
             bboxes = [l.bbox for l in pred.text_lines]
             pred_text = [l.text for l in pred.text_lines]
-            page_image = draw_text_on_image(bboxes, pred_text, image.size, has_math="_math" in langs)
+            page_image = draw_text_on_image(bboxes, pred_text, image.size, langs, has_math="_math" in langs)
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
     out_preds = defaultdict(list)
@@ -71,7 +71,7 @@ def main():
         out_pred["page"] = len(out_preds[name]) + 1
         out_preds[name].append(out_pred)
 
-    with open(os.path.join(result_path, "results.json"), "w+") as f:
+    with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(out_preds, f, ensure_ascii=False)
 
     print(f"Wrote results to {result_path}")

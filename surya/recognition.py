@@ -2,7 +2,7 @@ from typing import List
 import torch
 from PIL import Image
 
-from surya.postprocessing.math.latex import fix_math
+from surya.postprocessing.math.latex import fix_math, contains_math
 from surya.postprocessing.text import truncate_repetitions
 from surya.settings import settings
 from tqdm import tqdm
@@ -54,7 +54,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         detected_text = processor.tokenizer.batch_decode(generated_ids)
         detected_text = [truncate_repetitions(dt) for dt in detected_text]
         # Postprocess to fix LaTeX output (add $$ signs, etc)
-        detected_text = [fix_math(text) if math else text for text, math in zip(detected_text, has_math)]
+        detected_text = [fix_math(text) if math and contains_math(text) else text for text, math in zip(detected_text, has_math)]
         output_text.extend(detected_text)
 
     return output_text

@@ -5,7 +5,7 @@ from tqdm import tqdm
 import torch
 from PIL import Image
 
-from surya.detection import batch_detection
+from surya.detection import batch_text_detection
 from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image
 from surya.postprocessing.text import truncate_repetitions, sort_text_lines
 from surya.recognition import batch_recognition
@@ -60,7 +60,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
 
 
 def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor) -> List[OCRResult]:
-    det_predictions = batch_detection(images, det_model, det_processor)
+    det_predictions = batch_text_detection(images, det_model, det_processor)
     if det_model.device == "cuda":
         torch.cuda.empty_cache() # Empty cache from first model run
 

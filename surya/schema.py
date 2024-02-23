@@ -56,6 +56,13 @@ class PolygonBox(BaseModel):
             corner[1] = int(corner[1] * height_scaler)
         self.polygon = new_corners
 
+    def fit_to_bounds(self, bounds):
+        new_corners = copy.deepcopy(self.polygon)
+        for corner in new_corners:
+            corner[0] = max(min(corner[0], bounds[2]), bounds[0])
+            corner[1] = max(min(corner[1], bounds[3]), bounds[1])
+        self.polygon = new_corners
+
 
 
 class Bbox(BaseModel):
@@ -87,6 +94,10 @@ class Bbox(BaseModel):
         return self.width * self.height
 
 
+class LayoutBox(PolygonBox):
+    box_type: str
+
+
 class ColumnLine(Bbox):
     vertical: bool
     horizontal: bool
@@ -108,4 +119,10 @@ class DetectionResult(BaseModel):
     horizontal_lines: List[ColumnLine]
     heatmap: Any
     affinity_map: Any
+    image_bbox: List[float]
+
+
+class LayoutResult(BaseModel):
+    bboxes: List[LayoutBox]
+    segmentation_map: Any
     image_bbox: List[float]

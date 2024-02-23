@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import cv2
@@ -8,6 +8,31 @@ from PIL import ImageDraw
 from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
 from surya.settings import settings
+
+
+def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
+    new_boxes = []
+    for box_obj in boxes:
+        box = box_obj.bbox
+        box_area = (box[2] - box[0]) * (box[3] - box[1])
+        contained = False
+        for other_box_obj in boxes:
+            if other_box_obj.polygon == box_obj.polygon:
+                continue
+
+            other_box = other_box_obj.bbox
+            other_box_area = (other_box[2] - other_box[0]) * (other_box[3] - other_box[1])
+            if box == other_box:
+                continue
+            # find overlap percentage
+            overlap = max(0, min(box[2], other_box[2]) - max(box[0], other_box[0])) * max(0, min(box[3], other_box[3]) - max(box[1], other_box[1]))
+            overlap = overlap / box_area
+            if overlap > .9 and box_area < other_box_area:
+                contained = True
+                break
+        if not contained:
+            new_boxes.append(box_obj)
+    return new_boxes
 
 
 def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
@@ -118,7 +143,13 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, labels
 
 
-def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_BLANK_THRESHOLD) -> List[PolygonBox]:
+def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[PolygonBox]:
+    if text_threshold is None:
+        text_threshold = settings.DETECTOR_TEXT_THRESHOLD
+
+    if low_text is None:
+        low_text = settings.DETECTOR_BLANK_THRESHOLD
+
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
     boxes, labels = detect_boxes(textmap, text_threshold, low_text)
@@ -127,10 +158,12 @@ def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,
     return boxes
 
 
-def get_and_clean_boxes(textmap, processor_size, image_size) -> List[PolygonBox]:
-    bboxes = get_detected_boxes(textmap)
+def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None, low_text=None) -> List[PolygonBox]:
+    bboxes = get_detected_boxes(textmap, text_threshold, low_text)
     for bbox in bboxes:
         bbox.rescale(processor_size, image_size)
+        bbox.fit_to_bounds([0, 0, image_size[0], image_size[1]])
+
     bboxes = clean_contained_boxes(bboxes)
     return bboxes
 
