@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     }
     RECOGNITION_FONT_DL_BASE: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0"
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
+    RECOGNITION_PAD_VALUE: int = 0 # Should be 0 or 255
+
+    # Layout
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout"
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

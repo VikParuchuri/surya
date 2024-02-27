@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Optional
 
 from pydantic import BaseModel, field_validator, computed_field
 
@@ -22,11 +22,11 @@ class PolygonBox(BaseModel):
 
     @property
     def height(self):
-        return self.polygon[1][1] - self.polygon[0][1]
+        return self.bbox[3] - self.bbox[1]
 
     @property
     def width(self):
-        return self.polygon[1][0] - self.polygon[0][0]
+        return self.bbox[2] - self.bbox[0]
 
     @property
     def area(self):
@@ -63,6 +63,17 @@ class PolygonBox(BaseModel):
             corner[1] = max(min(corner[1], bounds[3]), bounds[1])
         self.polygon = new_corners
 
+    def intersection_area(self, other):
+        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
+        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
+        return x_overlap * y_overlap
+
+    def intersection_pct(self, other):
+        if self.area == 0:
+            return 0
+
+        intersection = self.intersection_area(other)
+        return intersection / self.area
 
 
 class Bbox(BaseModel):
@@ -95,7 +106,7 @@ class Bbox(BaseModel):
 
 
 class LayoutBox(PolygonBox):
-    box_type: str
+    label: str
 
 
 class ColumnLine(Bbox):
@@ -113,7 +124,7 @@ class OCRResult(BaseModel):
     image_bbox: List[float]
 
 
-class DetectionResult(BaseModel):
+class TextDetectionResult(BaseModel):
     bboxes: List[PolygonBox]
     vertical_lines: List[ColumnLine]
     horizontal_lines: List[ColumnLine]

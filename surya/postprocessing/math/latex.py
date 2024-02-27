@@ -7,16 +7,13 @@ def contains_math(text):
 
 
 def fix_math(text):
-    if "\\" not in text:
-        return strip_fences(text)
-
     # Fix any issues with the text
     text = fix_text(text)
 
     # Remove LaTeX labels and references
     text = remove_labels(text)
     text = replace_katex_invalid(text)
-    text = append_fences(text)
+    #text = append_fences(text)
     return text
 
 

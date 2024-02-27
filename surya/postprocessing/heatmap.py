@@ -3,7 +3,7 @@ from typing import List, Tuple
 import numpy as np
 import cv2
 import math
-from PIL import ImageDraw
+from PIL import ImageDraw, ImageFont
 
 from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
@@ -177,12 +177,19 @@ def draw_bboxes_on_image(bboxes, image):
     return image
 
 
-def draw_polys_on_image(corners, image):
+def draw_polys_on_image(corners, image, labels=None):
     draw = ImageDraw.Draw(image)
+    font_path = settings.RECOGNITION_RENDER_FONTS["all"]
+    label_font = ImageFont.truetype(font_path, 16)
 
-    for poly in corners:
+    for i in range(len(corners)):
+        poly = corners[i]
         poly = [(p[0], p[1]) for p in poly]
         draw.polygon(poly, outline='red', width=1)
+
+        if labels is not None:
+            label = labels[i]
+            draw.text((min([p[0] for p in poly]), min([p[1] for p in poly])), label, fill="blue", font=label_font)
 
     return image
 

@@ -88,7 +88,7 @@ def slice_and_pad_poly(image: Image.Image, coordinates, idx):
 
     # Extract the polygonal area from the image
     polygon_image = np.array(image)
-    polygon_image[mask == 0] = 0
+    polygon_image[mask == 0] = settings.RECOGNITION_PAD_VALUE
     polygon_image = Image.fromarray(polygon_image)
 
     rectangle = Image.new('RGB', (bbox[2] - bbox[0], bbox[3] - bbox[1]), 'white')
