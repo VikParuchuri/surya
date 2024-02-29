@@ -89,6 +89,8 @@ def detect_boxes(linemap, text_threshold, low_text):
     label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
 
     det = []
+    confidences = []
+    max_confidence = 0
     for k in range(1, label_count):
         # size filtering
         size = stats[k, cv2.CC_STAT_AREA]
@@ -138,9 +140,22 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
+        mask = np.zeros_like(linemap).astype(np.uint8)
+        cv2.fillPoly(mask, [np.int32(box)], 255)
+        mask = mask.astype(np.float16) / 255
+
+        roi = np.where(mask == 1, linemap, 0)
+        confidence = np.mean(roi[roi != 0])
+
+        if confidence > max_confidence:
+            max_confidence = confidence
+
+        confidences.append(confidence)
         det.append(box)
 
-    return det, labels
+    if max_confidence > 0:
+        confidences = [c / max_confidence for c in confidences]
+    return det, labels, confidences
 
 
 def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[PolygonBox]:
@@ -152,9 +167,9 @@ def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[Pol
 
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
-    boxes, labels = detect_boxes(textmap, text_threshold, low_text)
+    boxes, labels, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [PolygonBox(polygon=box) for box in boxes]
+    boxes = [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
     return boxes
 
 

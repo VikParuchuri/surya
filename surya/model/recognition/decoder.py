@@ -45,8 +45,13 @@ class MBartExpertLayer(nn.Module):
         self.dropout = nn.Dropout(config.activation_dropout)
 
         self.hidden_dim = config.d_model
-        self.lg_lang_codes = sorted(config.lg_langs.values())
-        self.xl_lang_codes = sorted(config.xl_langs.values())
+
+        self.lg_lang_codes = []
+        self.xl_lang_codes = []
+        if hasattr(config, "lg_langs"):
+            self.lg_lang_codes = sorted(config.lg_langs.values())
+        if hasattr(config, "xl_langs"):
+            self.xl_lang_codes = sorted(config.xl_langs.values())
         self.lang_codes = sorted(config.langs.values())
         self.num_experts = len(self.lang_codes)
 

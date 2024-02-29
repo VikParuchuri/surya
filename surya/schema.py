@@ -8,6 +8,7 @@ from surya.postprocessing.util import rescale_bbox
 
 class PolygonBox(BaseModel):
     polygon: List[List[float]]
+    confidence: Optional[float] = None
 
     @field_validator('polygon')
     @classmethod
@@ -116,6 +117,7 @@ class ColumnLine(Bbox):
 
 class TextLine(PolygonBox):
     text: str
+    confidence: Optional[float] = None
 
 
 class OCRResult(BaseModel):

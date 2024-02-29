@@ -27,7 +27,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
         all_slices.extend(slices)
         all_langs.extend([lang] * len(slices))
 
-    rec_predictions = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
+    rec_predictions, _ = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
 
     predictions_by_image = []
     slice_start = 0
@@ -74,23 +74,25 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
         all_slices.extend(slices)
         all_langs.extend([lang] * len(slices))
 
-    rec_predictions = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
+    rec_predictions, confidence_scores = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
 
     predictions_by_image = []
     slice_start = 0
     for idx, (image, det_pred, lang) in enumerate(zip(images, det_predictions, langs)):
         slice_end = slice_start + slice_map[idx]
         image_lines = rec_predictions[slice_start:slice_end]
+        line_confidences = confidence_scores[slice_start:slice_end]
         slice_start = slice_end
 
         assert len(image_lines) == len(det_pred.bboxes)
 
         lines = []
-        for text_line, bbox in zip(image_lines, det_pred.bboxes):
+        for text_line, confidence, bbox in zip(image_lines, line_confidences, det_pred.bboxes):
             lines.append(TextLine(
                 text=text_line,
                 polygon=bbox.polygon,
-                bbox=bbox.bbox
+                bbox=bbox.bbox,
+                confidence=confidence
             ))
 
         lines = sort_text_lines(lines)
