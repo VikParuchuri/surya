@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU, 32 otherwise
     DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
-    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
+    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1200 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
 

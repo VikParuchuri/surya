@@ -13,7 +13,7 @@ def fix_math(text):
     # Remove LaTeX labels and references
     text = remove_labels(text)
     text = replace_katex_invalid(text)
-    #text = append_fences(text)
+    text = fix_fences(text)
     return text
 
 
@@ -45,9 +45,7 @@ def remove_inner_dollars(text):
         math_block = match.group(1)
         return '$$' + math_block.replace('$', '') + '$$'
 
-    # Regex to find $$...$$ blocks, including new lines
     pattern = r'\$\$(.*?)\$\$'
-
     return re.sub(pattern, replace_dollar, text, flags=re.DOTALL)
 
 
@@ -95,12 +93,25 @@ def is_latex(text):
     return False
 
 
-def append_fences(text):
-    fence_count = text.count("$")
-    if text.count("$$") % 2 != 0:
-        text += "$$"
-    elif fence_count % 2 != 0:
-        text += "$"
+def fix_fences(text):
+    if text.startswith("$$") and not text.endswith("$$"):
+        if text[-1] == "$":
+            text += "$"
+        else:
+            text += "$$"
+
+    if text.endswith("$$") and not text.startswith("$$"):
+        if text[0] == "$":
+            text = "$" + text
+        else:
+            text = "$$" + text
+
+    if text.startswith("$") and not text.endswith("$"):
+        text = "$" + text + "$$"
+
+    if text.endswith("$") and not text.startswith("$"):
+        text = "$$" + text + "$"
+
     return text
 
 

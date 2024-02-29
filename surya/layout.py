@@ -25,7 +25,7 @@ def bbox_avg(integral_image, x1, y1, x2, y2):
     return bbox_sum / bbox_area
 
 
-def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image], orig_size, id2label, vertical_line_width=15) -> List[LayoutBox]:
+def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
     logits = np.stack(heatmaps, axis=0)
     vertical_line_bboxes = [line for line in detection_result.vertical_lines]
     line_bboxes = [line for line in detection_result.bboxes]
@@ -44,7 +44,11 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
 
         logits[:, vert_bbox[1]:vert_bbox[3], vert_bbox[0]:vert_bbox[2]] = 0  # zero out where the column lines are
 
-    logits[:, logits[0] > .7] = 0 # zero out where blanks are
+    logits[:, logits[0] >= .5] = 0 # zero out where blanks are
+
+    # Zero out where other segments are
+    for i in range(logits.shape[0]):
+        logits[i, segment_assignment != i] = 0
 
     detected_boxes = []
     done_maps = set()
@@ -55,7 +59,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             if heatmap_idx in done_maps:
                 continue
             heatmap = logits[heatmap_idx]
-            bboxes = get_detected_boxes(heatmap)
+            bboxes = get_detected_boxes(heatmap, text_threshold=.9)
             bboxes = [bbox for bbox in bboxes if bbox.area > 25]
             for bb in bboxes:
                 bb.fit_to_bounds([0, 0, heatmap.shape[1] - 1, heatmap.shape[0] - 1])
@@ -123,6 +127,10 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
 
         logits[:, int(bbox.bbox[1]):int(bbox.bbox[3]), int(bbox.bbox[0]):int(bbox.bbox[2])] = 0  # zero out where the new box is
 
+    if len(line_bboxes) > 0:
+        for bbox in line_bboxes:
+            detected_boxes.append(LayoutBox(polygon=bbox.polygon, label="Text"))
+
     for bbox in detected_boxes:
         bbox.rescale(list(reversed(heatmap.shape)), orig_size)
 
@@ -158,7 +166,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
         segment_assignment = logits.argmax(axis=0)
 
         if detection_results:
-            bboxes = get_regions_from_detection_result(detection_results[i], heatmaps, orig_size, id2label)
+            bboxes = get_regions_from_detection_result(detection_results[i], heatmaps, orig_size, id2label, segment_assignment)
         else:
             bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
 
