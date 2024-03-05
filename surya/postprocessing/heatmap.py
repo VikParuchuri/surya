@@ -199,7 +199,7 @@ def draw_polys_on_image(corners, image, labels=None):
 
     for i in range(len(corners)):
         poly = corners[i]
-        poly = [(p[0], p[1]) for p in poly]
+        poly = [(int(p[0]), int(p[1])) for p in poly]
         draw.polygon(poly, outline='red', width=1)
 
         if labels is not None:

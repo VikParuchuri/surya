@@ -15,9 +15,9 @@ from tqdm import tqdm
 def get_batch_size():
     batch_size = settings.DETECTOR_BATCH_SIZE
     if batch_size is None:
-        batch_size = 8
+        batch_size = 6
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 32
+            batch_size = 24
     return batch_size
 
 

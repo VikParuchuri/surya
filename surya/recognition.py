@@ -64,7 +64,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                 torch.ones_like(generated_ids),
                 torch.zeros_like(generated_ids)
             ).sum(axis=-1).cpu()
-            prefix_len = generated_ids.shape[0] - len(scores) # Length of passed in tokens (bos, langs)
+            prefix_len = generated_ids.shape[1] - len(scores) # Length of passed in tokens (bos, langs)
             for token_idx, score in enumerate(scores):
                 probs = F.softmax(score, dim=-1)
                 max_probs = torch.max(probs, dim=-1).values
