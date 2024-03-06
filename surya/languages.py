@@ -92,7 +92,6 @@ CODE_TO_LANGUAGE = {
     'xh': 'Xhosa',
     'yi': 'Yiddish',
     'zh': 'Chinese',
-    "_math": "Math",
 }
 
 LANGUAGE_TO_CODE = {v: k for k, v in CODE_TO_LANGUAGE.items()}

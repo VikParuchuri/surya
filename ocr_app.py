@@ -24,6 +24,7 @@ parser.add_argument("--math", action="store_true", help="Use math model for dete
 try:
     args = parser.parse_args()
 except SystemExit as e:
+    print(f"Error parsing arguments: {e}")
     os._exit(e.code)
 
 @st.cache_resource()

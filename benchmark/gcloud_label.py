@@ -13,6 +13,7 @@ import io
 DATA_DIR = os.path.join(settings.BASE_DIR, settings.DATA_DIR)
 RESULT_DIR = os.path.join(settings.BASE_DIR, settings.RESULT_DIR)
 
+rtl_langs = ["ar", "fa", "he", "ur", "ps", "sd", "yi", "ug"]
 
 def polygon_to_bbox(polygon):
     x = [vertex["x"] for vertex in polygon["vertices"]]
@@ -20,16 +21,28 @@ def polygon_to_bbox(polygon):
     return (min(x), min(y), max(x), max(y))
 
 
-def text_with_break(text, property):
+def text_with_break(text, property, is_rtl=False):
     break_type = None
+    prefix = False
     if property:
         if "detectedBreak" in property:
             if "type" in property["detectedBreak"]:
                 break_type = property["detectedBreak"]["type"]
+            if "isPrefix" in property["detectedBreak"]:
+                prefix = property["detectedBreak"]["isPrefix"]
+    break_char = ""
     if break_type == 1:
-        return text + " "
+        break_char = " "
     if break_type == 5:
-        return text + "\n"
+        break_char = "\n"
+
+    if is_rtl:
+        prefix = not prefix
+
+    if prefix:
+        text = break_char + text
+    else:
+        text = text + break_char
     return text
 
 
@@ -65,7 +78,7 @@ def annotate_image(img, client, language, cache_dir):
     return loaded_response
 
 
-def get_line_text(response, lines):
+def get_line_text(response, lines, is_rtl=False):
     document = response["fullTextAnnotation"]
 
     bounds = []
@@ -76,7 +89,7 @@ def get_line_text(response, lines):
                     for symbol in word["symbols"]:
                         bounds.append((symbol["boundingBox"], symbol["text"], symbol.get("property")))
 
-    bboxes = [(polygon_to_bbox(b[0]), text_with_break(b[1], b[2])) for b in bounds]
+    bboxes = [(polygon_to_bbox(b[0]), text_with_break(b[1], b[2], is_rtl)) for b in bounds]
     line_boxes = defaultdict(list)
     for i, bbox in enumerate(bboxes):
         max_overlap_pct = 0
@@ -92,6 +105,8 @@ def get_line_text(response, lines):
     ocr_lines = []
     for j, line in enumerate(lines):
         ocr_bboxes = sorted(line_boxes[j], key=lambda x: x[0][0])
+        if is_rtl:
+            ocr_bboxes = list(reversed(ocr_bboxes))
         ocr_text = "".join([b[1] for b in ocr_bboxes])
         ocr_lines.append(ocr_text)
 
@@ -119,7 +134,7 @@ def main():
         language = dataset[i]["language"]
 
         response = annotate_image(img, client, language, cache_dir)
-        ocr_lines = get_line_text(response, lines)
+        ocr_lines = get_line_text(response, lines, is_rtl=language in rtl_langs)
 
         all_gc_lines.append(ocr_lines)
 

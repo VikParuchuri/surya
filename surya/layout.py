@@ -25,7 +25,7 @@ def bbox_avg(integral_image, x1, y1, x2, y2):
     return bbox_sum / bbox_area
 
 
-def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
+def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image.Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
     logits = np.stack(heatmaps, axis=0)
     vertical_line_bboxes = [line for line in detection_result.vertical_lines]
     line_bboxes = [line for line in detection_result.bboxes]
@@ -139,7 +139,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
     return detected_boxes
 
 
-def get_regions(heatmaps: List[Image], orig_size, id2label, segment_assignment) -> List[LayoutBox]:
+def get_regions(heatmaps: List[Image.Image], orig_size, id2label, segment_assignment) -> List[LayoutBox]:
     bboxes = []
     for i in range(1, len(id2label)):  # Skip the blank class
         heatmap = heatmaps[i]
