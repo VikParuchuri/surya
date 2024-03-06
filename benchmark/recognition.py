@@ -148,9 +148,9 @@ def main():
             pred_image_name = f"{'_'.join(lang)}_{idx}_pred.png"
             ref_image_name = f"{'_'.join(lang)}_{idx}_ref.png"
             pred_text = [l.text for l in pred.text_lines]
-            pred_image = draw_text_on_image(bbox, pred_text, image.size)
+            pred_image = draw_text_on_image(bbox, pred_text, image.size, lang)
             pred_image.save(os.path.join(result_path, pred_image_name))
-            ref_image = draw_text_on_image(bbox, ref_text, image.size)
+            ref_image = draw_text_on_image(bbox, ref_text, image.size, lang)
             ref_image.save(os.path.join(result_path, ref_image_name))
             image.save(os.path.join(result_path, f"{'_'.join(lang)}_{idx}_image.png"))
 

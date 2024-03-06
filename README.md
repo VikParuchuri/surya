@@ -61,6 +61,8 @@ pip install streamlit
 surya_gui
 ```
 
+Pass the `--math` command line argument to use the math detection model instead of the default model.  This will detect math better, but will be worse at everything else.
+
 ## OCR (text recognition)
 
 You can OCR text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
@@ -81,6 +83,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 - `text_lines` - the detected text and bounding boxes for each line
   - `text` - the text in the line
+  - `confidence` - the confidence of the model in the detected text
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
 - `languages` - the languages specified for the page
@@ -120,12 +123,14 @@ surya_detect DATA_PATH --images
 - `--images` will save images of the pages and detected text lines (optional)
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
+- `--math` uses a specialized math detection model instead of the default model.  This will be better at math, but worse at everything else.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
 - `bboxes` - detected bounding boxes for text
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+  - `confidence` - the confidence of the model in the detected text
 - `vertical_lines` - vertical lines detected in the document
   - `bbox` - the axis-aligned line coordinates.
 - `horizontal_lines` - horizontal lines detected in the document

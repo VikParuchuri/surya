@@ -1,8 +1,11 @@
+import argparse
 import io
+from typing import List
 
 import pypdfium2
 import streamlit as st
-from surya.detection import batch_detection
+from surya.detection import batch_text_detection
+from surya.layout import batch_layout_detection
 from surya.model.detection.segformer import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
@@ -12,12 +15,22 @@ from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, DetectionResult
+from surya.schema import OCRResult, TextDetectionResult, LayoutResult
+from surya.settings import settings
+import os
 
+parser = argparse.ArgumentParser(description="Run OCR on an image or PDF.")
+parser.add_argument("--math", action="store_true", help="Use math model for detection", default=False)
+try:
+    args = parser.parse_args()
+except SystemExit as e:
+    print(f"Error parsing arguments: {e}")
+    os._exit(e.code)
 
 @st.cache_resource()
 def load_det_cached():
-    return load_model(), load_processor()
+    checkpoint = settings.DETECTOR_MATH_MODEL_CHECKPOINT if args.math else settings.DETECTOR_MODEL_CHECKPOINT
+    return load_model(checkpoint=checkpoint), load_processor(checkpoint=checkpoint)
 
 
 @st.cache_resource()
@@ -25,21 +38,35 @@ def load_rec_cached():
     return load_rec_model(), load_rec_processor()
 
 
-def text_detection(img) -> DetectionResult:
-    pred = batch_detection([img], det_model, det_processor)[0]
+@st.cache_resource()
+def load_layout_cached():
+    return load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT), load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+
+
+def text_detection(img) -> TextDetectionResult:
+    pred = batch_text_detection([img], det_model, det_processor)[0]
     polygons = [p.polygon for p in pred.bboxes]
     det_img = draw_polys_on_image(polygons, img.copy())
     return det_img, pred
 
 
+def layout_detection(img) -> LayoutResult:
+    _, det_pred = text_detection(img)
+    pred = batch_layout_detection([img], layout_model, layout_processor, [det_pred])[0]
+    polygons = [p.polygon for p in pred.bboxes]
+    labels = [p.label for p in pred.bboxes]
+    layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels)
+    return layout_img, pred
+
+
 # Function for OCR
-def ocr(img, langs) -> OCRResult:
+def ocr(img, langs: List[str]) -> OCRResult:
     replace_lang_with_code(langs)
     img_pred = run_ocr([img], [langs], det_model, det_processor, rec_model, rec_processor)[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
-    rec_img = draw_text_on_image(bboxes, text, img.size)
+    rec_img = draw_text_on_image(bboxes, text, img.size, langs, has_math="_math" in langs)
     return rec_img, img_pred
 
 
@@ -72,6 +99,7 @@ col1, col2 = st.columns([.5, .5])
 
 det_model, det_processor = load_det_cached()
 rec_model, rec_processor = load_rec_cached()
+layout_model, layout_processor = load_layout_cached()
 
 
 st.markdown("""
@@ -106,6 +134,7 @@ else:
 
 text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
+layout_det = st.sidebar.button("Run Layout Detection [BETA]")
 
 # Run Text Detection
 if text_det and pil_image is not None:
@@ -113,6 +142,14 @@ if text_det and pil_image is not None:
     with col1:
         st.image(det_img, caption="Detected Text", use_column_width=True)
         st.json(pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
+
+
+# Run layout
+if layout_det and pil_image is not None:
+    layout_img, pred = layout_detection(pil_image)
+    with col1:
+        st.image(layout_img, caption="Detected Layout", use_column_width=True)
+        st.json(pred.model_dump(exclude=["segmentation_map"]), expanded=True)
 
 # Run OCR
 if text_rec and pil_image is not None:
