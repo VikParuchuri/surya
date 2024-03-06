@@ -1,13 +1,39 @@
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import cv2
 import math
-from PIL import ImageDraw
+from PIL import ImageDraw, ImageFont
 
+from surya.postprocessing.fonts import get_font_path
 from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
 from surya.settings import settings
+
+
+def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
+    new_boxes = []
+    for box_obj in boxes:
+        box = box_obj.bbox
+        box_area = (box[2] - box[0]) * (box[3] - box[1])
+        contained = False
+        for other_box_obj in boxes:
+            if other_box_obj.polygon == box_obj.polygon:
+                continue
+
+            other_box = other_box_obj.bbox
+            other_box_area = (other_box[2] - other_box[0]) * (other_box[3] - other_box[1])
+            if box == other_box:
+                continue
+            # find overlap percentage
+            overlap = max(0, min(box[2], other_box[2]) - max(box[0], other_box[0])) * max(0, min(box[3], other_box[3]) - max(box[1], other_box[1]))
+            overlap = overlap / box_area
+            if overlap > .9 and box_area < other_box_area:
+                contained = True
+                break
+        if not contained:
+            new_boxes.append(box_obj)
+    return new_boxes
 
 
 def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
@@ -64,6 +90,8 @@ def detect_boxes(linemap, text_threshold, low_text):
     label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
 
     det = []
+    confidences = []
+    max_confidence = 0
     for k in range(1, label_count):
         # size filtering
         size = stats[k, cv2.CC_STAT_AREA]
@@ -113,24 +141,45 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
+        mask = np.zeros_like(linemap).astype(np.uint8)
+        cv2.fillPoly(mask, [np.int32(box)], 255)
+        mask = mask.astype(np.float16) / 255
+
+        roi = np.where(mask == 1, linemap, 0)
+        confidence = np.mean(roi[roi != 0])
+
+        if confidence > max_confidence:
+            max_confidence = confidence
+
+        confidences.append(confidence)
         det.append(box)
 
-    return det, labels
+    if max_confidence > 0:
+        confidences = [c / max_confidence for c in confidences]
+    return det, labels, confidences
 
 
-def get_detected_boxes(textmap, text_threshold=settings.DETECTOR_TEXT_THRESHOLD,  low_text=settings.DETECTOR_BLANK_THRESHOLD) -> List[PolygonBox]:
+def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[PolygonBox]:
+    if text_threshold is None:
+        text_threshold = settings.DETECTOR_TEXT_THRESHOLD
+
+    if low_text is None:
+        low_text = settings.DETECTOR_BLANK_THRESHOLD
+
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
-    boxes, labels = detect_boxes(textmap, text_threshold, low_text)
+    boxes, labels, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [PolygonBox(polygon=box) for box in boxes]
+    boxes = [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
     return boxes
 
 
-def get_and_clean_boxes(textmap, processor_size, image_size) -> List[PolygonBox]:
-    bboxes = get_detected_boxes(textmap)
+def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None, low_text=None) -> List[PolygonBox]:
+    bboxes = get_detected_boxes(textmap, text_threshold, low_text)
     for bbox in bboxes:
         bbox.rescale(processor_size, image_size)
+        bbox.fit_to_bounds([0, 0, image_size[0], image_size[1]])
+
     bboxes = clean_contained_boxes(bboxes)
     return bboxes
 
@@ -144,12 +193,19 @@ def draw_bboxes_on_image(bboxes, image):
     return image
 
 
-def draw_polys_on_image(corners, image):
+def draw_polys_on_image(corners, image, labels=None):
     draw = ImageDraw.Draw(image)
+    font_path = get_font_path()
+    label_font = ImageFont.truetype(font_path, 16)
 
-    for poly in corners:
-        poly = [(p[0], p[1]) for p in poly]
+    for i in range(len(corners)):
+        poly = corners[i]
+        poly = [(int(p[0]), int(p[1])) for p in poly]
         draw.polygon(poly, outline='red', width=1)
+
+        if labels is not None:
+            label = labels[i]
+            draw.text((min([p[0] for p in poly]), min([p[1] for p in poly])), label, fill="blue", font=label_font)
 
     return image
 

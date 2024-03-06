@@ -44,20 +44,30 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det"
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det2"
+    DETECTOR_MATH_MODEL_CHECKPOINT: str = "vikp/surya_det_math"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
-    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1280 # Height at which to slice images vertically
+    DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec"
-    RECOGNITION_MAX_TOKENS: int = 160
+    RECOGNITION_MAX_TOKENS: int = 175
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
-    RECOGNITION_RENDER_FONT: str = os.path.join(FONT_DIR, "GoNotoKurrent-Regular.ttf")
-    RECOGNITION_FONT_DL_PATH: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf"
+    RECOGNITION_RENDER_FONTS: Dict[str, str] = {
+        "all": os.path.join(FONT_DIR, "GoNotoCurrent-Regular.ttf"),
+        "zh": os.path.join(FONT_DIR, "GoNotoCJKCore.ttf"),
+        "ja": os.path.join(FONT_DIR, "GoNotoCJKCore.ttf"),
+        "ko": os.path.join(FONT_DIR, "GoNotoCJKCore.ttf"),
+    }
+    RECOGNITION_FONT_DL_BASE: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0"
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
+    RECOGNITION_PAD_VALUE: int = 0 # Should be 0 or 255
+
+    # Layout
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout"
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

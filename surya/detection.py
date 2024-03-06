@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import torch
@@ -7,7 +7,7 @@ from PIL import Image
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
 from surya.input.processing import prepare_image, split_image
-from surya.schema import DetectionResult
+from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
 
@@ -15,15 +15,16 @@ from tqdm import tqdm
 def get_batch_size():
     batch_size = settings.DETECTOR_BATCH_SIZE
     if batch_size is None:
-        batch_size = 8
+        batch_size = 6
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 32
+            batch_size = 24
     return batch_size
 
 
-def batch_detection(images: List, model, processor) -> List[DetectionResult]:
+def batch_detection(images: List, model, processor) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
     batch_size = get_batch_size()
+    heatmap_count = model.config.num_labels
 
     images = [image.convert("RGB") for image in images]
     orig_sizes = [image.size for image in images]
@@ -51,41 +52,42 @@ def batch_detection(images: List, model, processor) -> List[DetectionResult]:
 
         logits = pred.logits
         for j in range(logits.shape[0]):
-            heatmap = logits[j, 0, :, :].detach().cpu().numpy().astype(np.float32)
-            affinity_map = logits[j, 1, :, :].detach().cpu().numpy().astype(np.float32)
+            heatmaps = []
+            for k in range(heatmap_count):
+                heatmap = logits[j, k, :, :].detach().cpu().numpy().astype(np.float32)
+                heatmap_shape = list(heatmap.shape)
 
-            heatmap_shape = list(heatmap.shape)
-            correct_shape = [processor.size["height"], processor.size["width"]]
-            cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
+                correct_shape = [processor.size["height"], processor.size["width"]]
+                cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
+                if heatmap_shape != correct_shape:
+                    heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
 
-            if heatmap_shape != correct_shape:
-                heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
-
-            affinity_shape = list(affinity_map.shape)
-            if affinity_shape != correct_shape:
-                affinity_map = cv2.resize(affinity_map, cv2_size, interpolation=cv2.INTER_LINEAR)
-
-            pred_parts.append((heatmap, affinity_map))
+                heatmaps.append(heatmap)
+            pred_parts.append(heatmaps)
 
     preds = []
     for i, (idx, height) in enumerate(zip(split_index, split_heights)):
         if len(preds) <= idx:
             preds.append(pred_parts[i])
         else:
-            heatmap, affinity_map = preds[idx]
-            pred_heatmap = pred_parts[i][0]
-            pred_affinity = pred_parts[i][1]
+            heatmaps = preds[idx]
+            pred_heatmaps = [pred_parts[i][k] for k in range(heatmap_count)]
 
             if height < processor.size["height"]:
                 # Cut off padding to get original height
-                pred_heatmap = pred_heatmap[:height, :]
-                pred_affinity = pred_affinity[:height, :]
+                pred_heatmaps = [pred_heatmap[:height, :] for pred_heatmap in pred_heatmaps]
 
-            heatmap = np.vstack([heatmap, pred_heatmap])
-            affinity_map = np.vstack([affinity_map, pred_affinity])
-            preds[idx] = (heatmap, affinity_map)
+            for k in range(heatmap_count):
+                heatmaps[k] = np.vstack([heatmaps[k], pred_heatmaps[k]])
+            preds[idx] = heatmaps
 
     assert len(preds) == len(images)
+    assert all([len(pred) == heatmap_count for pred in preds])
+    return preds, orig_sizes
+
+
+def batch_text_detection(images: List, model, processor) -> List[TextDetectionResult]:
+    preds, orig_sizes = batch_detection(images, model, processor)
     results = []
     for i in range(len(images)):
         heatmap, affinity_map = preds[i]
@@ -98,7 +100,7 @@ def batch_detection(images: List, model, processor) -> List[DetectionResult]:
         vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
         horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
 
-        result = DetectionResult(
+        result = TextDetectionResult(
             bboxes=bboxes,
             vertical_lines=vertical_lines,
             horizontal_lines=horizontal_lines,
@@ -110,9 +112,5 @@ def batch_detection(images: List, model, processor) -> List[DetectionResult]:
         results.append(result)
 
     return results
-
-
-
-
 
 
