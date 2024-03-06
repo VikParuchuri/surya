@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "surya-ocr"
-version = "0.2.2"
+version = "0.2.3"
 description = "OCR and line detection in 90+ languages"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
@@ -14,7 +14,8 @@ include = [
     "detect_text.py",
     "ocr_text.py",
     "ocr_app.py",
-    "run_ocr_app.py"
+    "run_ocr_app.py",
+    "detect_layout.py"
 ]
 
 [tool.poetry.dependencies]
@@ -45,6 +46,7 @@ playwright = "^1.41.2"
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"
 surya_ocr = "ocr_text:main"
+surya_layout = "detect_layout:main"
 surya_gui = "run_ocr_app:run_app"
 
 [build-system]

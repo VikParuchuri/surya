@@ -5,6 +5,7 @@ import cv2
 import math
 from PIL import ImageDraw, ImageFont
 
+from surya.postprocessing.fonts import get_font_path
 from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
 from surya.settings import settings
@@ -194,7 +195,7 @@ def draw_bboxes_on_image(bboxes, image):
 
 def draw_polys_on_image(corners, image, labels=None):
     draw = ImageDraw.Draw(image)
-    font_path = settings.RECOGNITION_RENDER_FONTS["all"]
+    font_path = get_font_path()
     label_font = ImageFont.truetype(font_path, 16)
 
     for i in range(len(corners)):

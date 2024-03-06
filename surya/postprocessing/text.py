@@ -4,10 +4,11 @@ from typing import List, Tuple
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
+from surya.postprocessing.fonts import get_font_path
 from surya.schema import TextLine
 from surya.settings import settings
-from surya.postprocessing.math.latex import is_latex, slice_latex
-from surya.postprocessing.math.render import latex_to_pil, text_to_pil
+from surya.postprocessing.math.latex import is_latex
+from surya.postprocessing.math.render import latex_to_pil
 
 
 def sort_text_lines(lines: List[TextLine], tolerance=1.25):
@@ -68,15 +69,6 @@ def get_text_size(text, font):
 
 
 def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size):
-    # Download font if it doesn't exist
-    if not os.path.exists(font_path):
-        os.makedirs(os.path.dirname(font_path), exist_ok=True)
-        font_dl_path = f"{settings.RECOGNITION_FONT_DL_BASE}/{os.path.basename(font_path)}"
-        with requests.get(font_dl_path, stream=True) as r, open(font_path, 'wb') as f:
-            r.raise_for_status()
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-
     font = ImageFont.truetype(font_path, box_font_size)
     text_width, text_height = get_text_size(text, font)
     while (text_width > bbox_width or text_height > bbox_height) and box_font_size > 6:
@@ -106,11 +98,7 @@ def render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path):
 
 def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], langs: List[str], font_path=None, max_font_size=60, res_upscale=2, has_math=False):
     if font_path is None:
-        font_path = settings.RECOGNITION_RENDER_FONTS["all"]
-        for k in settings.RECOGNITION_RENDER_FONTS:
-            if k in langs and len(langs) == 1:
-                font_path = settings.RECOGNITION_RENDER_FONTS[k]
-                break
+        font_path = get_font_path(langs)
     new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)
     image = Image.new('RGB', new_image_size, color='white')
     draw = ImageDraw.Draw(image)

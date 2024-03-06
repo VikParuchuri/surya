@@ -83,7 +83,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 - `text_lines` - the detected text and bounding boxes for each line
   - `text` - the text in the line
-  - `confidence` - the confidence of the model in the detected text
+  - `confidence` - the confidence of the model in the detected text (0-1)
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
 - `languages` - the languages specified for the page
@@ -130,7 +130,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 - `bboxes` - detected bounding boxes for text
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
-  - `confidence` - the confidence of the model in the detected text
+  - `confidence` - the confidence of the model in the detected text (0-1)
 - `vertical_lines` - vertical lines detected in the document
   - `bbox` - the axis-aligned line coordinates.
 - `horizontal_lines` - horizontal lines detected in the document

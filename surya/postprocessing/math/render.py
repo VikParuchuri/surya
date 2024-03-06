@@ -3,64 +3,6 @@ from PIL import Image
 import io
 
 
-def text_to_pil(text, target_width, target_height, fontsize=10):
-    html_template = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-                display: flex;
-            }
-            #content {
-                font-size: {fontsize}px;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="content">{content}</div>
-    </body>
-    </html>
-    """
-
-    formatted_text = text.replace('\n', '\\n').replace('"', '\\"')
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-        page.set_viewport_size({'width': target_width, 'height': target_height})
-
-        while fontsize <= 30:
-            html_content = html_template.replace("{content}", formatted_text).replace("{fontsize}", str(fontsize))
-            page.set_content(html_content)
-
-            dimensions = page.evaluate("""() => {
-                const render = document.getElementById('content');
-                return {
-                    width: render.offsetWidth,
-                    height: render.offsetHeight
-                };
-            }""")
-
-            if dimensions['width'] >= target_width or dimensions['height'] >= target_height:
-                fontsize -= 1
-                break
-            else:
-                fontsize += 1
-
-        html_content = html_template.replace("{content}", formatted_text).replace("{fontsize}", str(fontsize))
-        page.set_content(html_content)
-
-        screenshot_bytes = page.screenshot()
-        browser.close()
-
-        image_stream = io.BytesIO(screenshot_bytes)
-        pil_image = Image.open(image_stream)
-        pil_image.load()
-        return pil_image
-
-
 def latex_to_pil(latex_code, target_width, target_height, fontsize=18):
     html_template = """
     <!DOCTYPE html>
