@@ -144,7 +144,7 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 
 ### From python
 
-```
+```py
 from PIL import Image
 from surya.detection import batch_detection
 from surya.model.segformer import load_model, load_processor
