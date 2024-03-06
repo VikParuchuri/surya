@@ -8,7 +8,6 @@ from surya.postprocessing.fonts import get_font_path
 from surya.schema import TextLine
 from surya.settings import settings
 from surya.postprocessing.math.latex import is_latex
-from surya.postprocessing.math.render import latex_to_pil
 
 
 def sort_text_lines(lines: List[TextLine], tolerance=1.25):
@@ -86,6 +85,7 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
 
 def render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path):
         try:
+            from surya.postprocessing.math.render import latex_to_pil
             box_font_size = max(10, min(int(.2 * bbox_height), 24))
             img = latex_to_pil(text, bbox_width, bbox_height, fontsize=box_font_size)
             img.thumbnail((bbox_width, bbox_height))
