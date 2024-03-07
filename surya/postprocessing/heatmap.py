@@ -26,8 +26,7 @@ def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
             if box == other_box:
                 continue
             # find overlap percentage
-            overlap = max(0, min(box[2], other_box[2]) - max(box[0], other_box[0])) * max(0, min(box[3], other_box[3]) - max(box[1], other_box[1]))
-            overlap = overlap / box_area
+            overlap = box_obj.intersection_pct(other_box_obj)
             if overlap > .9 and box_area < other_box_area:
                 contained = True
                 break

@@ -41,29 +41,6 @@ def main():
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    for idx, (layout_pred, line_pred, name) in enumerate(zip(layout_predictions, line_predictions, names)):
-        blocks = layout_pred.bboxes
-        for line in line_pred.vertical_lines:
-            new_blocks = []
-            for block in blocks:
-                block_modified = False
-
-                if line.bbox[0] > block.bbox[0] and line.bbox[2] < block.bbox[2]:
-                    overlap_pct = (min(line.bbox[3], block.bbox[3]) - max(line.bbox[1], block.bbox[1])) / (
-                                block.bbox[3] - block.bbox[1])
-                    if overlap_pct > 0.5:
-                        block1 = copy.deepcopy(block)
-                        block2 = copy.deepcopy(block)
-                        block1.bbox[2] = line.bbox[0]
-                        block2.bbox[0] = line.bbox[2]
-                        new_blocks.append(block1)
-                        new_blocks.append(block2)
-                        block_modified = True
-                if not block_modified:
-                    new_blocks.append(block)
-            blocks = new_blocks
-        layout_pred.bboxes = blocks
-
     if args.images:
         for idx, (image, layout_pred, line_pred, name) in enumerate(zip(images, layout_predictions, line_predictions, names)):
             polygons = [p.polygon for p in layout_pred.bboxes]

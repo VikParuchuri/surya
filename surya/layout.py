@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -28,7 +29,7 @@ def bbox_avg(integral_image, x1, y1, x2, y2):
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image.Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
     logits = np.stack(heatmaps, axis=0)
     vertical_line_bboxes = [line for line in detection_result.vertical_lines]
-    line_bboxes = [line for line in detection_result.bboxes]
+    line_bboxes = detection_result.bboxes
 
     # Scale back to processor size
     for line in vertical_line_bboxes:
@@ -51,66 +52,57 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
         logits[i, segment_assignment != i] = 0
 
     detected_boxes = []
-    done_maps = set()
-    for iteration in range(100): # detect up to 100 boxes
-        bbox = None
-        confidence = None
-        for heatmap_idx in range(1, len(id2label)):  # Skip the blank class
-            if heatmap_idx in done_maps:
+    for heatmap_idx in range(1, len(id2label)):  # Skip the blank class
+        heatmap = logits[heatmap_idx]
+        bboxes = get_detected_boxes(heatmap, text_threshold=.9, low_text=.8)
+        bboxes = [bbox for bbox in bboxes if bbox.area > 25]
+        for bb in bboxes:
+            bb.fit_to_bounds([0, 0, heatmap.shape[1] - 1, heatmap.shape[0] - 1])
+
+        integral_image = compute_integral_image(heatmap)
+        bbox_confidences = [bbox_avg(integral_image, *[int(b) for b in bbox.bbox]) for bbox in bboxes]
+        for confidence, bbox in zip(bbox_confidences, bboxes):
+            if confidence <= .3:
                 continue
-            heatmap = logits[heatmap_idx]
-            bboxes = get_detected_boxes(heatmap, text_threshold=.9)
-            bboxes = [bbox for bbox in bboxes if bbox.area > 25]
-            for bb in bboxes:
-                bb.fit_to_bounds([0, 0, heatmap.shape[1] - 1, heatmap.shape[0] - 1])
+            bbox = LayoutBox(polygon=bbox.polygon, label=id2label[heatmap_idx], confidence=confidence)
+            detected_boxes.append(bbox)
 
-            if len(bboxes) == 0:
-                done_maps.add(heatmap_idx)
-                continue
-
-            integral_image = compute_integral_image(heatmap)
-            bbox_confidences = [bbox_avg(integral_image, *[int(b) for b in bbox.bbox]) for bbox in bboxes]
-
-            max_confidence = max(bbox_confidences)
-            max_confidence_idx = bbox_confidences.index(max_confidence)
-            if max_confidence >= .15 and (confidence is None or max_confidence > confidence):
-                bbox = LayoutBox(polygon=bboxes[max_confidence_idx].polygon, label=id2label[heatmap_idx])
-            elif max_confidence < .15:
-                done_maps.add(heatmap_idx)
-
-        if bbox is None:
-            break
-
-        # Expand bbox to cover intersecting lines
-        remove_indices = []
-        covered_lines = []
+    detected_boxes = sorted(detected_boxes, key=lambda x: x.confidence, reverse=True)
+    # Expand bbox to cover intersecting lines
+    box_lines = defaultdict(list)
+    used_lines = set()
+    for bbox_idx, bbox in enumerate(detected_boxes):
         for line_idx, line_bbox in enumerate(line_bboxes):
-            if line_bbox.intersection_pct(bbox) >= .5:
-                remove_indices.append(line_idx)
-                covered_lines.append(line_bbox.bbox)
+            if line_bbox.intersection_pct(bbox) >= .5 and line_idx not in used_lines:
+                box_lines[bbox_idx].append(line_bbox.bbox)
+                used_lines.add(line_idx)
 
-        logits[:, int(bbox.bbox[1]):int(bbox.bbox[3]), int(bbox.bbox[0]):int(bbox.bbox[2])] = 0  # zero out where the detected bbox is
-        if len(covered_lines) == 0 and bbox.label not in ["Picture", "Formula"]:
+    new_boxes = []
+    for bbox_idx, bbox in enumerate(detected_boxes):
+        if bbox_idx not in box_lines and bbox.label not in ["Picture", "Formula"]:
             continue
 
-        if len(covered_lines) > 0 and bbox.label == "Picture":
+        if bbox_idx in box_lines and bbox.label in ["Picture"]:
             bbox.label = "Figure"
 
+        covered_lines = box_lines[bbox_idx]
         if len(covered_lines) > 0 and bbox.label not in ["Picture"]:
             min_x = min([line[0] for line in covered_lines])
             min_y = min([line[1] for line in covered_lines])
             max_x = max([line[2] for line in covered_lines])
             max_y = max([line[3] for line in covered_lines])
 
-            min_x_box = min([b[0] for b in bbox.polygon])
-            min_y_box = min([b[1] for b in bbox.polygon])
-            max_x_box = max([b[0] for b in bbox.polygon])
-            max_y_box = max([b[1] for b in bbox.polygon])
+            if bbox.label in ["Figure", "Table", "Formula"]:
+                # Figures can tables can contain text, but text isn't the whole area
+                min_x_box = min([b[0] for b in bbox.polygon])
+                min_y_box = min([b[1] for b in bbox.polygon])
+                max_x_box = max([b[0] for b in bbox.polygon])
+                max_y_box = max([b[1] for b in bbox.polygon])
 
-            min_x = min(min_x, min_x_box)
-            min_y = min(min_y, min_y_box)
-            max_x = max(max_x, max_x_box)
-            max_y = max(max_y, max_y_box)
+                min_x = min(min_x, min_x_box)
+                min_y = min(min_y, min_y_box)
+                max_x = max(max_x, max_x_box)
+                max_y = max(max_y, max_y_box)
 
             bbox.polygon[0][0] = min_x
             bbox.polygon[0][1] = min_y
@@ -121,21 +113,16 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             bbox.polygon[3][0] = min_x
             bbox.polygon[3][1] = max_y
 
-        # Remove "used" overlap lines
-        line_bboxes = [line_bboxes[i] for i in range(len(line_bboxes)) if i not in remove_indices]
-        detected_boxes.append(bbox)
+        new_boxes.append(bbox)
 
-        logits[:, int(bbox.bbox[1]):int(bbox.bbox[3]), int(bbox.bbox[0]):int(bbox.bbox[2])] = 0  # zero out where the new box is
+    unused_lines = [line for idx, line in enumerate(line_bboxes) if idx not in used_lines]
+    for bbox in unused_lines:
+        new_boxes.append(LayoutBox(polygon=bbox.polygon, label="Text", confidence=.5))
 
-    if len(line_bboxes) > 0:
-        for bbox in line_bboxes:
-            detected_boxes.append(LayoutBox(polygon=bbox.polygon, label="Text"))
-
-    for bbox in detected_boxes:
+    for bbox in new_boxes:
         bbox.rescale(list(reversed(heatmap.shape)), orig_size)
 
-    detected_boxes = [bbox for bbox in detected_boxes if bbox.area > 16]
-    detected_boxes = clean_contained_boxes(detected_boxes)
+    detected_boxes = [bbox for bbox in new_boxes if bbox.area > 16]
     return detected_boxes
 
 
