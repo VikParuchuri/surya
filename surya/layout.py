@@ -1,5 +1,6 @@
 import math
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -8,22 +9,8 @@ from surya.detection import batch_detection
 from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes, \
     clean_contained_boxes
 from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
-
-
-def compute_integral_image(arr):
-    return arr.cumsum(axis=0).cumsum(axis=1)
-
-
-def bbox_avg(integral_image, x1, y1, x2, y2):
-    total = integral_image[y2, x2]
-    above = integral_image[y1 - 1, x2] if y1 > 0 else 0
-    left = integral_image[y2, x1 - 1] if x1 > 0 else 0
-    above_left = integral_image[y1 - 1, x1 - 1] if (x1 > 0 and y1 > 0) else 0
-    bbox_sum = total - above - left + above_left
-    bbox_area = (x2 - x1) * (y2 - y1)
-    if bbox_area == 0:
-        return 0
-    return bbox_sum / bbox_area
+from surya.settings import settings
+import os
 
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image.Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
@@ -59,13 +46,8 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
         for bb in bboxes:
             bb.fit_to_bounds([0, 0, heatmap.shape[1] - 1, heatmap.shape[0] - 1])
 
-        integral_image = compute_integral_image(heatmap)
-        bbox_confidences = [bbox_avg(integral_image, *[int(b) for b in bbox.bbox]) for bbox in bboxes]
-        for confidence, bbox in zip(bbox_confidences, bboxes):
-            if confidence <= .3:
-                continue
-            bbox = LayoutBox(polygon=bbox.polygon, label=id2label[heatmap_idx], confidence=confidence)
-            detected_boxes.append(bbox)
+        for bbox in bboxes:
+            detected_boxes.append(LayoutBox(polygon=bbox.polygon, label=id2label[heatmap_idx], confidence=1))
 
     detected_boxes = sorted(detected_boxes, key=lambda x: x.confidence, reverse=True)
     # Expand bbox to cover intersecting lines
@@ -141,31 +123,44 @@ def get_regions(heatmaps: List[Image.Image], orig_size, id2label, segment_assign
     return bboxes
 
 
+def parallel_get_regions(heatmaps: List[Image.Image], orig_size, id2label, detection_results=None) -> List[LayoutResult]:
+    logits = np.stack(heatmaps, axis=0)
+    segment_assignment = logits.argmax(axis=0)
+    if detection_results is not None:
+        bboxes = get_regions_from_detection_result(detection_results, heatmaps, orig_size, id2label,
+                                                   segment_assignment)
+    else:
+        bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
+
+    segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
+
+    result = LayoutResult(
+        bboxes=bboxes,
+        segmentation_map=segmentation_img,
+        heatmaps=heatmaps,
+        image_bbox=[0, 0, orig_size[0], orig_size[1]]
+    )
+
+    return result
+
+
 def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None) -> List[LayoutResult]:
     preds, orig_sizes = batch_detection(images, model, processor)
     id2label = model.config.id2label
 
     results = []
-    for i in range(len(images)):
-        heatmaps = preds[i]
-        orig_size = orig_sizes[i]
-        logits = np.stack(heatmaps, axis=0)
-        segment_assignment = logits.argmax(axis=0)
+    if len(images) == 1: # Ensures we don't parallelize with streamlit
+        for i in range(len(images)):
+            result = parallel_get_regions(preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
+            results.append(result)
+    else:
+        futures = []
+        with ProcessPoolExecutor(max_workers=settings.DETECTOR_POSTPROCESSING_CPU_WORKERS) as executor:
+            for i in range(len(images)):
+                future = executor.submit(parallel_get_regions, preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
+                futures.append(future)
 
-        if detection_results:
-            bboxes = get_regions_from_detection_result(detection_results[i], heatmaps, orig_size, id2label, segment_assignment)
-        else:
-            bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
-
-        segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
-
-        result = LayoutResult(
-            bboxes=bboxes,
-            segmentation_map=segmentation_img,
-            heatmaps=heatmaps,
-            image_bbox=[0, 0, orig_size[0], orig_size[1]]
-        )
-
-        results.append(result)
+            for future in futures:
+                results.append(future.result())
 
     return results

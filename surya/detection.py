@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple
 
 import cv2
@@ -10,6 +11,7 @@ from surya.input.processing import prepare_image, split_image
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor
 
 
 def get_batch_size():
@@ -86,30 +88,37 @@ def batch_detection(images: List, model, processor) -> Tuple[List[List[np.ndarra
     return preds, orig_sizes
 
 
+def parallel_get_lines(preds, orig_sizes):
+    heatmap, affinity_map = preds
+    heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
+    aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
+    affinity_size = list(reversed(affinity_map.shape))
+    heatmap_size = list(reversed(heatmap.shape))
+    bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
+    vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes)
+    horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes)
+
+    result = TextDetectionResult(
+        bboxes=bboxes,
+        vertical_lines=vertical_lines,
+        horizontal_lines=horizontal_lines,
+        heatmap=heat_img,
+        affinity_map=aff_img,
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+    )
+    return result
+
+
 def batch_text_detection(images: List, model, processor) -> List[TextDetectionResult]:
     preds, orig_sizes = batch_detection(images, model, processor)
     results = []
-    for i in range(len(images)):
-        heatmap, affinity_map = preds[i]
-        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
-        aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
-
-        affinity_size = list(reversed(affinity_map.shape))
-        heatmap_size = list(reversed(heatmap.shape))
-        bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes[i])
-        vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes[i])
-        horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes[i])
-
-        result = TextDetectionResult(
-            bboxes=bboxes,
-            vertical_lines=vertical_lines,
-            horizontal_lines=horizontal_lines,
-            heatmap=heat_img,
-            affinity_map=aff_img,
-            image_bbox=[0, 0, orig_sizes[i][0], orig_sizes[i][1]]
-        )
-
-        results.append(result)
+    if len(images) == 1: # Ensures we don't parallelize with streamlit
+        for i in range(len(images)):
+            result = parallel_get_lines(preds[i], orig_sizes[i])
+            results.append(result)
+    else:
+        with ProcessPoolExecutor(max_workers=settings.DETECTOR_POSTPROCESSING_CPU_WORKERS) as executor:
+            results = list(executor.map(parallel_get_lines, preds, orig_sizes))
 
     return results
 

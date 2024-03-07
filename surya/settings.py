@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
+    DETECTOR_POSTPROCESSING_CPU_WORKERS: int = 8 # Number of workers for postprocessing
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec"

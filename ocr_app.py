@@ -1,3 +1,4 @@
+import os
 import argparse
 import io
 from typing import List
@@ -17,10 +18,10 @@ from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult
 from surya.settings import settings
-import os
 
 parser = argparse.ArgumentParser(description="Run OCR on an image or PDF.")
 parser.add_argument("--math", action="store_true", help="Use math model for detection", default=False)
+
 try:
     args = parser.parse_args()
 except SystemExit as e:
