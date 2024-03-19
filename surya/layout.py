@@ -41,7 +41,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
     detected_boxes = []
     for heatmap_idx in range(1, len(id2label)):  # Skip the blank class
         heatmap = logits[heatmap_idx]
-        bboxes = get_detected_boxes(heatmap, text_threshold=.9, low_text=.8)
+        bboxes = get_detected_boxes(heatmap)
         bboxes = [bbox for bbox in bboxes if bbox.area > 25]
         for bb in bboxes:
             bb.fit_to_bounds([0, 0, heatmap.shape[1] - 1, heatmap.shape[0] - 1])
@@ -96,6 +96,22 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             bbox.polygon[3][1] = max_y
 
         new_boxes.append(bbox)
+
+    for i in range(5): # Up to 5 rounds of merging
+        to_remove = set()
+        for bbox_idx, bbox in enumerate(new_boxes):
+            if bbox.label != "Table" or bbox_idx in to_remove:
+                continue
+
+            for bbox_idx2, bbox2 in enumerate(new_boxes):
+                if bbox2.label != "Table" or bbox_idx2 in to_remove or bbox_idx == bbox_idx2:
+                    continue
+
+                if bbox.intersection_pct(bbox2) > 0:
+                    bbox.merge(bbox2)
+                    to_remove.add(bbox_idx2)
+
+        new_boxes = [bbox for idx, bbox in enumerate(new_boxes) if idx not in to_remove]
 
     unused_lines = [line for idx, line in enumerate(line_bboxes) if idx not in used_lines]
     for bbox in unused_lines:

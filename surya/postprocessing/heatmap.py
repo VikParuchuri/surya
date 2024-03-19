@@ -9,6 +9,7 @@ from surya.postprocessing.fonts import get_font_path
 from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
 from surya.settings import settings
+from surya.postprocessing.text import get_text_size
 
 
 def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
@@ -192,10 +193,10 @@ def draw_bboxes_on_image(bboxes, image):
     return image
 
 
-def draw_polys_on_image(corners, image, labels=None):
+def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1):
     draw = ImageDraw.Draw(image)
     font_path = get_font_path()
-    label_font = ImageFont.truetype(font_path, 16)
+    label_font = ImageFont.truetype(font_path, 10)
 
     for i in range(len(corners)):
         poly = corners[i]
@@ -204,7 +205,24 @@ def draw_polys_on_image(corners, image, labels=None):
 
         if labels is not None:
             label = labels[i]
-            draw.text((min([p[0] for p in poly]), min([p[1] for p in poly])), label, fill="blue", font=label_font)
+            text_position = (
+                min([p[0] for p in poly]) + label_offset,
+                min([p[1] for p in poly]) + label_offset
+            )
+            text_size = get_text_size(label, label_font)
+            box_position = (
+                text_position[0] - box_padding + label_offset,
+                text_position[1] - box_padding + label_offset,
+                text_position[0] + text_size[0] + box_padding + label_offset,
+                text_position[1] + text_size[1] + box_padding + label_offset
+            )
+            draw.rectangle(box_position, fill="white")
+            draw.text(
+                text_position,
+                label,
+                fill="red",
+                font=label_font
+            )
 
     return image
 
