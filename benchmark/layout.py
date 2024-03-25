@@ -106,7 +106,7 @@ def main():
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
     print(f"Took {surya_time / len(images):.2f} seconds per image, and {surya_time:.1f} seconds total.")
-    print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.  There is a precision penalty for multiple boxes overlapping reference lines.")
+    print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.")
     print(f"Wrote results to {result_path}")
 
 
