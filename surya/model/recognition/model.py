@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
+
 from typing import List, Optional
 from transformers import VisionEncoderDecoderModel, VisionEncoderDecoderConfig, AutoModel, AutoModelForCausalLM
 from surya.model.recognition.config import MBartMoEConfig, VariableDonutSwinConfig

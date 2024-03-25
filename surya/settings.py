@@ -69,6 +69,7 @@ class Settings(BaseSettings):
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout"
+    LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

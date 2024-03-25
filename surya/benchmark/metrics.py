@@ -55,7 +55,7 @@ def calculate_coverage(box, other_boxes, penalize_double=False):
     return covered_pixels_count / box_area
 
 
-def precision_recall(preds, references, threshold=.5, workers=8):
+def precision_recall(preds, references, threshold=.5, workers=8, penalize_double=True):
     if len(references) == 0:
         return {
             "precision": 1,
@@ -69,7 +69,7 @@ def precision_recall(preds, references, threshold=.5, workers=8):
         }
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        precision_func = partial(calculate_coverage, penalize_double=True)
+        precision_func = partial(calculate_coverage, penalize_double=penalize_double)
         precision_iou = executor.map(precision_func, preds, repeat(references))
         reference_iou = executor.map(calculate_coverage, references, repeat(preds))
 

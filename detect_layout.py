@@ -42,7 +42,7 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     if args.images:
-        for idx, (image, layout_pred, line_pred, name) in enumerate(zip(images, layout_predictions, line_predictions, names)):
+        for idx, (image, layout_pred, name) in enumerate(zip(images, layout_predictions, names)):
             polygons = [p.polygon for p in layout_pred.bboxes]
             labels = [p.label for p in layout_pred.bboxes]
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image), labels=labels)

@@ -1,4 +1,3 @@
-import math
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
@@ -6,11 +5,9 @@ from PIL import Image
 import numpy as np
 
 from surya.detection import batch_detection
-from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes, \
-    clean_contained_boxes
+from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
 from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
 from surya.settings import settings
-import os
 
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[Image.Image], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
@@ -64,9 +61,6 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
         if bbox_idx not in box_lines and bbox.label not in ["Picture", "Formula"]:
             continue
 
-        if bbox_idx in box_lines and bbox.label in ["Picture"]:
-            bbox.label = "Figure"
-
         covered_lines = box_lines[bbox_idx]
         if len(covered_lines) > 0 and bbox.label not in ["Picture"]:
             min_x = min([line[0] for line in covered_lines])
@@ -74,7 +68,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             max_x = max([line[2] for line in covered_lines])
             max_y = max([line[3] for line in covered_lines])
 
-            if bbox.label in ["Figure", "Table", "Formula"]:
+            if bbox.label in ["Table", "Formula"]:
                 # Figures can tables can contain text, but text isn't the whole area
                 min_x_box = min([b[0] for b in bbox.polygon])
                 min_y_box = min([b[1] for b in bbox.polygon])
@@ -94,6 +88,9 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             bbox.polygon[2][1] = max_y
             bbox.polygon[3][0] = min_x
             bbox.polygon[3][1] = max_y
+
+        if bbox_idx in box_lines and bbox.label in ["Picture"]:
+            bbox.label = "Figure"
 
         new_boxes.append(bbox)
 
@@ -130,7 +127,7 @@ def get_regions(heatmaps: List[Image.Image], orig_size, id2label, segment_assign
         heatmap = heatmaps[i]
         assert heatmap.shape == segment_assignment.shape
         heatmap[segment_assignment != i] = 0  # zero out where another segment is
-        bbox = get_and_clean_boxes(heatmap, list(reversed(heatmap.shape)), orig_size, low_text=.7, text_threshold=.8)
+        bbox = get_and_clean_boxes(heatmap, list(reversed(heatmap.shape)), orig_size)
         for bb in bbox:
             bboxes.append(LayoutBox(polygon=bb.polygon, label=id2label[i]))
         heatmaps.append(heatmap)
