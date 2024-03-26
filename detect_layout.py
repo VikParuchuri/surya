@@ -21,8 +21,6 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    print("Layout detection is currently in beta!  There may be issues with the output.")
-
     model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     det_model = load_model()

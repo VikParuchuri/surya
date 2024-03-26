@@ -4,13 +4,13 @@ Surya is a document OCR toolkit that does:
 
 - Accurate OCR in 90+ languages
 - Line-level text detection in any language
-- Table and chart detection (coming soon)
+- Layout analysis (table, image, header, etc detection) in any language
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
-|                            Detection                             |                                   OCR                                   |
-|:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|
-|  ![New York Times Article Detection](static/images/excerpt.png)  |  ![New York Times Article Recognition](static/images/excerpt_text.png)  |
+|                            Detection                             |                                   OCR                                   |                                Layout                                 |
+|:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|:---------------------------------------------------------------------:|
+|  ![New York Times Article Detection](static/images/excerpt.png)  |  ![New York Times Article Recognition](static/images/excerpt_text.png)  | ![New York Times Article Detection](static/images/excerpt_layout.png) |
 
 
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
@@ -21,19 +21,19 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 
 ## Examples
 
-| Name             |           Text Detection            |                                      OCR |
-|------------------|:-----------------------------------:|-----------------------------------------:|
-| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) |
-| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) |
-| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) |
-| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) |
-| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) |
-| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |
-| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |
-| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |
-| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |
-| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |
-| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) |
+| Name             |           Text Detection            |                                      OCR |  Layout |
+|------------------|:-----------------------------------:|-----------------------------------------:|--------:|
+| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) | [Image](static/images/japanese_layout.jpg) |
+| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) | [Image](static/images/chinese_layout.jpg) |
+| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) | [Image](static/images/hindi_layout.jpg) |
+| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) | [Image](static/images/arabic_layout.jpg) |
+| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) | [Image](static/images/chi_hind_layout.jpg) |
+| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) | [Image](static/images/pres_layout.jpg) |
+| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |  [Image](static/images/paper_layout.jpg) |
+| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) | [Image](static/images/scanned_layout.jpg) |
+| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |  [Image](static/images/nyt_layout.jpg) |
+| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) | -- |
+| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |
 
 # Installation
 
@@ -100,13 +100,13 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 from PIL import Image
 from surya.ocr import run_ocr
 from surya.model.detection.segformer import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
+from surya.model.recognition.model import load_model
+from surya.model.recognition.processor import load_processor
 
 image = Image.open(IMAGE_PATH)
 langs = ["en"] # Replace with your languages
 det_processor, det_model = load_det_processor(), load_det_model()
-rec_model, rec_processor = load_rec_model(), load_rec_processor()
+rec_model, rec_processor = load_model(), load_processor()
 
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
 ```
@@ -156,13 +156,59 @@ model, processor = load_model(), load_processor()
 predictions = batch_detection([image], model, processor)
 ```
 
+## Layout analysis
+
+You can detect the layout of an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected layout.
+
+```
+surya_layout DATA_PATH --images
+```
+
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
+- `--images` will save images of the pages and detected text lines (optional)
+- `--max` specifies the maximum number of pages to process if you don't want to process everything
+- `--results_dir` specifies the directory to save results to instead of the default
+
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
+
+- `bboxes` - detected bounding boxes for text
+  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+  - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+  - `confidence` - the confidence of the model in the detected text (0-1).  This is currently not very reliable.
+  - `label` - the label for the bbox.  One of `Caption`, `Footnote`, `Formula`, `List-item`, `Page-footer`, `Page-header`, `Picture`, `Figure`, `Section-header`, `Table`, `Text`, `Title`.
+- `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
+
+**Performance tips**
+
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
+
+### From python
+
+```
+from PIL import Image
+from surya.detection import batch_detection
+from surya.model.segformer import load_model, load_processor
+from surya.settings import settings
+
+image = Image.open(IMAGE_PATH)
+model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+det_model = load_model()
+det_processor = load_processor()
+
+# layout_predictions is a list of dicts, one per image
+line_predictions = batch_text_detection([image], det_model, det_processor)
+layout_predictions = batch_layout_detection([image], model, processor, line_predictions)
+```
+
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
 - Surya is for OCR - the goal is to recognize the text lines correctly, not sort them into reading order. Surya will attempt to sort the lines, which will work in many cases, but use something like [marker](https://github.com/VikParuchuri/marker) or other postprocessing if you need to order the text.
 - It is for printed text, not handwriting (though it may work on some handwriting).
-- The model has trained itself to ignore advertisements.
-- You can find language support for OCR in `surya/languages.py`.  Text detection should work with any language.
+- The text detection model has trained itself to ignore advertisements.
+- You can find language support for OCR in `surya/languages.py`.  Text detection and layout analysis will work with any language.
 
 ## Troubleshooting
 
@@ -171,7 +217,6 @@ If OCR isn't working properly:
 - Try increasing resolution of the image so the text is bigger.  If the resolution is already very high, try decreasing it to no more than a `2048px` width.
 - Preprocessing the image (binarizing, deskewing, etc) can help with very old/blurry images.
 - You can adjust `DETECTOR_BLANK_THRESHOLD` and `DETECTOR_TEXT_THRESHOLD` if you don't get good results.  `DETECTOR_BLANK_THRESHOLD` controls the space between lines - any prediction below this number will be considered blank space.  `DETECTOR_TEXT_THRESHOLD` controls how text is joined - any number above this is considered text.  `DETECTOR_TEXT_THRESHOLD` should always be higher than `DETECTOR_BLANK_THRESHOLD`, and both should be in the 0-1 range.  Looking at the heatmap from the debug output of the detector can tell you how to adjust these (if you see faint things that look like boxes, lower the thresholds, and if you see bboxes being joined together, raise the thresholds).
-
 
 # Manual install
 
@@ -230,6 +275,10 @@ I instead used coverage, which calculates:
 First calculate coverage for each bbox, then add a small penalty for double coverage, since we want the detection to have non-overlapping bboxes.  Anything with a coverage of 0.5 or higher is considered a match.
 
 Then we calculate precision and recall for the whole dataset.
+
+## Layout analysis
+
+
 
 ## Running your own benchmarks
 

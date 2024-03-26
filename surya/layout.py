@@ -58,6 +58,9 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
 
     new_boxes = []
     for bbox_idx, bbox in enumerate(detected_boxes):
+        if bbox.label == "Picture" and bbox.area < 200: # Remove very small figures
+            continue
+
         if bbox_idx not in box_lines and bbox.label not in ["Picture", "Formula"]:
             continue
 
