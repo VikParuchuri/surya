@@ -55,7 +55,19 @@ def calculate_coverage(box, other_boxes, penalize_double=False):
     return covered_pixels_count / box_area
 
 
-def precision_recall(preds, references, threshold=.5, workers=8):
+def calculate_coverage_fast(box, other_boxes, penalize_double=False):
+    box_area = (box[2] - box[0]) * (box[3] - box[1])
+    if box_area == 0:
+        return 0
+
+    total_intersect = 0
+    for other_box in other_boxes:
+        total_intersect += intersection_area(box, other_box)
+
+    return min(1, total_intersect / box_area)
+
+
+def precision_recall(preds, references, threshold=.5, workers=8, penalize_double=True):
     if len(references) == 0:
         return {
             "precision": 1,
@@ -68,10 +80,15 @@ def precision_recall(preds, references, threshold=.5, workers=8):
             "recall": 0,
         }
 
+    # If we're not penalizing double coverage, we can use a faster calculation
+    coverage_func = calculate_coverage_fast
+    if penalize_double:
+        coverage_func = calculate_coverage
+
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        precision_func = partial(calculate_coverage, penalize_double=True)
+        precision_func = partial(coverage_func, penalize_double=penalize_double)
         precision_iou = executor.map(precision_func, preds, repeat(references))
-        reference_iou = executor.map(calculate_coverage, references, repeat(preds))
+        reference_iou = executor.map(coverage_func, references, repeat(preds))
 
     precision_classes = [1 if i > threshold else 0 for i in precision_iou]
     precision = sum(precision_classes) / len(precision_classes)

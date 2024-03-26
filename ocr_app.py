@@ -1,3 +1,4 @@
+import os
 import argparse
 import io
 from typing import List
@@ -17,10 +18,10 @@ from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult
 from surya.settings import settings
-import os
 
 parser = argparse.ArgumentParser(description="Run OCR on an image or PDF.")
 parser.add_argument("--math", action="store_true", help="Use math model for detection", default=False)
+
 try:
     args = parser.parse_args()
 except SystemExit as e:
@@ -105,7 +106,7 @@ layout_model, layout_processor = load_layout_cached()
 st.markdown("""
 # Surya OCR Demo
 
-This app will let you try surya, a multilingual OCR model. It supports text detection in any language, and text recognition in 90+ languages.
+This app will let you try surya, a multilingual OCR model. It supports text detection + layout analysis in any language, and text recognition in 90+ languages.
 
 Notes:
 - This works best on documents with printed text.
@@ -134,7 +135,7 @@ else:
 
 text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
-layout_det = st.sidebar.button("Run Layout Detection [BETA]")
+layout_det = st.sidebar.button("Run Layout Analysis")
 
 # Run Text Detection
 if text_det and pil_image is not None:

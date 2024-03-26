@@ -64,16 +64,26 @@ class PolygonBox(BaseModel):
             corner[1] = max(min(corner[1], bounds[3]), bounds[1])
         self.polygon = new_corners
 
-    def intersection_area(self, other):
-        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
-        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
+    def merge(self, other):
+        x1 = min(self.bbox[0], other.bbox[0])
+        y1 = min(self.bbox[1], other.bbox[1])
+        x2 = max(self.bbox[2], other.bbox[2])
+        y2 = max(self.bbox[3], other.bbox[3])
+        self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+    def intersection_area(self, other, margin=0):
+        x_overlap = max(0, min(self.bbox[2], other.bbox[2] - margin) - max(self.bbox[0], other.bbox[0] + margin))
+        y_overlap = max(0, min(self.bbox[3], other.bbox[3] - margin) - max(self.bbox[1], other.bbox[1] + margin))
         return x_overlap * y_overlap
 
-    def intersection_pct(self, other):
+    def intersection_pct(self, other, margin=0):
+        assert 0 <= margin <= 1
         if self.area == 0:
             return 0
 
-        intersection = self.intersection_area(other)
+        if margin:
+            margin = int(min(self.width, other.width) * margin)
+        intersection = self.intersection_area(other, margin)
         return intersection / self.area
 
 

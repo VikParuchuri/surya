@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
+
 import math
 from typing import Optional, Tuple, Union
 

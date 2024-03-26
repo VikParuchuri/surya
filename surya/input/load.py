@@ -1,3 +1,5 @@
+import PIL
+
 from surya.input.processing import open_pdf, get_page_images
 import os
 import filetype
@@ -50,14 +52,19 @@ def load_from_folder(folder_path, max_pages=None, start_page=None):
     images = []
     names = []
     for path in image_paths:
-        if filetype.guess(path).extension == "pdf":
+        extension = filetype.guess(path)
+        if extension and extension.extension == "pdf":
             image, name = load_pdf(path, max_pages, start_page)
             images.extend(image)
             names.extend(name)
         else:
-            image, name = load_image(path)
-            images.extend(image)
-            names.extend(name)
+            try:
+                image, name = load_image(path)
+                images.extend(image)
+                names.extend(name)
+            except PIL.UnidentifiedImageError:
+                print(f"Could not load image {path}")
+                continue
     return images, names
 
 

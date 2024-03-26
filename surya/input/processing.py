@@ -50,7 +50,7 @@ def open_pdf(pdf_filepath):
     return pypdfium2.PdfDocument(pdf_filepath)
 
 
-def get_page_images(doc, indices: List, dpi=96):
+def get_page_images(doc, indices: List, dpi=settings.IMAGE_DPI):
     renderer = doc.render(
         pypdfium2.PdfBitmap.to_pil,
         page_indices=indices,
