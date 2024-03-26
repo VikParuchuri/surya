@@ -41,7 +41,7 @@ You'll need python 3.9+ and PyTorch. You may need to install the CPU version of 
 
 Install with:
 
-```
+```shell
 pip install surya-ocr
 ```
 
@@ -56,7 +56,7 @@ Model weights will automatically download the first time you run surya.  Note th
 
 I've included a streamlit app that lets you interactively try Surya on images or PDF files.  Run it with:
 
-```
+```shell
 pip install streamlit
 surya_gui
 ```
@@ -67,7 +67,7 @@ Pass the `--math` command line argument to use the math detection model instead 
 
 You can OCR text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
 
-```
+```shell
 surya_ocr DATA_PATH --images --langs hi,en
 ```
 
@@ -96,16 +96,16 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 
 ### From python
 
-```
+```python
 from PIL import Image
 from surya.ocr import run_ocr
-from surya.model.detection.segformer import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.detection import segformer
 from surya.model.recognition.model import load_model
 from surya.model.recognition.processor import load_processor
 
 image = Image.open(IMAGE_PATH)
 langs = ["en"] # Replace with your languages
-det_processor, det_model = load_det_processor(), load_det_model()
+det_processor, det_model = segformer.load_processor(), segformer.load_model()
 rec_model, rec_processor = load_model(), load_processor()
 
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
@@ -115,7 +115,7 @@ predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec
 
 You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes.
 
-```
+```shell
 surya_detect DATA_PATH --images
 ```
 
@@ -144,23 +144,23 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 
 ### From python
 
-```
+```python
 from PIL import Image
-from surya.detection import batch_detection
-from surya.model.segformer import load_model, load_processor
+from surya.detection import batch_text_detection
+from surya.model.detection.segformer import load_model, load_processor
 
 image = Image.open(IMAGE_PATH)
 model, processor = load_model(), load_processor()
 
 # predictions is a list of dicts, one per image
-predictions = batch_detection([image], model, processor)
+predictions = batch_text_detection([image], model, processor)
 ```
 
 ## Layout analysis
 
 You can detect the layout of an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected layout.
 
-```
+```shell
 surya_layout DATA_PATH --images
 ```
 
@@ -185,10 +185,11 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 
 ### From python
 
-```
+```python
 from PIL import Image
-from surya.detection import batch_detection
-from surya.model.segformer import load_model, load_processor
+from surya.detection import batch_text_detection
+from surya.layout import batch_layout_detection
+from surya.model.detection.segformer import load_model, load_processor
 from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
@@ -278,7 +279,23 @@ Then we calculate precision and recall for the whole dataset.
 
 ## Layout analysis
 
+![Benchmark chart](static/images/benchmark_layout_chart.png)
 
+| Layout Type   |   precision |   recall |
+|---------------|-------------|----------|
+| Image         |        0.95 |     0.99 |
+| Table         |        0.95 |     0.96 |
+| Text          |        0.89 |     0.95 |
+| Title         |        0.92 |     0.89 |
+
+Time per image - .79 seconds on GPU (A6000).
+
+**Methodology**
+
+I benchmarked the layout analysis on [Publaynet](https://github.com/ibm-aur-nlp/PubLayNet), which was not in the training data.  I had to align publaynet labels with the surya layout labels.  I was then able to find coverage for each layout type:
+
+- Precision - how well the predicted bboxes cover ground truth bboxes
+- Recall - how well ground truth bboxes cover predicted bboxes
 
 ## Running your own benchmarks
 
@@ -314,6 +331,17 @@ python benchmark/recognition.py --tesseract
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
 - Set `RECOGNITION_BATCH_SIZE=864` to use the same batch size as the benchmark.
 
+**Layout analysis**
+
+This will evaluate surya on the publaynet dataset.
+
+```
+python benchmark/layout.py
+```
+
+- `--max` controls how many images to process for the benchmark
+- `--debug` will render images with detected text
+- `--results_dir` will let you specify a directory to save results to instead of the default one
 
 # Training
 
@@ -323,7 +351,7 @@ Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a m
 
 # Commercial usage
 
-The text detection and OCR models were trained from scratch, so they're okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
+The text detection, layout analysis, and OCR models were trained from scratch, so they're okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
 
 If you want to remove the GPL license requirements for inference or use the weights commercially over the revenue limit, please contact me at surya@vikas.sh for dual licensing.
 

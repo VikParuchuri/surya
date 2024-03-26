@@ -2,6 +2,13 @@ import json
 import argparse
 
 
+def verify_layout(data):
+    scores = data["metrics"]
+    for layout_type, metrics in scores.items():
+        if metrics["precision"] <= 0.6 or metrics["recall"] <= 0.6:
+            raise ValueError("Scores do not meet the required threshold")
+
+
 def verify_det(data):
     scores = data["metrics"]["surya"]
     if scores["precision"] <= 0.9 or scores["recall"] <= 0.9:
@@ -22,6 +29,8 @@ def verify_scores(file_path, bench_type):
         verify_det(data)
     elif bench_type == "recognition":
         verify_rec(data)
+    elif bench_type == "layout":
+        verify_layout(data)
     else:
         raise ValueError("Invalid benchmark type")
 
