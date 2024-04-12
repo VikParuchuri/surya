@@ -50,29 +50,35 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
     # Expand bbox to cover intersecting lines
     box_lines = defaultdict(list)
     used_lines = set()
-    for bbox_idx, bbox in enumerate(detected_boxes):
-        for line_idx, line_bbox in enumerate(line_bboxes):
-            if line_bbox.intersection_pct(bbox) >= .5 and line_idx not in used_lines:
-                box_lines[bbox_idx].append(line_bbox.bbox)
-                used_lines.add(line_idx)
+
+    # We try 2 rounds of identifying the correct lines to snap to
+    # First round is majority intersection, second lowers the threshold
+    for thresh in [.5, .4]:
+        for bbox_idx, bbox in enumerate(detected_boxes):
+            for line_idx, line_bbox in enumerate(line_bboxes):
+                if line_bbox.intersection_pct(bbox) > thresh and line_idx not in used_lines:
+                    box_lines[bbox_idx].append(line_bbox.bbox)
+                    used_lines.add(line_idx)
 
     new_boxes = []
     for bbox_idx, bbox in enumerate(detected_boxes):
         if bbox.label == "Picture" and bbox.area < 200: # Remove very small figures
             continue
 
+        # Skip if we didn't find any lines to snap to, except for Pictures and Formulas
         if bbox_idx not in box_lines and bbox.label not in ["Picture", "Formula"]:
             continue
 
         covered_lines = box_lines[bbox_idx]
+        # Snap non-picture layout boxes to correct text boundaries
         if len(covered_lines) > 0 and bbox.label not in ["Picture"]:
             min_x = min([line[0] for line in covered_lines])
             min_y = min([line[1] for line in covered_lines])
             max_x = max([line[2] for line in covered_lines])
             max_y = max([line[3] for line in covered_lines])
 
+            # Tables and formulas can contain text, but text isn't the whole area
             if bbox.label in ["Table", "Formula"]:
-                # Figures can tables can contain text, but text isn't the whole area
                 min_x_box = min([b[0] for b in bbox.polygon])
                 min_y_box = min([b[1] for b in bbox.polygon])
                 max_x_box = max([b[0] for b in bbox.polygon])
@@ -97,6 +103,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
 
         new_boxes.append(bbox)
 
+    # Merge tables together (sometimes one column is detected as a separate table)
     for i in range(5): # Up to 5 rounds of merging
         to_remove = set()
         for bbox_idx, bbox in enumerate(new_boxes):
@@ -113,6 +120,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
 
         new_boxes = [bbox for idx, bbox in enumerate(new_boxes) if idx not in to_remove]
 
+    # Ensure we account for all text lines in the layout
     unused_lines = [line for idx, line in enumerate(line_bboxes) if idx not in used_lines]
     for bbox in unused_lines:
         new_boxes.append(LayoutBox(polygon=bbox.polygon, label="Text", confidence=.5))
@@ -121,6 +129,19 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
         bbox.rescale(list(reversed(heatmap.shape)), orig_size)
 
     detected_boxes = [bbox for bbox in new_boxes if bbox.area > 16]
+
+    # Remove bboxes contained inside others, unless they're captions
+    contained_bbox = []
+    for i, bbox in enumerate(detected_boxes):
+        for j, bbox2 in enumerate(detected_boxes):
+            if i == j:
+                continue
+
+            if bbox2.intersection_pct(bbox) >= .95 and bbox2.label not in ["Caption", "Text"]:
+                contained_bbox.append(j)
+
+    detected_boxes = [bbox for idx, bbox in enumerate(detected_boxes) if idx not in contained_bbox]
+
     return detected_boxes
 
 
