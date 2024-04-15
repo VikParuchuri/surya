@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
+    # Ordering
+    ORDER_MODEL_CHECKPOINT: str = "vikp/order2"
+    ORDER_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
+    ORDER_MAX_BOXES: int = 256
+    ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
+
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None
 

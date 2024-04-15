@@ -115,9 +115,17 @@ class Bbox(BaseModel):
     def area(self):
         return self.width * self.height
 
+    @property
+    def polygon(self):
+        return [[self.bbox[0], self.bbox[1]], [self.bbox[2], self.bbox[1]], [self.bbox[2], self.bbox[3]], [self.bbox[0], self.bbox[3]]]
+
 
 class LayoutBox(PolygonBox):
     label: str
+
+
+class OrderBox(Bbox):
+    position: int
 
 
 class ColumnLine(Bbox):
@@ -148,4 +156,9 @@ class TextDetectionResult(BaseModel):
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
     segmentation_map: Any
+    image_bbox: List[float]
+
+
+class OrderResult(BaseModel):
+    bboxes: List[OrderBox]
     image_bbox: List[float]
