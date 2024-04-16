@@ -42,11 +42,14 @@ def main():
     line_predictions = batch_text_detection(images, det_model, det_processor)
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
     bboxes = []
+    labels = []
     for layout_pred in layout_predictions:
         bbox = [l.bbox for l in layout_pred.bboxes]
+        label = [l.label for l in layout_pred.bboxes]
         bboxes.append(bbox)
+        labels.append(label)
 
-    order_predictions = batch_ordering(images, bboxes, model, processor)
+    order_predictions = batch_ordering(images, bboxes, model, processor, labels=labels)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 

@@ -70,7 +70,8 @@ def layout_detection(img) -> (Image.Image, LayoutResult):
 def order_detection(img) -> (Image.Image, OrderResult):
     _, layout_pred = layout_detection(img)
     bboxes = [l.bbox for l in layout_pred.bboxes]
-    pred = batch_ordering([img], [bboxes], order_model, order_processor)[0]
+    labels = [l.label for l in layout_pred.bboxes]
+    pred = batch_ordering([img], [bboxes], order_model, order_processor, labels=[labels])[0]
     polys = [l.polygon for l in pred.bboxes]
     positions = [str(l.position) for l in pred.bboxes]
     order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=20)
