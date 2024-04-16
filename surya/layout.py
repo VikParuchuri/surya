@@ -137,7 +137,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
             if i == j:
                 continue
 
-            if bbox2.intersection_pct(bbox) >= .95 and bbox2.label not in ["Caption", "Text"]:
+            if bbox2.intersection_pct(bbox) >= .95 and bbox2.label not in ["Caption"]:
                 contained_bbox.append(j)
 
     detected_boxes = [bbox for idx, bbox in enumerate(detected_boxes) if idx not in contained_bbox]

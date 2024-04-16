@@ -30,7 +30,7 @@ def rank_elements(arr):
     return rank
 
 
-def batch_ordering(images: List, bboxes: List[List[List[int]]], model, processor) -> List[OrderResult]:
+def batch_ordering(images: List, bboxes: List[List[List[float]]], model, processor) -> List[OrderResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(bboxes)
     batch_size = get_batch_size()
