@@ -52,27 +52,61 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
         batch_pixel_values = model_inputs["pixel_values"]
         batch_bboxes = model_inputs["input_boxes"]
         batch_bbox_mask = model_inputs["input_boxes_mask"]
+        batch_bbox_counts = model_inputs["input_boxes_counts"]
 
         batch_bboxes = torch.from_numpy(np.array(batch_bboxes, dtype=np.int32)).to(model.device)
         batch_bbox_mask = torch.from_numpy(np.array(batch_bbox_mask, dtype=np.int32)).to(model.device)
         batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
 
         with torch.inference_mode():
-            return_dict = model(
-                pixel_values=batch_pixel_values,
-                decoder_input_boxes=batch_bboxes,
-                decoder_input_boxes_mask=batch_bbox_mask
-            )
-            logits = return_dict["logits"].detach().cpu()
+            token_count = 0
+            past_key_values = None
+            encoder_outputs = None
+            batch_predictions = [[] for _ in range(len(batch_images))]
+            done = [False for _ in range(len(batch_images))]
+            while token_count < settings.ORDER_MAX_BOXES:
+                return_dict = model(
+                    pixel_values=batch_pixel_values,
+                    decoder_input_boxes=batch_bboxes,
+                    decoder_input_boxes_mask=batch_bbox_mask,
+                    decoder_input_boxes_counts=batch_bbox_counts,
+                    encoder_outputs=encoder_outputs,
+                    past_key_values=past_key_values,
+                )
+                logits = return_dict["logits"].detach().cpu()
 
-        assert logits.shape[0] == len(batch_images) == len(batch_bboxes)
-        for j in range(logits.shape[0]):
-            row_logits = logits[j].tolist()
+                last_tokens = []
+                last_token_mask = []
+                for j, in range(logits.shape[0]):
+                    new_logits = logits[j].clone()
+                    new_logits[batch_predictions[j]] = -1e9 # Mask out already predicted tokens, we can only predict each token once
+                    pred = int(torch.argmax(logits[j], dim=-1).item())
+
+                    last_tokens.append([pred] * 4)
+                    if pred == processor.token_pad_id:
+                        last_token_mask.append([0])
+                        done[j] = True
+                    else:
+                        last_token_mask.append([1])
+                        batch_predictions[j].append(pred - processor.box_size["height"])  # Get rank prediction for given position
+
+                # Break when we finished generating all sequences
+                if all(done):
+                    break
+
+                past_key_values = return_dict["past_key_values"]
+                encoder_outputs = (return_dict["encoder_last_hidden_state"],)
+
+                batch_bboxes = torch.tensor(last_tokens, dtype=torch.long).to(model.device)
+                batch_bbox_mask = torch.tensor(last_token_mask, dtype=torch.long).to(model.device)
+                token_count += 1
+
+        for j, row_pred in enumerate(batch_predictions):
             row_bboxes = bboxes[i+j]
-            assert len(row_logits) == len(row_bboxes), "Mismatch between logits and bboxes."
+            assert len(row_pred) == len(row_bboxes), "Mismatch between logits and bboxes."
 
             orig_size = orig_sizes[j]
-            ranks = rank_elements(row_logits)
+            ranks = rank_elements(row_pred)
 
             if labels is not None:
                 # This is to force headers/footers into the proper order

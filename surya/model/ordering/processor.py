@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Dict, Union, Optional, List, Tuple
 
 import torch
@@ -15,9 +16,11 @@ from surya.settings import settings
 def load_processor(checkpoint=settings.ORDER_MODEL_CHECKPOINT):
     processor = OrderImageProcessor.from_pretrained(checkpoint)
     processor.size = settings.ORDER_IMAGE_SIZE
-    processor.box_pad_id = 1001
+    box_size = 1000
+    processor.token_sep_id = 257 + box_size
+    processor.token_pad_id = 258 + box_size
     processor.max_boxes = settings.ORDER_MAX_BOXES
-    processor.box_size = {"height": 1000, "width": 1000}
+    processor.box_size = {"height": box_size, "width": box_size}
     return processor
 
 
@@ -57,16 +60,21 @@ class OrderImageProcessor(DonutImageProcessor):
         return np_images
 
     def process_boxes(self, boxes):
-        max_boxes = max(len(b) for b in boxes)
+        max_boxes = max(len(b) for b in boxes) + 1
         padded_boxes = []
         box_masks = []
+        box_counts = []
         for b in boxes:
-            box_mask = [1] * len(b) + [0] * (max_boxes - len(b))
-            padded_box = b + [[self.box_pad_id] * 4] * (max_boxes - len(b))
+            # Left pad for generation
+            padded_b = deepcopy(b)
+            padded_b.append([self.token_sep_id] * 4) # Sep token to indicate start of label predictions
+            box_mask = [0] * (max_boxes - len(b)) + [1] * len(b)
+            padded_box = [[self.token_pad_id] * 4] * (max_boxes - len(b)) + b
             padded_boxes.append(padded_box)
             box_masks.append(box_mask)
+            box_counts.append(len(b))
 
-        return padded_boxes, box_masks
+        return padded_boxes, box_masks, box_counts
 
     def resize_img_and_boxes(self, img, boxes):
         orig_dim = img.size
@@ -128,6 +136,8 @@ class OrderImageProcessor(DonutImageProcessor):
         new_images = []
         new_boxes = []
         for img, box in zip(images, boxes):
+            if len(box) > self.processor.max_boxes:
+                raise ValueError(f"Too many boxes, max is {self.max_boxes}")
             img, box = self.resize_img_and_boxes(img, box)
             new_images.append(img)
             new_boxes.append(box)
@@ -139,10 +149,11 @@ class OrderImageProcessor(DonutImageProcessor):
         images = [to_numpy_array(image) for image in images]
 
         images = self.process_inner(images)
-        boxes, box_mask = self.process_boxes(boxes)
+        boxes, box_mask, box_counts = self.process_boxes(boxes)
         data = {
             "pixel_values": images,
             "input_boxes": boxes,
-            "input_boxes_mask": box_mask
+            "input_boxes_mask": box_mask,
+            "input_boxes_counts": box_counts,
         }
         return BatchFeature(data=data, tensor_type=return_tensors)

@@ -212,7 +212,7 @@ class MBartOrderDecoderLayer(MBartDecoderLayer):
             num_kv_heads=config.kv_heads,
             dropout=config.attention_dropout,
             is_decoder=True,
-            is_causal=False,
+            is_causal=True,
             config=config,
         )
         self.dropout = config.dropout
@@ -297,6 +297,7 @@ class MBartOrderDecoder(MBartDecoder):
         self,
         input_boxes: torch.LongTensor = None,
         input_boxes_mask: Optional[torch.Tensor] = None,
+        input_boxes_counts: Optional[torch.Tensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.Tensor] = None,
@@ -341,6 +342,12 @@ class MBartOrderDecoder(MBartDecoder):
             attention_mask = _prepare_4d_causal_attention_mask(
                 input_boxes_mask, input_shape, inputs_embeds, past_key_values_length
             )
+
+            if past_key_values_length == 0:
+                # Enable all boxes to attend to each other (before the sep token)
+                boxes_mask = torch.arange(input_shape[1], device=attention_mask.device)[None, :] < input_boxes_counts[:, None]
+                boxes_mask = boxes_mask.unsqueeze(1).unsqueeze(1) # Enable proper broadcasting
+                attention_mask = attention_mask.masked_fill(boxes_mask, 0)
 
         # expand encoder attention mask
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
@@ -474,7 +481,7 @@ class MBartOrder(MBartForCausalLM):
         MBartPreTrainedModel.__init__(self, config)
         self.model = MBartOrderDecoderWrapper(config)
 
-        self.lm_head = nn.Linear(config.hidden_size, 1, bias=False)
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.output_scale = config.output_scale
 
         # Initialize weights and apply final processing
@@ -484,6 +491,7 @@ class MBartOrder(MBartForCausalLM):
         self,
         input_boxes: torch.LongTensor = None,
         input_boxes_mask: Optional[torch.Tensor] = None,
+        input_boxes_counts: Optional[torch.Tensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         head_mask: Optional[torch.Tensor] = None,
@@ -506,6 +514,7 @@ class MBartOrder(MBartForCausalLM):
         outputs = self.model.decoder(
             input_boxes=input_boxes,
             input_boxes_mask=input_boxes_mask,
+            input_boxes_counts=input_boxes_counts,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
             head_mask=head_mask,
@@ -519,7 +528,6 @@ class MBartOrder(MBartForCausalLM):
         )
 
         logits = self.lm_head(outputs[0])
-        logits = logits.sigmoid() * 2 * self.output_scale - self.output_scale # Scale to -1000 to 1000
 
         loss = None
         if not return_dict:

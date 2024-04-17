@@ -12,6 +12,7 @@ class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel):
         decoder_input_boxes: torch.LongTensor = None,
         # Shape (batch_size, num_boxes, 4), all coords scaled 0 - 1000, with 1001 as padding
         decoder_input_boxes_mask: torch.LongTensor = None,  # Shape (batch_size, num_boxes), 0 if padding, 1 otherwise
+        decoder_input_boxes_counts: torch.LongTensor = None,  # Shape (batch_size), number of boxes in each image
         encoder_outputs: Optional[Tuple[torch.FloatTensor]] = None,
         past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         decoder_inputs_embeds: Optional[torch.FloatTensor] = None,
@@ -60,6 +61,7 @@ class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel):
         decoder_outputs = self.decoder(
             input_boxes=decoder_input_boxes,
             input_boxes_mask=decoder_input_boxes_mask,
+            input_boxes_counts=decoder_input_boxes_counts,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
             inputs_embeds=decoder_inputs_embeds,
