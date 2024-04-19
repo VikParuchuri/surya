@@ -16,10 +16,11 @@ from surya.settings import settings
 def load_processor(checkpoint=settings.ORDER_MODEL_CHECKPOINT):
     processor = OrderImageProcessor.from_pretrained(checkpoint)
     processor.size = settings.ORDER_IMAGE_SIZE
-    box_size = 1000
-    processor.token_sep_id = 257 + box_size
-    processor.token_pad_id = 258 + box_size
-    processor.max_boxes = settings.ORDER_MAX_BOXES
+    box_size = 1024
+    max_tokens = 256
+    processor.token_sep_id = max_tokens + box_size + 1
+    processor.token_pad_id = max_tokens + box_size + 2
+    processor.max_boxes = settings.ORDER_MAX_BOXES - 1
     processor.box_size = {"height": box_size, "width": box_size}
     return processor
 
@@ -60,7 +61,6 @@ class OrderImageProcessor(DonutImageProcessor):
         return np_images
 
     def process_boxes(self, boxes):
-        max_boxes = max(len(b) for b in boxes) + 1
         padded_boxes = []
         box_masks = []
         box_counts = []
@@ -68,11 +68,17 @@ class OrderImageProcessor(DonutImageProcessor):
             # Left pad for generation
             padded_b = deepcopy(b)
             padded_b.append([self.token_sep_id] * 4) # Sep token to indicate start of label predictions
-            box_mask = [0] * (max_boxes - len(b)) + [1] * len(b)
-            padded_box = [[self.token_pad_id] * 4] * (max_boxes - len(b)) + b
-            padded_boxes.append(padded_box)
+            padded_boxes.append(padded_b)
+
+        max_boxes = max(len(b) for b in padded_boxes)
+        for i in range(len(padded_boxes)):
+            pad_len = max_boxes - len(padded_boxes[i])
+            box_len = len(padded_boxes[i])
+            box_mask = [0] * pad_len + [1] * box_len
+            padded_box = [[self.token_pad_id] * 4] * pad_len + padded_boxes[i]
+            padded_boxes[i] = padded_box
             box_masks.append(box_mask)
-            box_counts.append(len(b))
+            box_counts.append([pad_len, max_boxes])
 
         return padded_boxes, box_masks, box_counts
 
@@ -87,7 +93,7 @@ class OrderImageProcessor(DonutImageProcessor):
         width, height = orig_dim
         box_width, box_height = self.box_size["width"], self.box_size["height"]
         for box in boxes:
-            # Rescale to 0-1000
+            # Rescale to 0-1024
             box[0] = box[0] / width * box_width
             box[1] = box[1] / height * box_height
             box[2] = box[2] / width * box_width
@@ -136,7 +142,7 @@ class OrderImageProcessor(DonutImageProcessor):
         new_images = []
         new_boxes = []
         for img, box in zip(images, boxes):
-            if len(box) > self.processor.max_boxes:
+            if len(box) > self.max_boxes:
                 raise ValueError(f"Too many boxes, max is {self.max_boxes}")
             img, box = self.resize_img_and_boxes(img, box)
             new_images.append(img)

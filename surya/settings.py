@@ -72,8 +72,8 @@ class Settings(BaseSettings):
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering
-    ORDER_MODEL_CHECKPOINT: str = "vikp/order_hr"
-    ORDER_IMAGE_SIZE: Dict = {"height": 1280, "width": 1280}
+    ORDER_MODEL_CHECKPOINT: str = "vikp/surya_order"
+    ORDER_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
     ORDER_MAX_BOXES: int = 256
     ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"

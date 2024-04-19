@@ -245,10 +245,9 @@ class BboxEmbedding(nn.Module):
         self.h_embed = nn.Embedding(config.max_height, config.d_model)
         self.cx_embed = nn.Embedding(config.max_width, config.d_model)
         self.cy_embed = nn.Embedding(config.max_height, config.d_model)
+        self.box_pos_embed = nn.Embedding(config.max_position_embeddings, config.d_model)
 
-        self.layernorm = nn.LayerNorm(config.d_model, eps=1e-5)
-
-    def forward(self, boxes: torch.LongTensor):
+    def forward(self, boxes: torch.LongTensor, input_box_counts: torch.LongTensor, past_key_values_length: int):
         x1, y1, x2, y2 = boxes.unbind(dim=-1)
         # Shape is (batch_size, num_boxes/seq len, d_model)
         w = x2 - x1
@@ -261,7 +260,15 @@ class BboxEmbedding(nn.Module):
 
         coord_embeds = self.x1_embed(x1) + self.y1_embed(y1) + self.x2_embed(x2) + self.y2_embed(y2)
         embedded = coord_embeds + self.w_embed(w) + self.h_embed(h) + self.cx_embed(cx) + self.cy_embed(cy)
-        embedded = self.layernorm(embedded)
+
+        # Add in positional embeddings for the boxes
+        if past_key_values_length == 0:
+            for j in range(embedded.shape[0]):
+                box_start = input_box_counts[j, 0]
+                box_end = input_box_counts[j, 1] - 1 # Skip the sep token
+                box_count = box_end - box_start
+                embedded[j, box_start:box_end] = embedded[j, box_start:box_end] + self.box_pos_embed.weight[:box_count]
+
         return embedded
 
 
@@ -332,7 +339,7 @@ class MBartOrderDecoder(MBartDecoder):
         past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if inputs_embeds is None:
-            inputs_embeds = self.embed_tokens(input_boxes) * self.embed_scale
+            inputs_embeds = self.embed_tokens(input_boxes, input_boxes_counts, past_key_values_length) * self.embed_scale
 
         if self._use_flash_attention_2:
             # 2d mask is passed through the layers
@@ -344,8 +351,14 @@ class MBartOrderDecoder(MBartDecoder):
             )
 
             if past_key_values_length == 0:
+                box_ends = input_boxes_counts[:, 1]
+                box_starts = input_boxes_counts[:, 0]
+                input_shape_arranged = torch.arange(input_shape[1], device=attention_mask.device)[None, :]
                 # Enable all boxes to attend to each other (before the sep token)
-                boxes_mask = torch.arange(input_shape[1], device=attention_mask.device)[None, :] < input_boxes_counts[:, None]
+                # Ensure that the boxes are not attending to the padding tokens
+                boxes_end_mask = input_shape_arranged < box_ends[:, None]
+                boxes_start_mask = input_shape_arranged >= box_starts[:, None]
+                boxes_mask = boxes_end_mask & boxes_start_mask
                 boxes_mask = boxes_mask.unsqueeze(1).unsqueeze(1) # Enable proper broadcasting
                 attention_mask = attention_mask.masked_fill(boxes_mask, 0)
 
@@ -482,7 +495,6 @@ class MBartOrder(MBartForCausalLM):
         self.model = MBartOrderDecoderWrapper(config)
 
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        self.output_scale = config.output_scale
 
         # Initialize weights and apply final processing
         self.post_init()
