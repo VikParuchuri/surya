@@ -2,16 +2,20 @@
 
 Surya is a document OCR toolkit that does:
 
-- Accurate OCR in 90+ languages
+- OCR in 90+ languages that benchmarks favorably vs cloud services
 - Line-level text detection in any language
-- Layout analysis (table, image, header, etc detection) in any language
+- Layout analysis (table, image, header, etc detection)
+- Reading order detection
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
-|                            Detection                             |                                   OCR                                   |                                Layout                                 |
-|:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|:---------------------------------------------------------------------:|
-|  ![New York Times Article Detection](static/images/excerpt.png)  |  ![New York Times Article Recognition](static/images/excerpt_text.png)  | ![New York Times Article Detection](static/images/excerpt_layout.png) |
+|                            Detection                             |                                   OCR                                   |
+|:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|
+|  ![New York Times Article Detection](static/images/excerpt.png)  |  ![New York Times Article Recognition](static/images/excerpt_text.png)  |
 
+|                               Layout                               |                               Reading Order                                |
+|:------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
+| ![New York Times Article Layout](static/images/excerpt_layout.png) | ![New York Times Article Reading Order](static/images/excerpt_reading.jpg) |
 
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
 
@@ -21,19 +25,19 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 
 ## Examples
 
-| Name             |           Text Detection            |                                      OCR |  Layout |
-|------------------|:-----------------------------------:|-----------------------------------------:|--------:|
-| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) | [Image](static/images/japanese_layout.jpg) |
-| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) | [Image](static/images/chinese_layout.jpg) |
-| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) | [Image](static/images/hindi_layout.jpg) |
-| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) | [Image](static/images/arabic_layout.jpg) |
-| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) | [Image](static/images/chi_hind_layout.jpg) |
-| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) | [Image](static/images/pres_layout.jpg) |
-| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |  [Image](static/images/paper_layout.jpg) |
-| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) | [Image](static/images/scanned_layout.jpg) |
-| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |  [Image](static/images/nyt_layout.jpg) |
-| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) | -- |
-| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |
+| Name             |              Detection              |                                      OCR |                                     Layout |                                       Order |
+|------------------|:-----------------------------------:|-----------------------------------------:|-------------------------------------------:|--------------------------------------------:|
+| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) | [Image](static/images/japanese_layout.jpg) | [Image](static/images/japanese_reading.jpg) |
+| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) |  [Image](static/images/chinese_layout.jpg) |  [Image](static/images/chinese_reading.jpg) |
+| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) |    [Image](static/images/hindi_layout.jpg) |    [Image](static/images/hindi_reading.jpg) |
+| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) |   [Image](static/images/arabic_layout.jpg) |   [Image](static/images/arabic_reading.jpg) |
+| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) | [Image](static/images/chi_hind_layout.jpg) | [Image](static/images/chi_hind_reading.jpg) |
+| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |     [Image](static/images/pres_layout.jpg) |     [Image](static/images/pres_reading.jpg) |
+| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |    [Image](static/images/paper_layout.jpg) |    [Image](static/images/paper_reading.jpg) |
+| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |  [Image](static/images/scanned_layout.jpg) |  [Image](static/images/scanned_reading.jpg) |
+| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |      [Image](static/images/nyt_layout.jpg) |                                          -- |
+| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |    [Image](static/images/funsd_layout.jpg) |    [Image](static/images/funsd_reading.jpg) |
+| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |                                          -- |
 
 # Installation
 
@@ -203,13 +207,59 @@ line_predictions = batch_text_detection([image], det_model, det_processor)
 layout_predictions = batch_layout_detection([image], model, processor, line_predictions)
 ```
 
+## Reading order
+
+You can detect the reading order of an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected reading order and layout.
+
+```shell
+surya_order DATA_PATH --images
+```
+
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
+- `--images` will save images of the pages and detected text lines (optional)
+- `--max` specifies the maximum number of pages to process if you don't want to process everything
+- `--results_dir` specifies the directory to save results to instead of the default
+
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
+
+- `bboxes` - detected bounding boxes for text
+  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+  - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
+  - `confidence` - the confidence of the model in the detected text (0-1).  This is currently not very reliable.
+  - `label` - the label for the bbox.  One of `Caption`, `Footnote`, `Formula`, `List-item`, `Page-footer`, `Page-header`, `Picture`, `Figure`, `Section-header`, `Table`, `Text`, `Title`.
+- `page` - the page number in the file
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
+
+**Performance tips**
+
+Setting the `ORDER_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `4`.
+
+### From python
+
+```python
+from PIL import Image
+from surya.ordering import batch_ordering
+from surya.model.ordering.processor import load_processor
+from surya.model.ordering.model import load_model
+
+image = Image.open(IMAGE_PATH)
+# bboxes should be a list of lists with layout bboxes for the image in [x1,y1,x2,y2] format
+# You can get this from the layout model, see above for usage
+bboxes = [bbox1, bbox2, ...]
+
+model = load_model()
+processor = load_processor()
+
+# order_predictions will be a list of dicts, one per image
+order_predictions = batch_ordering([image], [bboxes], model, processor)
+```
+
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
-- Surya is for OCR - the goal is to recognize the text lines correctly, not sort them into reading order. Surya will attempt to sort the lines, which will work in many cases, but use something like [marker](https://github.com/VikParuchuri/marker) or other postprocessing if you need to order the text.
 - It is for printed text, not handwriting (though it may work on some handwriting).
 - The text detection model has trained itself to ignore advertisements.
-- You can find language support for OCR in `surya/languages.py`.  Text detection and layout analysis will work with any language.
+- You can find language support for OCR in `surya/languages.py`.  Text detection, layout analysis, and reading order will work with any language.
 
 ## Troubleshooting
 
@@ -232,7 +282,7 @@ If you want to develop surya, you can install it manually:
 
 ## OCR
 
-![Benchmark chart](static/images/benchmark_rec_chart.png)
+![Benchmark chart tesseract](static/images/benchmark_rec_chart.png)
 
 | Model     | Time per page (s) | Avg similarity (⬆) |
 |-----------|-------------------|--------------------|
@@ -243,11 +293,21 @@ If you want to develop surya, you can install it manually:
 
 Tesseract is CPU-based, and surya is CPU or GPU.  I tried to cost-match the resources used, so I used a 1xA6000 (48GB VRAM) for surya, and 28 CPU cores for Tesseract (same price on Lambda Labs/DigitalOcean).
 
+### Google Cloud Vision
+
+I benchmarked OCR against Google Cloud vision since it has similar language coverage to Surya.
+
+![Benchmark chart google cloud](static/images/gcloud_rec_bench.png)
+
+[Full language results](static/images/gcloud_full_langs.png)
+
 **Methodology**
 
 I measured normalized sentence similarity (0-1, higher is better) based on a set of real-world and synthetic pdfs.  I sampled PDFs from common crawl, then filtered out the ones with bad OCR.  I couldn't find PDFs for some languages, so I also generated simple synthetic PDFs for those.
 
 I used the reference line bboxes from the PDFs with both tesseract and surya, to just evaluate the OCR quality.
+
+For Google Cloud, I aligned the output from Google Cloud with the ground truth.  I had to skip RTL languages since they didn't align well.
 
 ## Text line detection
 
