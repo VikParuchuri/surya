@@ -12,9 +12,9 @@ import numpy as np
 def get_batch_size():
     batch_size = settings.ORDER_BATCH_SIZE
     if batch_size is None:
-        batch_size = 4
+        batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "mps":
-            batch_size = 4
+            batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
             batch_size = 32
     return batch_size
@@ -91,9 +91,11 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
                     last_token_mask.append([0])
                     batch_predictions[j].append(pred)
                     done[j] = True
-                else:
+                elif len(batch_predictions[j]) < label_count - 1:
                     last_token_mask.append([1])
                     batch_predictions[j].append(pred)  # Get rank prediction for given position
+                else:
+                    last_token_mask.append([0])
 
             # Break when we finished generating all sequences
             if all(done):

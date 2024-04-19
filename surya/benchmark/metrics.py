@@ -118,3 +118,22 @@ def mean_coverage(preds, references):
         return 0
     coverage = sum(coverages) / len(coverages)
     return {"coverage": coverage}
+
+
+def rank_accuracy(preds, references):
+    # Preds and references need to be aligned so each position refers to the same bbox
+    pairs = []
+    for i, pred in enumerate(preds):
+        for j, pred2 in enumerate(preds):
+            if i == j:
+                continue
+            pairs.append((i, j, pred > pred2))
+
+    # Find how many of the prediction rankings are correct
+    correct = 0
+    for i, ref in enumerate(references):
+        for j, ref2 in enumerate(references):
+            if (i, j, ref > ref2) in pairs:
+                correct += 1
+
+    return correct / len(pairs)
