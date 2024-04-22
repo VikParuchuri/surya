@@ -36,6 +36,10 @@ jobs:
         run: |
           poetry run python benchmark/layout.py --max 5
           poetry run python scripts/verify_benchmark_scores.py results/benchmark/layout_bench/results.json --bench_type layout
+      - name: Run ordering benchmark text
+        run: |
+          poetry run python benchmark/ordering.py --max 5
+          poetry run python scripts/verify_benchmark_scores.py results/benchmark/order_bench/results.json --bench_type ordering
         
           
 

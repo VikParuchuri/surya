@@ -184,7 +184,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
     return bboxes
 
 
-def draw_bboxes_on_image(bboxes, image):
+def draw_bboxes_on_image(bboxes, image, labels=None):
     draw = ImageDraw.Draw(image)
 
     for bbox in bboxes:
@@ -193,10 +193,10 @@ def draw_bboxes_on_image(bboxes, image):
     return image
 
 
-def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1):
+def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10):
     draw = ImageDraw.Draw(image)
     font_path = get_font_path()
-    label_font = ImageFont.truetype(font_path, 10)
+    label_font = ImageFont.truetype(font_path, label_font_size)
 
     for i in range(len(corners)):
         poly = corners[i]
