@@ -35,9 +35,9 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 | Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |     [Image](static/images/pres_layout.jpg) |     [Image](static/images/pres_reading.jpg) |
 | Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |    [Image](static/images/paper_layout.jpg) |    [Image](static/images/paper_reading.jpg) |
 | Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |  [Image](static/images/scanned_layout.jpg) |  [Image](static/images/scanned_reading.jpg) |
-| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |      [Image](static/images/nyt_layout.jpg) |                                          -- |
+| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |      [Image](static/images/nyt_layout.jpg) |        [Image](static/images/nyt_order.jpg) |
 | Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |    [Image](static/images/funsd_layout.jpg) |    [Image](static/images/funsd_reading.jpg) |
-| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |                                          -- |
+| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |   [Image](static/images/textbook_order.jpg) |
 
 # Installation
 
@@ -65,11 +65,11 @@ pip install streamlit
 surya_gui
 ```
 
-Pass the `--math` command line argument to use the math detection model instead of the default model.  This will detect math better, but will be worse at everything else.
+Pass the `--math` command line argument to use the math text detection model instead of the default model.  This will detect math better, but will be worse at everything else.
 
 ## OCR (text recognition)
 
-You can OCR text in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected text and bboxes, and optionally save images of the reconstructed page.
+This command will write out a json file with the detected text and bboxes:
 
 ```shell
 surya_ocr DATA_PATH --images --langs hi,en
@@ -117,7 +117,7 @@ predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec
 
 ## Text line detection
 
-You can detect text lines in an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected bboxes.
+This command will write out a json file with the detected bboxes.
 
 ```shell
 surya_detect DATA_PATH --images
@@ -162,7 +162,7 @@ predictions = batch_text_detection([image], model, processor)
 
 ## Layout analysis
 
-You can detect the layout of an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected layout.
+This command will write out a json file with the detected layout.
 
 ```shell
 surya_layout DATA_PATH --images
@@ -209,7 +209,7 @@ layout_predictions = batch_layout_detection([image], model, processor, line_pred
 
 ## Reading order
 
-You can detect the reading order of an image, pdf, or folder of images/pdfs with the following command.  This will write out a json file with the detected reading order and layout.
+This command will write out a json file with the detected reading order and layout.
 
 ```shell
 surya_order DATA_PATH --images
@@ -224,15 +224,14 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 - `bboxes` - detected bounding boxes for text
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-  - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
-  - `confidence` - the confidence of the model in the detected text (0-1).  This is currently not very reliable.
-  - `label` - the label for the bbox.  One of `Caption`, `Footnote`, `Formula`, `List-item`, `Page-footer`, `Page-header`, `Picture`, `Figure`, `Section-header`, `Table`, `Text`, `Title`.
+  - `position` - the position in the reading order of the bbox, starting from 0.
+  - `label` - the label for the bbox.  See the layout section of the documentation for a list of potential labels.
 - `page` - the page number in the file
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
 **Performance tips**
 
-Setting the `ORDER_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `4`.
+Setting the `ORDER_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `360MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 11GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `4`.
 
 ### From python
 
@@ -357,6 +356,16 @@ I benchmarked the layout analysis on [Publaynet](https://github.com/ibm-aur-nlp/
 - Precision - how well the predicted bboxes cover ground truth bboxes
 - Recall - how well ground truth bboxes cover predicted bboxes
 
+## Reading Order
+
+75% mean accuracy, and .14 seconds per image on an A6000 GPU.  See methodology for notes - this benchmark is not perfect measure of accuracy, and is more useful as a sanity check.
+
+**Methodology**
+
+I benchmarked the layout analysis on the layout dataset from [here](https://www.icst.pku.edu.cn/cpdp/sjzy/), which was not in the training data.  Unfortunately, this dataset is fairly noisy, and not all the labels are correct.  It was very hard to find a dataset annotated with reading order and also layout information.  I wanted to avoid using a cloud service for the ground truth.
+
+The accuracy is computed by finding if each pair of layout boxes is in the correct order, then taking the % that are correct.
+
 ## Running your own benchmarks
 
 You can benchmark the performance of surya on your machine.  
@@ -403,6 +412,16 @@ python benchmark/layout.py
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
+**Reading Order**
+
+```
+python benchmark/ordering.py
+```
+
+- `--max` controls how many images to process for the benchmark
+- `--debug` will render images with detected text
+- `--results_dir` will let you specify a directory to save results to instead of the default one
+
 # Training
 
 Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
@@ -411,7 +430,7 @@ Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a m
 
 # Commercial usage
 
-The text detection, layout analysis, and OCR models were trained from scratch, so they're okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
+All models were trained from scratch, so they're okay for commercial usage.  The weights are licensed cc-by-nc-sa-4.0, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period.
 
 If you want to remove the GPL license requirements for inference or use the weights commercially over the revenue limit, please contact me at surya@vikas.sh for dual licensing.
 

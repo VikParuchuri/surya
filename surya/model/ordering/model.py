@@ -8,7 +8,7 @@ from surya.model.ordering.processor import OrderImageProcessor
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.ORDER_MODEL_CHECKPOINT):
+def load_model(checkpoint=settings.ORDER_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
     config = VisionEncoderDecoderConfig.from_pretrained(checkpoint)
 
     decoder_config = vars(config.decoder)
@@ -24,8 +24,11 @@ def load_model(checkpoint=settings.ORDER_MODEL_CHECKPOINT):
     AutoModelForCausalLM.register(MBartOrderConfig, MBartOrder)
     AutoModel.register(VariableDonutSwinConfig, VariableDonutSwinModel)
 
-    model = OrderVisionEncoderDecoderModel.from_pretrained(checkpoint, config=config)
+    model = OrderVisionEncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
     assert isinstance(model.decoder, MBartOrder)
     assert isinstance(model.encoder, VariableDonutSwinModel)
 
+    model = model.to(device)
+    model = model.eval()
+    print(f"Loading reading order model {checkpoint} on device {device} with dtype {dtype}")
     return model

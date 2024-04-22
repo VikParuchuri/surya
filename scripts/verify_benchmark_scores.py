@@ -21,6 +21,12 @@ def verify_rec(data):
         raise ValueError("Scores do not meet the required threshold")
 
 
+def verify_order(data):
+    score = data["mean_accuracy"]
+    if score < 0.75:
+        raise ValueError("Scores do not meet the required threshold")
+
+
 def verify_scores(file_path, bench_type):
     with open(file_path, 'r') as file:
         data = json.load(file)
@@ -31,6 +37,8 @@ def verify_scores(file_path, bench_type):
         verify_rec(data)
     elif bench_type == "layout":
         verify_layout(data)
+    elif bench_type == "ordering":
+        verify_order(data)
     else:
         raise ValueError("Invalid benchmark type")
 

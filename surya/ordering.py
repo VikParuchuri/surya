@@ -30,15 +30,10 @@ def rank_elements(arr):
     return rank
 
 
-def batch_ordering(images: List, bboxes: List[List[List[float]]], model, processor, labels: Optional[List[List[str]]] = None) -> List[OrderResult]:
+def batch_ordering(images: List, bboxes: List[List[List[float]]], model, processor) -> List[OrderResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(bboxes)
     batch_size = get_batch_size()
-
-    if labels is not None:
-        assert len(labels) == len(images)
-        for l, b in zip(labels, bboxes):
-            assert len(l) == len(b)
 
     images = [image.convert("RGB") for image in images]
 
@@ -78,11 +73,12 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
 
             last_tokens = []
             last_token_mask = []
+            min_val = torch.finfo(model.dtype).min
             for j in range(logits.shape[0]):
                 label_count = batch_bbox_counts[j, 1] - batch_bbox_counts[j, 0] - 1 # Subtract 1 for the sep token
                 new_logits = logits[j, -1].clone()
-                new_logits[batch_predictions[j]] = -1e9 # Mask out already predicted tokens, we can only predict each token once
-                new_logits[label_count:] = -1e9 # Mask out all logit positions above the number of bboxes
+                new_logits[batch_predictions[j]] = min_val # Mask out already predicted tokens, we can only predict each token once
+                new_logits[label_count:] = min_val # Mask out all logit positions above the number of bboxes
                 pred = int(torch.argmax(new_logits, dim=-1).item())
 
                 # Add one to avoid colliding with the 1000 height/width token for bboxes
@@ -118,24 +114,6 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
 
             for box_idx in range(len(row_bboxes)):
                 ranks[row_pred[box_idx]] = box_idx
-
-            if labels is not None:
-                # This is to force headers/footers into the proper order
-                row_label = labels[i+j]
-                combined = [[i, bbox, label, rank] for i, (bbox, label, rank) in enumerate(zip(row_bboxes, row_label, ranks))]
-                combined = sorted(combined, key=lambda x: x[3])
-
-                sorted_boxes = ([row for row in combined if row[2] == "Page-header"] +
-                                [row for row in combined if row[2] not in ["Page-header", "Page-footer"]] +
-                                [row for row in combined if row[2] == "Page-footer"])
-
-                # Re-rank after sorting
-                for rank, row in enumerate(sorted_boxes):
-                    row[3] = rank
-
-                sorted_boxes = sorted(sorted_boxes, key=lambda x: x[0])
-                row_bboxes = [row[1] for row in sorted_boxes]
-                ranks = [row[3] for row in sorted_boxes]
 
             order_boxes = []
             for row_bbox, rank in zip(row_bboxes, ranks):
