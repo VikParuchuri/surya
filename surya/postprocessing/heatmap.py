@@ -143,7 +143,7 @@ def detect_boxes(linemap, text_threshold, low_text):
 
         mask = np.zeros_like(linemap).astype(np.uint8)
         cv2.fillPoly(mask, [np.int32(box)], 255)
-        mask = mask.astype(np.float16) / 255
+        mask = mask.astype(np.float32) / 255
 
         roi = np.where(mask == 1, linemap, 0)
         confidence = np.mean(roi[roi != 0])
