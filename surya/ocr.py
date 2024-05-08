@@ -62,7 +62,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
 
 def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor, batch_size=None) -> List[OCRResult]:
     det_predictions = batch_text_detection(images, det_model, det_processor)
-    if det_model.device == "cuda":
+    if det_model.device.type == "cuda":
         torch.cuda.empty_cache() # Empty cache from first model run
 
     slice_map = []
