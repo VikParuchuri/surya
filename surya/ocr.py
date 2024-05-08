@@ -60,7 +60,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
     return predictions_by_image
 
 
-def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor) -> List[OCRResult]:
+def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor, batch_size=None) -> List[OCRResult]:
     det_predictions = batch_text_detection(images, det_model, det_processor)
     if det_model.device == "cuda":
         torch.cuda.empty_cache() # Empty cache from first model run
@@ -75,7 +75,7 @@ def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_pr
         all_slices.extend(slices)
         all_langs.extend([lang] * len(slices))
 
-    rec_predictions, confidence_scores = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
+    rec_predictions, confidence_scores = batch_recognition(all_slices, all_langs, rec_model, rec_processor, batch_size=batch_size)
 
     predictions_by_image = []
     slice_start = 0

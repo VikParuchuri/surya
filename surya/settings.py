@@ -34,12 +34,16 @@ class Settings(BaseSettings):
     @computed_field
     def TORCH_DEVICE_DETECTION(self) -> str:
         if self.TORCH_DEVICE is not None:
+            # Does not work with mps
+            if "mps" in self.TORCH_DEVICE:
+                return "cpu"
+
             return self.TORCH_DEVICE
 
-        # Does not work with mps
         if torch.cuda.is_available():
             return "cuda"
 
+        # Does not work with mps
         return "cpu"
 
     # Text detection

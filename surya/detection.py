@@ -23,9 +23,10 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model, processor) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(images: List, model, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
-    batch_size = get_batch_size()
+    if batch_size is None:
+        batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
 
     images = [image.convert("RGB") for image in images]
@@ -109,8 +110,8 @@ def parallel_get_lines(preds, orig_sizes):
     return result
 
 
-def batch_text_detection(images: List, model, processor) -> List[TextDetectionResult]:
-    preds, orig_sizes = batch_detection(images, model, processor)
+def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
+    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
     results = []
     if len(images) == 1: # Ensures we don't parallelize with streamlit
         for i in range(len(images)):
