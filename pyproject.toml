@@ -22,7 +22,7 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13,!=3.9.7"
 transformers = "4.36.2"
-torch = "^2.1.2"
+torch = "2.2.2"
 pydantic = "^2.5.3"
 pydantic-settings = "^2.1.0"
 python-dotenv = "^1.0.0"
