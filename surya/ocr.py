@@ -12,7 +12,7 @@ from surya.recognition import batch_recognition
 from surya.schema import TextLine, OCRResult
 
 
-def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None) -> List[OCRResult]:
+def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None, batch_size=None) -> List[OCRResult]:
     # Polygons need to be in corner format - [[x1, y1], [x2, y2], [x3, y3], [x4, y4]], bboxes in [x1, y1, x2, y2] format
     assert bboxes is not None or polygons is not None
     assert len(images) == len(langs), "You need to pass in one list of languages for each image"
@@ -28,7 +28,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
         all_slices.extend(slices)
         all_langs.extend([lang] * len(slices))
 
-    rec_predictions, _ = batch_recognition(all_slices, all_langs, rec_model, rec_processor)
+    rec_predictions, _ = batch_recognition(all_slices, all_langs, rec_model, rec_processor, batch_size=batch_size)
 
     predictions_by_image = []
     slice_start = 0
