@@ -21,10 +21,12 @@ def get_batch_size():
     return batch_size
 
 
-def batch_recognition(images: List, languages: List[List[str]], model, processor):
+def batch_recognition(images: List, languages: List[List[str]], model, processor, batch_size=None):
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
-    batch_size = get_batch_size()
+
+    if batch_size is None:
+        batch_size = get_batch_size()
 
     images = [image.convert("RGB") for image in images]
 

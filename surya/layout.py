@@ -181,8 +181,8 @@ def parallel_get_regions(heatmaps: List[Image.Image], orig_size, id2label, detec
     return result
 
 
-def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None) -> List[LayoutResult]:
-    preds, orig_sizes = batch_detection(images, model, processor)
+def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None) -> List[LayoutResult]:
+    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
     id2label = model.config.id2label
 
     results = []
