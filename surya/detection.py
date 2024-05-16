@@ -1,17 +1,18 @@
-import os
 from typing import List, Tuple
 
-import cv2
 import torch
 import numpy as np
 from PIL import Image
+
+from surya.model.detection.segformer import SegformerForRegressionMask
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
-from surya.input.processing import prepare_image, split_image
+from surya.input.processing import prepare_image, split_image, get_total_splits
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
+import torch.nn.functional as F
 
 
 def get_batch_size():
@@ -23,70 +24,81 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(images: List, model: SegformerForRegressionMask, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
 
-    images = [image.convert("RGB") for image in images]
     orig_sizes = [image.size for image in images]
-    split_index = []
-    split_heights = []
-    image_splits = []
-    for i, image in enumerate(images):
-        image_parts, split_height = split_image(image, processor)
-        image_splits.extend(image_parts)
-        split_index.extend([i] * len(image_parts))
-        split_heights.extend(split_height)
+    splits_per_image = [get_total_splits(size, processor) for size in orig_sizes]
 
-    image_splits = [prepare_image(image, processor) for image in image_splits]
+    batches = []
+    current_batch_size = 0
+    current_batch = []
+    for i in range(len(images)):
+        if current_batch_size + splits_per_image[i] > batch_size:
+            if len(current_batch) > 0:
+                batches.append(current_batch)
+            current_batch = []
+            current_batch_size = 0
+        current_batch.append(i)
+        current_batch_size += splits_per_image[i]
 
-    pred_parts = []
-    for i in tqdm(range(0, len(image_splits), batch_size), desc="Detecting bboxes"):
-        batch = image_splits[i:i+batch_size]
+    if len(current_batch) > 0:
+        batches.append(current_batch)
+
+    all_preds = []
+    for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
+        batch_image_idxs = batches[batch_idx]
+        batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
+
+        split_index = []
+        split_heights = []
+        image_splits = []
+        for image_idx, image in enumerate(batch_images):
+            image_parts, split_height = split_image(image, processor)
+            image_splits.extend(image_parts)
+            split_index.extend([image_idx] * len(image_parts))
+            split_heights.extend(split_height)
+
+        image_splits = [prepare_image(image, processor) for image in image_splits]
         # Batch images in dim 0
-        batch = torch.stack(batch, dim=0)
-        batch = batch.to(model.dtype)
-        batch = batch.to(model.device)
+        batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
 
         with torch.inference_mode():
             pred = model(pixel_values=batch)
 
         logits = pred.logits
-        for j in range(logits.shape[0]):
-            heatmaps = []
-            for k in range(heatmap_count):
-                heatmap = logits[j, k, :, :].detach().cpu().numpy().astype(np.float32)
-                heatmap_shape = list(heatmap.shape)
+        correct_shape = [processor.size["height"], processor.size["width"]]
+        current_shape = list(logits.shape[2:])
+        if current_shape != correct_shape:
+            logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
 
-                correct_shape = [processor.size["height"], processor.size["width"]]
-                cv2_size = list(reversed(correct_shape)) # opencv uses (width, height) instead of (height, width)
-                if heatmap_shape != correct_shape:
-                    heatmap = cv2.resize(heatmap, cv2_size, interpolation=cv2.INTER_LINEAR)
+        logits = logits.cpu().detach().numpy().astype(np.float32)
+        preds = []
+        for i, (idx, height) in enumerate(zip(split_index, split_heights)):
+            # If our current prediction length is below the image idx, that means we have a new image
+            # Otherwise, we need to add to the current image
+            if len(preds) <= idx:
+                preds.append([logits[i][k] for k in range(heatmap_count)])
+            else:
+                heatmaps = preds[idx]
+                pred_heatmaps = [logits[i][k] for k in range(heatmap_count)]
 
-                heatmaps.append(heatmap)
-            pred_parts.append(heatmaps)
+                if height < processor.size["height"]:
+                    # Cut off padding to get original height
+                    pred_heatmaps = [pred_heatmap[:height, :] for pred_heatmap in pred_heatmaps]
 
-    preds = []
-    for i, (idx, height) in enumerate(zip(split_index, split_heights)):
-        if len(preds) <= idx:
-            preds.append(pred_parts[i])
-        else:
-            heatmaps = preds[idx]
-            pred_heatmaps = [pred_parts[i][k] for k in range(heatmap_count)]
+                for k in range(heatmap_count):
+                    heatmaps[k] = np.vstack([heatmaps[k], pred_heatmaps[k]])
+                preds[idx] = heatmaps
 
-            if height < processor.size["height"]:
-                # Cut off padding to get original height
-                pred_heatmaps = [pred_heatmap[:height, :] for pred_heatmap in pred_heatmaps]
+        all_preds.extend(preds)
 
-            for k in range(heatmap_count):
-                heatmaps[k] = np.vstack([heatmaps[k], pred_heatmaps[k]])
-            preds[idx] = heatmaps
-
-    assert len(preds) == len(images)
-    assert all([len(pred) == heatmap_count for pred in preds])
-    return preds, orig_sizes
+    assert len(all_preds) == len(images)
+    assert all([len(pred) == heatmap_count for pred in all_preds])
+    return all_preds, orig_sizes
 
 
 def parallel_get_lines(preds, orig_sizes):

@@ -1,3 +1,4 @@
+import gc
 import warnings
 warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
 
@@ -119,26 +120,23 @@ class SegformerForRegressionMask(SegformerForSemanticSegmentation):
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, SemanticSegmenterOutput]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
 
         outputs = self.segformer(
             pixel_values,
             output_attentions=output_attentions,
             output_hidden_states=True,  # we need the intermediate hidden states
-            return_dict=return_dict,
+            return_dict=False,
         )
 
-        encoder_hidden_states = outputs.hidden_states if return_dict else outputs[1]
+        encoder_hidden_states = outputs[1]
 
         logits = self.decode_head(encoder_hidden_states)
         # Apply sigmoid to get 0-1 output
-        logits = torch.special.expit(logits)
+        sigmoid_logits = torch.special.expit(logits)
 
         return SemanticSegmenterOutput(
             loss=None,
-            logits=logits,
-            hidden_states=outputs.hidden_states if output_hidden_states else None,
-            attentions=outputs.attentions,
+            logits=sigmoid_logits,
+            hidden_states=None,
+            attentions=None,
         )
