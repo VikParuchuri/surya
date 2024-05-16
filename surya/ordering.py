@@ -3,6 +3,7 @@ from typing import List, Optional
 import torch
 from PIL import Image
 
+from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
 from surya.schema import OrderBox, OrderResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -30,7 +31,7 @@ def rank_elements(arr):
     return rank
 
 
-def batch_ordering(images: List, bboxes: List[List[List[float]]], model, processor, batch_size=None) -> List[OrderResult]:
+def batch_ordering(images: List, bboxes: List[List[List[float]]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[OrderResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(bboxes)
     if batch_size is None:
@@ -59,9 +60,10 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
         past_key_values = None
         encoder_outputs = None
         batch_predictions = [[] for _ in range(len(batch_images))]
-        done = [False for _ in range(len(batch_images))]
-        while token_count < settings.ORDER_MAX_BOXES:
-            with torch.inference_mode():
+        done = torch.zeros(len(batch_images), dtype=torch.bool, device=model.device)
+
+        with torch.inference_mode():
+            while token_count < settings.ORDER_MAX_BOXES:
                 return_dict = model(
                     pixel_values=batch_pixel_values,
                     decoder_input_boxes=batch_bboxes,
@@ -70,41 +72,40 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model, process
                     encoder_outputs=encoder_outputs,
                     past_key_values=past_key_values,
                 )
-                logits = return_dict["logits"].detach().cpu()
+                logits = return_dict["logits"].detach()
 
-            last_tokens = []
-            last_token_mask = []
-            min_val = torch.finfo(model.dtype).min
-            for j in range(logits.shape[0]):
-                label_count = batch_bbox_counts[j, 1] - batch_bbox_counts[j, 0] - 1 # Subtract 1 for the sep token
-                new_logits = logits[j, -1].clone()
-                new_logits[batch_predictions[j]] = min_val # Mask out already predicted tokens, we can only predict each token once
-                new_logits[label_count:] = min_val # Mask out all logit positions above the number of bboxes
-                pred = int(torch.argmax(new_logits, dim=-1).item())
+                last_tokens = []
+                last_token_mask = []
+                min_val = torch.finfo(model.dtype).min
+                for j in range(logits.shape[0]):
+                    label_count = batch_bbox_counts[j, 1] - batch_bbox_counts[j, 0] - 1  # Subtract 1 for the sep token
+                    new_logits = logits[j, -1]
+                    new_logits[batch_predictions[j]] = min_val  # Mask out already predicted tokens, we can only predict each token once
+                    new_logits[label_count:] = min_val  # Mask out all logit positions above the number of bboxes
+                    pred = int(torch.argmax(new_logits, dim=-1).item())
 
-                # Add one to avoid colliding with the 1000 height/width token for bboxes
-                last_tokens.append([[pred + processor.box_size["height"] + 1] * 4])
-                if len(batch_predictions[j]) == label_count - 1: # Minus one since we're appending the final label
-                    last_token_mask.append([0])
-                    batch_predictions[j].append(pred)
-                    done[j] = True
-                elif len(batch_predictions[j]) < label_count - 1:
-                    last_token_mask.append([1])
-                    batch_predictions[j].append(pred)  # Get rank prediction for given position
-                else:
-                    last_token_mask.append([0])
+                    # Add one to avoid colliding with the 1000 height/width token for bboxes
+                    last_tokens.append([[pred + processor.box_size["height"] + 1] * 4])
+                    if len(batch_predictions[j]) == label_count - 1:  # Minus one since we're appending the final label
+                        last_token_mask.append([0])
+                        batch_predictions[j].append(pred)
+                        done[j] = True
+                    elif len(batch_predictions[j]) < label_count - 1:
+                        last_token_mask.append([1])
+                        batch_predictions[j].append(pred)  # Get rank prediction for given position
+                    else:
+                        last_token_mask.append([0])
 
-            # Break when we finished generating all sequences
-            if all(done):
-                break
+                if done.all():
+                    break
 
-            past_key_values = return_dict["past_key_values"]
-            encoder_outputs = (return_dict["encoder_last_hidden_state"],)
+                past_key_values = return_dict["past_key_values"]
+                encoder_outputs = (return_dict["encoder_last_hidden_state"],)
 
-            batch_bboxes = torch.tensor(last_tokens, dtype=torch.long).to(model.device)
-            token_bbox_mask = torch.tensor(last_token_mask, dtype=torch.long).to(model.device)
-            batch_bbox_mask = torch.cat([batch_bbox_mask, token_bbox_mask], dim=1)
-            token_count += 1
+                batch_bboxes = torch.tensor(last_tokens, dtype=torch.long).to(model.device)
+                token_bbox_mask = torch.tensor(last_token_mask, dtype=torch.long).to(model.device)
+                batch_bbox_mask = torch.cat([batch_bbox_mask, token_bbox_mask], dim=1)
+                token_count += 1
 
         for j, row_pred in enumerate(batch_predictions):
             row_bboxes = bboxes[i+j]

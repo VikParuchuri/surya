@@ -79,7 +79,6 @@ def get_dynamic_thresholds(linemap, text_threshold, low_text, typical_top10_avg=
 def detect_boxes(linemap, text_threshold, low_text):
     # From CRAFT - https://github.com/clovaai/CRAFT-pytorch
     # prepare data
-    linemap = linemap.copy()
     img_h, img_w = linemap.shape
 
     text_threshold, low_text = get_dynamic_thresholds(linemap, text_threshold, low_text)

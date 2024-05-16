@@ -10,6 +10,16 @@ import torch
 from surya.settings import settings
 
 
+def get_total_splits(image_size, processor):
+    img_height = list(image_size)[1]
+    max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
+    processor_height = processor.size["height"]
+    if img_height > max_height:
+        num_splits = math.ceil(img_height / processor_height)
+        return num_splits
+    return 1
+
+
 def split_image(img, processor):
     # This will not modify/return the original image - it will either crop, or copy the image
     img_height = list(img.size)[1]

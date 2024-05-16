@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
+    parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
     args = parser.parse_args()
 
     model = load_model()
@@ -57,9 +58,13 @@ def main():
     predictions = batch_text_detection(images, model, processor)
     surya_time = time.time() - start
 
-    start = time.time()
-    tess_predictions = tesseract_parallel(images)
-    tess_time = time.time() - start
+    if args.tesseract:
+        start = time.time()
+        tess_predictions = tesseract_parallel(images)
+        tess_time = time.time() - start
+    else:
+        tess_predictions = [None] * len(images)
+        tess_time = None
 
     folder_name = os.path.basename(pathname).split(".")[0]
     result_path = os.path.join(args.results_dir, folder_name)
@@ -71,7 +76,10 @@ def main():
         surya_polys = [s.polygon for s in sb.bboxes]
 
         surya_metrics = precision_recall(surya_boxes, cb)
-        tess_metrics = precision_recall(tb, cb)
+        if tb is not None:
+            tess_metrics = precision_recall(tb, cb)
+        else:
+            tess_metrics = None
 
         page_metrics[idx] = {
             "surya": surya_metrics,
@@ -84,7 +92,11 @@ def main():
 
     mean_metrics = {}
     metric_types = sorted(page_metrics[0]["surya"].keys())
-    for k in ["surya", "tesseract"]:
+    models = ["surya"]
+    if args.tesseract:
+        models.append("tesseract")
+
+    for k in models:
         for m in metric_types:
             metric = []
             for page in page_metrics:
@@ -108,8 +120,11 @@ def main():
     table_headers = ["Model", "Time (s)", "Time per page (s)"] + metric_types
     table_data = [
         ["surya", surya_time, surya_time / len(images)] + [mean_metrics["surya"][m] for m in metric_types],
-        ["tesseract", tess_time, tess_time / len(images)] + [mean_metrics["tesseract"][m] for m in metric_types]
     ]
+    if args.tesseract:
+        table_data.append(
+            ["tesseract", tess_time, tess_time / len(images)] + [mean_metrics["tesseract"][m] for m in metric_types]
+        )
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
     print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.  There is a precision penalty for multiple boxes overlapping reference lines.")
