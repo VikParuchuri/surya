@@ -46,8 +46,8 @@ def load_from_file(input_path, max_pages=None, start_page=None):
 
 
 def load_from_folder(folder_path, max_pages=None, start_page=None):
-    image_paths = [os.path.join(folder_path, image_name) for image_name in os.listdir(folder_path)]
-    image_paths = [ip for ip in image_paths if not os.path.isdir(ip) and not ip.startswith(".")]
+    image_paths = [os.path.join(folder_path, image_name) for image_name in os.listdir(folder_path) if not image_name.startswith(".")]
+    image_paths = [ip for ip in image_paths if not os.path.isdir(ip)]
 
     images = []
     names = []
