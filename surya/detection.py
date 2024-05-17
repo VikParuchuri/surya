@@ -6,7 +6,7 @@ from PIL import Image
 
 from surya.model.detection.segformer import SegformerForRegressionMask
 from surya.postprocessing.heatmap import get_and_clean_boxes
-from surya.postprocessing.affinity import get_vertical_lines, get_horizontal_lines
+from surya.postprocessing.affinity import get_vertical_lines
 from surya.input.processing import prepare_image, split_image, get_total_splits
 from surya.schema import TextDetectionResult
 from surya.settings import settings
@@ -109,12 +109,10 @@ def parallel_get_lines(preds, orig_sizes):
     heatmap_size = list(reversed(heatmap.shape))
     bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
     vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes)
-    horizontal_lines = get_horizontal_lines(affinity_map, affinity_size, orig_sizes)
 
     result = TextDetectionResult(
         bboxes=bboxes,
         vertical_lines=vertical_lines,
-        horizontal_lines=horizontal_lines,
         heatmap=heat_img,
         affinity_map=aff_img,
         image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
@@ -125,7 +123,7 @@ def parallel_get_lines(preds, orig_sizes):
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
     preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
     results = []
-    if len(images) == 1: # Ensures we don't parallelize with streamlit
+    if settings.IN_STREAMLIT: # Ensures we don't parallelize with streamlit
         for i in range(len(images)):
             result = parallel_get_lines(preds[i], orig_sizes[i])
             results.append(result)

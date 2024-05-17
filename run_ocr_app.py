@@ -14,4 +14,7 @@ def run_app():
     if args.math:
         cmd.append("--")
         cmd.append("--math")
-    subprocess.run(cmd)
+    subprocess.run(cmd, env={**os.environ, "IN_STREAMLIT": "true"})
+
+if __name__ == "__main__":
+    run_app()

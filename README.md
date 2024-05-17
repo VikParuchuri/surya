@@ -143,8 +143,6 @@ The `results.json` file will contain a json dictionary where the keys are the in
   - `confidence` - the confidence of the model in the detected text (0-1)
 - `vertical_lines` - vertical lines detected in the document
   - `bbox` - the axis-aligned line coordinates.
-- `horizontal_lines` - horizontal lines detected in the document
-  - `bbox` - the axis-aligned line coordinates.
 - `page` - the page number in the file
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 

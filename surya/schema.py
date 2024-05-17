@@ -147,7 +147,6 @@ class OCRResult(BaseModel):
 class TextDetectionResult(BaseModel):
     bboxes: List[PolygonBox]
     vertical_lines: List[ColumnLine]
-    horizontal_lines: List[ColumnLine]
     heatmap: Any
     affinity_map: Any
     image_bbox: List[float]

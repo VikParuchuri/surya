@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
     IMAGE_DPI: int = 96
+    IN_STREAMLIT: bool = False # Whether we're running in streamlit
 
     # Paths
     DATA_DIR: str = "data"
