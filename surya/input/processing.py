@@ -80,31 +80,38 @@ def slice_bboxes_from_image(image: Image.Image, bboxes):
 
 
 def slice_polys_from_image(image: Image.Image, polys):
+    image_array = np.array(image)
     lines = []
     for idx, poly in enumerate(polys):
-        lines.append(slice_and_pad_poly(image, poly, idx))
+        lines.append(slice_and_pad_poly(image, image_array, poly, idx))
     return lines
 
 
-def slice_and_pad_poly(image: Image.Image, coordinates, idx):
+def slice_and_pad_poly(image: Image.Image, image_array: np.array, coordinates, idx):
     # Create a mask for the polygon
     mask = Image.new('L', image.size, 0)
 
-    # coordinates must be in tuple form for PIL
+    # Draw polygon onto mask
     coordinates = [(corner[0], corner[1]) for corner in coordinates]
     ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=1)
     bbox = mask.getbbox()
+
+    if bbox is None:
+        return None
+
     mask = np.array(mask)
 
-    # Extract the polygonal area from the image
-    polygon_image = np.array(image)
+    # We mask out anything not in the polygon
+    polygon_image = image_array.copy()
     polygon_image[mask == 0] = settings.RECOGNITION_PAD_VALUE
-    polygon_image = Image.fromarray(polygon_image)
 
-    rectangle = Image.new('RGB', (bbox[2] - bbox[0], bbox[3] - bbox[1]), 'white')
+    # Crop out the bbox, and ensure we pad the area outside the polygon with the pad value
+    cropped_polygon = polygon_image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    rectangle = np.full((bbox[3] - bbox[1], bbox[2] - bbox[0], 3), settings.RECOGNITION_PAD_VALUE, dtype=np.uint8)
+    rectangle[:, :] = cropped_polygon
 
     # Paste the polygon into the rectangle
-    rectangle.paste(polygon_image.crop(bbox), (0, 0))
+    rectangle_image = Image.fromarray(rectangle)
 
-    return rectangle
+    return rectangle_image
 

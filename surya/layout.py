@@ -186,7 +186,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     id2label = model.config.id2label
 
     results = []
-    if len(images) == 1: # Ensures we don't parallelize with streamlit
+    if settings.IN_STREAMLIT: # Ensures we don't parallelize with streamlit
         for i in range(len(images)):
             result = parallel_get_regions(preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
             results.append(result)

@@ -163,10 +163,3 @@ def get_vertical_lines(image, processor_size, image_size, divisor=20, x_toleranc
         vertical_lines[0].bbox[1] = 0
 
     return vertical_lines
-
-
-def get_horizontal_lines(affinity_map, processor_size, image_size) -> List[ColumnLine]:
-    horizontal_lines = get_detected_lines(affinity_map, horizontal=True)
-    for line in horizontal_lines:
-        line.rescale_bbox(processor_size, image_size)
-    return horizontal_lines
