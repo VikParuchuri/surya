@@ -28,8 +28,6 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     if batch_size is None:
         batch_size = get_batch_size()
 
-    images = [image.convert("RGB") for image in images]
-
     output_text = []
     confidences = []
 
@@ -37,6 +35,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         batch_langs = languages[i:i+batch_size]
         has_math = ["_math" in lang for lang in batch_langs]
         batch_images = images[i:i+batch_size]
+        batch_images = [image.convert("RGB") for image in batch_images]
         model_inputs = processor(text=[""] * len(batch_langs), images=batch_images, lang=batch_langs)
 
         batch_pixel_values = model_inputs["pixel_values"]

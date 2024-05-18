@@ -2,6 +2,7 @@ import os
 import random
 from typing import List
 
+import cv2
 import numpy as np
 import math
 import pypdfium2
@@ -83,35 +84,24 @@ def slice_polys_from_image(image: Image.Image, polys):
     image_array = np.array(image)
     lines = []
     for idx, poly in enumerate(polys):
-        lines.append(slice_and_pad_poly(image, image_array, poly, idx))
+        lines.append(slice_and_pad_poly(image_array, poly))
     return lines
 
 
-def slice_and_pad_poly(image: Image.Image, image_array: np.array, coordinates, idx):
-    # Create a mask for the polygon
-    mask = Image.new('L', image.size, 0)
-
+def slice_and_pad_poly(image_array: np.array, coordinates):
     # Draw polygon onto mask
     coordinates = [(corner[0], corner[1]) for corner in coordinates]
-    ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=1)
-    bbox = mask.getbbox()
-
-    if bbox is None:
-        return None
-
-    mask = np.array(mask)
+    bbox = [min([x[0] for x in coordinates]), min([x[1] for x in coordinates]), max([x[0] for x in coordinates]), max([x[1] for x in coordinates])]
 
     # We mask out anything not in the polygon
-    polygon_image = image_array.copy()
-    polygon_image[mask == 0] = settings.RECOGNITION_PAD_VALUE
+    cropped_polygon = image_array[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy()
+    coordinates = [(x - bbox[0], y - bbox[1]) for x, y in coordinates]
 
-    # Crop out the bbox, and ensure we pad the area outside the polygon with the pad value
-    cropped_polygon = polygon_image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
-    rectangle = np.full((bbox[3] - bbox[1], bbox[2] - bbox[0], 3), settings.RECOGNITION_PAD_VALUE, dtype=np.uint8)
-    rectangle[:, :] = cropped_polygon
+    # Pad the area outside the polygon with the pad value
+    mask = np.zeros_like(cropped_polygon, dtype=np.uint8)
+    cv2.fillPoly(mask, [np.int32(coordinates)], 1)
 
-    # Paste the polygon into the rectangle
-    rectangle_image = Image.fromarray(rectangle)
+    cropped_polygon[mask == 0] = settings.RECOGNITION_PAD_VALUE
+    rectangle_image = Image.fromarray(cropped_polygon)
 
     return rectangle_image
-

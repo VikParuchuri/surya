@@ -62,38 +62,18 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
     return predictions_by_image
 
 
-def parallel_slice_polys(det_pred, image):
-    polygons = [p.polygon for p in det_pred.bboxes]
-    slices = slice_polys_from_image(image, polygons)
-    return slices
-
-
 def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor, batch_size=None) -> List[OCRResult]:
     det_predictions = batch_text_detection(images, det_model, det_processor)
-    if det_model.device.type == "cuda":
-        torch.cuda.empty_cache() # Empty cache from first model run
 
     all_slices = []
-
-    if settings.IN_STREAMLIT:
-        all_slices = [parallel_slice_polys(det_pred, image) for det_pred, image in zip(det_predictions, images)]
-    else:
-        futures = []
-        with ProcessPoolExecutor(max_workers=settings.DETECTOR_POSTPROCESSING_CPU_WORKERS) as executor:
-            for image_idx in range(len(images)):
-                future = executor.submit(parallel_slice_polys, det_predictions[image_idx], images[image_idx])
-                futures.append(future)
-
-            for future in futures:
-                all_slices.append(future.result())
-
     slice_map = []
     all_langs = []
-    for idx, (slice, lang) in enumerate(zip(all_slices, langs)):
-        slice_map.append(len(slice))
-        all_langs.extend([lang] * len(slice))
-
-    all_slices = [slice for sublist in all_slices for slice in sublist]
+    for idx, (det_pred, image, lang) in enumerate(zip(det_predictions, images, langs)):
+        polygons = [p.polygon for p in det_pred.bboxes]
+        slices = slice_polys_from_image(image, polygons)
+        slice_map.append(len(slices))
+        all_langs.extend([lang] * len(slices))
+        all_slices.extend(slices)
 
     rec_predictions, confidence_scores = batch_recognition(all_slices, all_langs, rec_model, rec_processor, batch_size=batch_size)
 
