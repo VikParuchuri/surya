@@ -123,12 +123,13 @@ def parallel_get_lines(preds, orig_sizes):
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
     preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
     results = []
-    if settings.IN_STREAMLIT: # Ensures we don't parallelize with streamlit
+    if settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH: # Ensures we don't parallelize with streamlit, or with very few images
         for i in range(len(images)):
             result = parallel_get_lines(preds[i], orig_sizes[i])
             results.append(result)
     else:
-        with ProcessPoolExecutor(max_workers=settings.DETECTOR_POSTPROCESSING_CPU_WORKERS) as executor:
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(parallel_get_lines, preds, orig_sizes))
 
     return results

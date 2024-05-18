@@ -186,13 +186,14 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     id2label = model.config.id2label
 
     results = []
-    if settings.IN_STREAMLIT: # Ensures we don't parallelize with streamlit
+    if settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH: # Ensures we don't parallelize with streamlit or too few images
         for i in range(len(images)):
             result = parallel_get_regions(preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
             results.append(result)
     else:
         futures = []
-        with ProcessPoolExecutor(max_workers=settings.DETECTOR_POSTPROCESSING_CPU_WORKERS) as executor:
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
             for i in range(len(images)):
                 future = executor.submit(parallel_get_regions, preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
                 futures.append(future)
