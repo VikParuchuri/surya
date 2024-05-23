@@ -37,6 +37,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         has_math = ["_math" in lang for lang in batch_langs]
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]
+
         model_inputs = processor(text=[""] * len(batch_langs), images=batch_images, lang=batch_langs)
 
         batch_pixel_values = model_inputs["pixel_values"]

@@ -81,7 +81,7 @@ def slice_bboxes_from_image(image: Image.Image, bboxes):
 
 
 def slice_polys_from_image(image: Image.Image, polys):
-    image_array = np.array(image)
+    image_array = np.array(image, dtype=np.uint8)
     lines = []
     for idx, poly in enumerate(polys):
         lines.append(slice_and_pad_poly(image_array, poly))
@@ -98,8 +98,9 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
     coordinates = [(x - bbox[0], y - bbox[1]) for x, y in coordinates]
 
     # Pad the area outside the polygon with the pad value
-    mask = np.zeros_like(cropped_polygon, dtype=np.uint8)
+    mask = np.zeros(cropped_polygon.shape[:2], dtype=np.uint8)
     cv2.fillPoly(mask, [np.int32(coordinates)], 1)
+    mask = np.stack([mask] * 3, axis=-1)
 
     cropped_polygon[mask == 0] = settings.RECOGNITION_PAD_VALUE
     rectangle_image = Image.fromarray(cropped_polygon)
