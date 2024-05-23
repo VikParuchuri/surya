@@ -3,16 +3,13 @@ import collections
 import copy
 import json
 
-from surya.benchmark.metrics import precision_recall
 from surya.model.ordering.model import load_model
 from surya.model.ordering.processor import load_processor
-from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.ordering import batch_ordering
 from surya.settings import settings
 from surya.benchmark.metrics import rank_accuracy
 import os
 import time
-from tabulate import tabulate
 import datasets
 
 
