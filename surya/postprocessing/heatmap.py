@@ -91,6 +91,8 @@ def detect_boxes(linemap, text_threshold, low_text):
     det = []
     confidences = []
     max_confidence = 0
+    mask = np.zeros_like(linemap, dtype=np.uint8)
+
     for k in range(1, label_count):
         # size filtering
         size = stats[k, cv2.CC_STAT_AREA]
@@ -140,7 +142,7 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
-        mask = np.zeros_like(linemap, dtype=np.uint8)
+        mask.fill(0)
         cv2.fillPoly(mask, [np.int32(box)], 1)
 
         roi = np.where(mask == 1, linemap, 0)

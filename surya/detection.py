@@ -7,7 +7,7 @@ from PIL import Image
 from surya.model.detection.segformer import SegformerForRegressionMask
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image, split_image, get_total_splits
+from surya.input.processing import prepare_image_detection, split_image, get_total_splits
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -62,7 +62,7 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
             split_index.extend([image_idx] * len(image_parts))
             split_heights.extend(split_height)
 
-        image_splits = [prepare_image(image, processor) for image in image_splits]
+        image_splits = [prepare_image_detection(image, processor) for image in image_splits]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
 

@@ -5,8 +5,8 @@ warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_
 import math
 from typing import Optional, Tuple, Union
 
-from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerImageProcessor, \
-    SegformerDecodeHead, SegformerModel
+from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerDecodeHead, SegformerModel
+from surya.model.detection.processor import SegformerImageProcessor
 import torch
 from torch import nn
 

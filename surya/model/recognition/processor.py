@@ -1,5 +1,6 @@
 from typing import Dict, Union, Optional, List, Tuple
 
+import cv2
 from torch import TensorType
 from transformers import DonutImageProcessor, DonutProcessor, AutoImageProcessor, DonutSwinConfig
 from transformers.image_processing_utils import BaseImageProcessor, get_size_dict, BatchFeature
@@ -29,84 +30,64 @@ class SuryaImageProcessor(DonutImageProcessor):
         self.max_size = max_size
         self.train = train
 
-    def numpy_resize(self, image: np.ndarray, size, resample):
-        image = PIL.Image.fromarray(image)
-        resized = self.pil_resize(image, size, resample)
-        resized = np.array(resized, dtype=np.uint8)
-        resized_image = resized.transpose(2, 0, 1)
+    def numpy_resize(self, image: np.ndarray, size, interpolation=cv2.INTER_LANCZOS4):
+        height, width = image.shape[:2]
+        max_width, max_height = size["width"], size["height"]
+
+        if (height == max_height and width <= max_width) or (width == max_width and height <= max_height):
+            return image
+
+        scale = min(max_width / width, max_height / height)
+
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+
+        resized_image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
+        resized_image = resized_image.transpose(2, 0, 1)
 
         return resized_image
 
-    def pil_resize(self, image: PIL.Image.Image, size, resample):
-        width, height = image.size
-        max_width, max_height = size["width"], size["height"]
-        if width != max_width or height != max_height:
-            # Shrink to fit within dimensions
-            width_scale = max_width / width
-            height_scale = max_height / height
-            scale = min(width_scale, height_scale)
-
-            new_width = min(int(width * scale), max_width)
-            new_height = min(int(height * scale), max_height)
-            image = image.resize((new_width, new_height), resample)
-
-        image.thumbnail((max_width, max_height), resample)
-
-        assert image.width <= max_width and image.height <= max_height
-
-        return image
-
-    def process_inner(self, images: List[List], train=False):
-        # This will be in list of lists format, with height x width x channel
-        assert isinstance(images[0], (list, np.ndarray))
-
-        # convert list of lists format to array
-        if isinstance(images[0], list):
-            # numpy unit8 needed for augmentation
-            np_images = [np.array(img, dtype=np.uint8) for img in images]
-        else:
-            np_images = [img.astype(np.uint8) for img in images]
-
-        assert np_images[0].shape[2] == 3 # RGB input images, channel dim last
+    def process_inner(self, images: List[np.ndarray], train=False):
+        assert images[0].shape[2] == 3 # RGB input images, channel dim last
 
         # Rotate if the bbox is wider than it is tall
-        np_images = [self.align_long_axis(image, size=self.max_size, input_data_format=ChannelDimension.LAST) for image in np_images]
+        images = [self.align_long_axis(image, size=self.max_size, input_data_format=ChannelDimension.LAST) for image in images]
 
         # Verify that the image is wider than it is tall
-        for img in np_images:
+        for img in images:
             assert img.shape[1] >= img.shape[0]
 
         # This also applies the right channel dim format, to channel x height x width
-        np_images = [self.numpy_resize(img, self.max_size, self.resample) for img in np_images]
-        assert np_images[0].shape[0] == 3 # RGB input images, channel dim first
+        images = [self.numpy_resize(img, self.max_size, self.resample) for img in images]
+        assert images[0].shape[0] == 3 # RGB input images, channel dim first
 
         # Convert to float32 for rescale/normalize
-        np_images = [img.astype(np.float32) for img in np_images]
+        images = [img.astype(np.float32) for img in images]
 
         # Pads with 255 (whitespace)
         # Pad to max size to improve performance
         max_size = self.max_size
-        np_images = [
+        images = [
             self.pad_image(
                 image=image,
                 size=max_size,
                 random_padding=train, # Change amount of padding randomly during training
                 input_data_format=ChannelDimension.FIRST,
-                pad_value=255.0
+                pad_value=settings.RECOGNITION_PAD_VALUE
             )
-            for image in np_images
+            for image in images
         ]
         # Rescale and normalize
-        np_images = [
+        images = [
             self.rescale(img, scale=self.rescale_factor, input_data_format=ChannelDimension.FIRST)
-            for img in np_images
+            for img in images
         ]
-        np_images = [
+        images = [
             self.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
-            for img in np_images
+            for img in images
         ]
 
-        return np_images
+        return images
 
 
     def preprocess(
@@ -131,15 +112,8 @@ class SuryaImageProcessor(DonutImageProcessor):
     ) -> PIL.Image.Image:
         images = make_list_of_images(images)
 
-        if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "torch.Tensor, tf.Tensor or jax.ndarray."
-            )
-
         # Convert to numpy for later processing steps
-        images = [to_numpy_array(image) for image in images]
-
+        images = [np.array(img) for img in images]
         images = self.process_inner(images, train=self.train)
         data = {"pixel_values": images}
         return BatchFeature(data=data, tensor_type=return_tensors)

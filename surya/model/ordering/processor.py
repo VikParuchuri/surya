@@ -31,34 +31,25 @@ class OrderImageProcessor(DonutImageProcessor):
 
         self.patch_size = kwargs.get("patch_size", (4, 4))
 
-    def process_inner(self, images: List[List]):
-        # This will be in list of lists format, with height x width x channel
-        assert isinstance(images[0], (list, np.ndarray))
+    def process_inner(self, images: List[np.ndarray]):
+        images = [img.transpose(2, 0, 1) for img in images] # convert to CHW format
 
-        # convert list of lists format to array
-        if isinstance(images[0], list):
-            # numpy unit8 needed for augmentation
-            np_images = [np.array(img, dtype=np.uint8) for img in images]
-        else:
-            np_images = [img.astype(np.uint8) for img in images]
-            np_images = [img.transpose(2, 0, 1) for img in np_images] # convert to CHW format
-
-        assert np_images[0].shape[0] == 3 # RGB input images, channel dim last
+        assert images[0].shape[0] == 3 # RGB input images, channel dim last
 
         # Convert to float32 for rescale/normalize
-        np_images = [img.astype(np.float32) for img in np_images]
+        images = [img.astype(np.float32) for img in images]
 
         # Rescale and normalize
-        np_images = [
+        images = [
             self.rescale(img, scale=self.rescale_factor, input_data_format=ChannelDimension.FIRST)
-            for img in np_images
+            for img in images
         ]
-        np_images = [
+        images = [
             self.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
-            for img in np_images
+            for img in images
         ]
 
-        return np_images
+        return images
 
     def process_boxes(self, boxes):
         padded_boxes = []
@@ -152,7 +143,7 @@ class OrderImageProcessor(DonutImageProcessor):
         boxes = new_boxes
 
         # Convert to numpy for later processing steps
-        images = [to_numpy_array(image) for image in images]
+        images = [np.array(image) for image in images]
 
         images = self.process_inner(images)
         boxes, box_mask, box_counts = self.process_boxes(boxes)
