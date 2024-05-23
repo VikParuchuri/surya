@@ -155,7 +155,7 @@ class SuryaImageProcessor(DonutImageProcessor):
         data_format: Optional[Union[str, ChannelDimension]] = None,
         input_data_format: Optional[Union[str, ChannelDimension]] = None,
     ) -> np.ndarray:
-        input_height, input_width = get_image_size(image, channel_dim=input_data_format)
+        input_height, input_width = image.shape[:2]
         output_height, output_width = size["height"], size["width"]
 
         if (output_width < output_height and input_width > input_height) or (
