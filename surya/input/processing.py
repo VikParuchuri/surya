@@ -45,7 +45,7 @@ def split_image(img, processor):
     return [img.copy()], [img_height]
 
 
-def prepare_image(img, processor):
+def prepare_image_detection(img, processor):
     new_size = (processor.size["width"], processor.size["height"])
 
     img.thumbnail(new_size, Image.Resampling.LANCZOS) # Shrink largest dimension to fit new size
