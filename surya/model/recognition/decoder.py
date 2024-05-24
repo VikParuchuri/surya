@@ -46,12 +46,9 @@ class MBartExpertLayer(nn.Module):
 
         self.hidden_dim = config.d_model
 
-        self.lg_lang_codes = []
-        self.xl_lang_codes = []
-        if hasattr(config, "lg_langs"):
-            self.lg_lang_codes = sorted(config.lg_langs.values())
-        if hasattr(config, "xl_langs"):
-            self.xl_lang_codes = sorted(config.xl_langs.values())
+        self.lg_lang_codes = sorted(config.lg_langs.values()) if hasattr(config, "lg_langs") else []
+        self.xl_lang_codes = sorted(config.xl_langs.values()) if hasattr(config, "xl_langs") else []
+
         self.lang_codes = sorted(config.langs.values())
         self.num_experts = len(self.lang_codes)
 
@@ -72,25 +69,24 @@ class MBartExpertLayer(nn.Module):
         # Loop over all available experts in the model and perform the computation on each expert
         for expert_idx, expert_lang in enumerate(self.lang_codes):
             # Check which samples match with this expert
-            lang_match = (langs == expert_lang).max(dim=-1).values
-            idx = torch.where(lang_match)[0]
+            lang_match = (langs == expert_lang).any(dim=-1)
+            idx = torch.nonzero(lang_match, as_tuple=True)[0]
 
             if idx.shape[0] == 0:
                 continue
 
             expert_layer = self.experts[str(expert_lang)]
 
-            idx_list = idx.tolist()
-            current_state = hidden_states[idx_list].reshape(-1, hidden_dim)
-            current_hidden_states = expert_layer(current_state)
+            current_state = hidden_states[idx]
+            current_hidden_states = expert_layer(current_state.view(-1, hidden_dim))
             current_hidden_states = self.dropout(current_hidden_states)
-            current_hidden_states = current_hidden_states.reshape(-1, sequence_length, hidden_dim)
+            current_hidden_states = current_hidden_states.view(-1, sequence_length, hidden_dim)
 
             # Weight by number of languages in the input
-            selected_routing_weights = routing_weights[idx_list].reshape(-1, 1, 1)
-            current_hidden_states = current_hidden_states * selected_routing_weights
+            selected_routing_weights = routing_weights[idx].view(-1, 1, 1)
+            current_hidden_states *= selected_routing_weights
 
-            final_hidden_states.index_add_(0, idx, current_hidden_states.to(hidden_states.dtype))
+            final_hidden_states.index_add_(0, idx, current_hidden_states)
 
         return final_hidden_states
 
@@ -126,18 +122,9 @@ class MBartGQAttention(nn.Module):
         self.num_kv_heads = num_kv_heads
         self.num_kv_groups = self.num_heads // self.num_kv_heads
 
-        assert self.num_heads % self.num_kv_heads == 0, f"num_heads ({self.num_heads}) must be divisible by num_kv_heads ({self.num_kv_heads})"
-        assert embed_dim % self.num_kv_heads == 0, f"embed_dim ({self.embed_dim}) must be divisible by num_kv_heads ({self.num_kv_heads})"
-
         self.dropout = dropout
         self.head_dim = embed_dim // num_heads
         self.config = config
-
-        if (self.head_dim * num_heads) != self.embed_dim:
-            raise ValueError(
-                f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim}"
-                f" and `num_heads`: {num_heads})."
-            )
         self.scaling = self.head_dim**-0.5
         self.is_decoder = is_decoder
         self.is_causal = is_causal
@@ -213,10 +200,8 @@ class MBartGQAttention(nn.Module):
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
 
         # Expand kv heads, then match query shape
-        key_states = repeat_kv(key_states, self.num_kv_groups)
-        value_states = repeat_kv(value_states, self.num_kv_groups)
-        key_states = key_states.reshape(*proj_shape)
-        value_states = value_states.reshape(*proj_shape)
+        key_states = repeat_kv(key_states, self.num_kv_groups).reshape(*proj_shape)
+        value_states = repeat_kv(value_states, self.num_kv_groups).reshape(*proj_shape)
 
         src_len = key_states.size(1)
         attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
@@ -237,15 +222,6 @@ class MBartGQAttention(nn.Module):
 
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
-        if layer_head_mask is not None:
-            if layer_head_mask.size() != (self.num_heads,):
-                raise ValueError(
-                    f"Head mask for a single layer should be of size {(self.num_heads,)}, but is"
-                    f" {layer_head_mask.size()}"
-                )
-            attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
         if output_attentions:
             # this operation is a bit awkward, but it's required to
             # make sure that attn_weights keeps its gradient.
@@ -257,22 +233,11 @@ class MBartGQAttention(nn.Module):
             attn_weights_reshaped = None
 
         attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
-
-        attn_output = torch.bmm(attn_probs, value_states)
-
-        if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
-            raise ValueError(
-                f"`attn_output` should be of size {(bsz * self.num_heads, tgt_len, self.head_dim)}, but is"
-                f" {attn_output.size()}"
-            )
-
-        attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
-        attn_output = attn_output.transpose(1, 2)
+        attn_output = torch.bmm(attn_probs, value_states).view(bsz, self.num_heads, tgt_len, self.head_dim).transpose(1,2)
 
         # Use the `embed_dim` from the config (stored in the class) rather than `hidden_state` because `attn_output` can be
         # partitioned across GPUs when using tensor-parallelism.
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
-
         attn_output = self.out_proj(attn_output)
 
         return attn_output, attn_weights_reshaped, past_key_value
@@ -521,36 +486,20 @@ class MBartMoEDecoder(MBartDecoder):
                     continue
 
             past_key_value = past_key_values[idx] if past_key_values is not None else None
-
-            if self.gradient_checkpointing and self.training:
-                layer_outputs = self._gradient_checkpointing_func(
-                    decoder_layer.__call__,
-                    hidden_states,
-                    attention_mask,
-                    langs,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    head_mask[idx] if head_mask is not None else None,
-                    cross_attn_head_mask[idx] if cross_attn_head_mask is not None else None,
-                    None,
-                    output_attentions,
-                    use_cache,
-                )
-            else:
-                layer_outputs = decoder_layer(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    langs=langs,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    layer_head_mask=(head_mask[idx] if head_mask is not None else None),
-                    cross_attn_layer_head_mask=(
-                        cross_attn_head_mask[idx] if cross_attn_head_mask is not None else None
-                    ),
-                    past_key_value=past_key_value,
-                    output_attentions=output_attentions,
-                    use_cache=use_cache,
-                )
+            layer_outputs = decoder_layer(
+                hidden_states,
+                attention_mask=attention_mask,
+                langs=langs,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                layer_head_mask=(head_mask[idx] if head_mask is not None else None),
+                cross_attn_layer_head_mask=(
+                    cross_attn_head_mask[idx] if cross_attn_head_mask is not None else None
+                ),
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+            )
             hidden_states = layer_outputs[0]
 
             if use_cache:
