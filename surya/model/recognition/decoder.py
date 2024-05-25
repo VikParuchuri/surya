@@ -1,7 +1,6 @@
 import copy
 from typing import Optional, List, Union, Tuple
 
-from torch.nn import CrossEntropyLoss
 from transformers import MBartForCausalLM, MBartConfig
 from torch import nn
 from transformers.activations import ACT2FN
@@ -145,9 +144,8 @@ class MBartGQAttention(nn.Module):
         hidden_states: torch.Tensor,
         key_value_states: Optional[torch.Tensor] = None,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        is_prefill: Optional[bool] = False,
         attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         """Input shape: Batch x Time x Channel"""
 
@@ -165,39 +163,29 @@ class MBartGQAttention(nn.Module):
         # the provided `key_value_states` to support prefix tuning
         if (
             is_cross_attention
-            and past_key_value is not None
-            and past_key_value[0].shape[2] == key_value_states.shape[1]
+            and not is_prefill
         ):
             # reuse k,v, cross_attentions
             key_states = past_key_value[0]
             value_states = past_key_value[1]
+            past_key_value = (None, None)
         elif is_cross_attention:
             # cross_attentions
             key_states = self._shape_key_value(self.k_proj(key_value_states), -1, bsz)
             value_states = self._shape_key_value(self.v_proj(key_value_states), -1, bsz)
-        elif past_key_value is not None:
+            past_key_value = (key_states, value_states)
+        elif not is_prefill:
             # reuse k, v, self_attention
             key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
             value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
+            past_key_value = (key_states[:, :, -tgt_len:], value_states[:, :, -tgt_len:])
         else:
             # self_attention
             key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
             value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
-
-        if self.is_decoder:
-            # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
-            # Further calls to cross_attention layer can then reuse all cross-attention
-            # key/value_states (first "if" case)
-            # if uni-directional self-attention (decoder) save Tuple(torch.Tensor, torch.Tensor) of
-            # all previous decoder key/value_states. Further calls to uni-directional self-attention
-            # can concat previous decoder key/value_states to current projected key/value_states (third "elif" case)
-            # if encoder bi-directional self-attention `past_key_value` is always `None`
-            if is_cross_attention:
-                past_key_value = (key_states, value_states)
-            else:
-                past_key_value = (key_states[:, :, -tgt_len:], value_states[:, :, -tgt_len:])
+            past_key_value = (key_states[:, :, -tgt_len:], value_states[:, :, -tgt_len:])
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
@@ -209,31 +197,11 @@ class MBartGQAttention(nn.Module):
         src_len = key_states.size(1)
         attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
 
-        if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz * self.num_heads, tgt_len, src_len)}, but is"
-                f" {attn_weights.size()}"
-            )
-
         if attention_mask is not None:
-            if attention_mask.size() != (bsz, 1, tgt_len, src_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, tgt_len, src_len)}, but is {attention_mask.size()}"
-                )
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-
-        if output_attentions:
-            # this operation is a bit awkward, but it's required to
-            # make sure that attn_weights keeps its gradient.
-            # In order to do so, attn_weights have to be reshaped
-            # twice and have to be reused in the following
-            attn_weights_reshaped = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights_reshaped.view(bsz * self.num_heads, tgt_len, src_len)
-        else:
-            attn_weights_reshaped = None
 
         attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
         attn_output = torch.bmm(attn_probs, value_states).view(bsz, self.num_heads, tgt_len, self.head_dim).transpose(1,2)
@@ -243,13 +211,7 @@ class MBartGQAttention(nn.Module):
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights_reshaped, past_key_value
-
-
-MBART_ATTENTION_CLASSES = {
-    "eager": MBartGQAttention,
-    "flash_attention_2": None
-}
+        return attn_output, past_key_value
 
 
 class MBartMoEDecoderLayer(nn.Module):
@@ -257,7 +219,7 @@ class MBartMoEDecoderLayer(nn.Module):
         super().__init__()
         self.embed_dim = config.d_model
 
-        self.self_attn = MBART_ATTENTION_CLASSES[config._attn_implementation](
+        self.self_attn = MBartGQAttention(
             embed_dim=self.embed_dim,
             num_heads=config.decoder_attention_heads,
             num_kv_heads=config.kv_heads,
@@ -271,7 +233,7 @@ class MBartMoEDecoderLayer(nn.Module):
         self.activation_dropout = config.activation_dropout
 
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
-        self.encoder_attn = MBART_ATTENTION_CLASSES[config._attn_implementation](
+        self.encoder_attn = MBartGQAttention(
             self.embed_dim,
             config.decoder_attention_heads,
             num_kv_heads=config.kv_heads,
@@ -294,11 +256,9 @@ class MBartMoEDecoderLayer(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         langs: Optional[torch.LongTensor] = None,
         kv_caches: Optional[List[torch.Tensor]] = None,
+        is_prefill: Optional[bool] = False,
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = True,
     ) -> torch.Tensor:
         residual = hidden_states
@@ -308,32 +268,28 @@ class MBartMoEDecoderLayer(nn.Module):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = kv_caches[0] if kv_caches is not None else None
         # add present self-attn cache to positions 1,2 of present_key_value tuple
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        hidden_states, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_attn_past_key_value,
+            is_prefill=is_prefill,
             attention_mask=attention_mask,
-            layer_head_mask=layer_head_mask,
-            output_attentions=output_attentions,
         )
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
         # Cross-Attention Block
-        cross_attn_present_key_value = None
-        cross_attn_weights = None
         if encoder_hidden_states is not None:
             residual = hidden_states
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
 
             # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
             cross_attn_past_key_value = kv_caches[1] if kv_caches is not None else None
-            hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+            hidden_states, cross_attn_present_key_value = self.encoder_attn(
                 hidden_states=hidden_states,
                 key_value_states=encoder_hidden_states,
+                is_prefill=is_prefill,
                 attention_mask=encoder_attention_mask,
-                layer_head_mask=cross_attn_layer_head_mask,
                 past_key_value=cross_attn_past_key_value,
-                output_attentions=output_attentions,
             )
             hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
             hidden_states = residual + hidden_states
@@ -355,9 +311,6 @@ class MBartMoEDecoderLayer(nn.Module):
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
-
-        if output_attentions:
-            outputs += (self_attn_weights, cross_attn_weights)
 
         if use_cache:
             outputs += (present_key_value,)
@@ -401,58 +354,32 @@ class MBartMoEDecoder(MBartDecoder):
         langs: Optional[torch.LongTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.LongTensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
-        cross_attn_head_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPastAndCrossAttentions]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # retrieve input_ids and inputs_embeds
-        if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("You cannot specify both decoder_input_ids and decoder_inputs_embeds at the same time")
-        elif input_ids is not None:
-            input = input_ids
-            input_shape = input.size()
-            input_ids = input_ids.view(-1, input_shape[-1])
-        elif inputs_embeds is not None:
-            input_shape = inputs_embeds.size()[:-1]
-            input = inputs_embeds[:, :, -1]
-        else:
-            raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
+        input = input_ids
+        input_shape = input.size()
+        input_ids = input_ids.view(-1, input_shape[-1])
 
         # past_key_values_length
         past_key_values_length = past_token_count if kv_caches is not None else 0
+        inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
 
-        if inputs_embeds is None:
-            inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
-
-        if self._use_flash_attention_2:
-            # 2d mask is passed through the layers
-            attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask) else None
-        else:
-            # 4d mask is passed through the layers
-            attention_mask = _prepare_4d_causal_attention_mask(
-                attention_mask, input_shape, inputs_embeds, past_key_values_length
-            )
+        # 4d mask is passed through the layers
+        attention_mask = _prepare_4d_causal_attention_mask(
+            attention_mask, input_shape, inputs_embeds, past_key_values_length
+        )
 
         # expand encoder attention mask
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
-            if self._use_flash_attention_2:
-                encoder_attention_mask = encoder_attention_mask if 0 in encoder_attention_mask else None
-            else:
-                # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-                encoder_attention_mask = _prepare_4d_attention_mask(
-                    encoder_attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
-                )
+            # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+            encoder_attention_mask = _prepare_4d_attention_mask(
+                encoder_attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
+            )
 
         # embed positions
         positions = self.embed_positions(input, past_key_values_length)
@@ -462,64 +389,31 @@ class MBartMoEDecoder(MBartDecoder):
 
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
-        if self.gradient_checkpointing and self.training:
-            if use_cache:
-                use_cache = False
-
         # decoder layers
-        all_hidden_states = () if output_hidden_states else None
-        all_self_attns = () if output_attentions else None
-        all_cross_attentions = () if (output_attentions and encoder_hidden_states is not None) else None
+        all_hidden_states = None
+        all_self_attns = None
+        all_cross_attentions = None
         next_decoder_cache = () if use_cache else None
 
-        # check if head_mask/cross_attn_head_mask has a correct number of layers specified if desired
-        for attn_mask, mask_name in zip([head_mask, cross_attn_head_mask], ["head_mask", "cross_attn_head_mask"]):
-            if attn_mask is not None:
-                if attn_mask.size()[0] != len(self.layers):
-                    raise ValueError(
-                        f"The `{mask_name}` should be specified for {len(self.layers)} layers, but it is for"
-                        f" {attn_mask.size()[0]}."
-                    )
         for idx, decoder_layer in enumerate(self.layers):
-            # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-            if self.training:
-                dropout_probability = torch.rand([])
-                if dropout_probability < self.layerdrop:
-                    continue
-
+            is_prefill = past_token_count == 0
             kv_cache = [kv_caches[0][idx], kv_caches[1][idx]] if kv_caches is not None else None
             layer_outputs = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
                 langs=langs,
                 kv_caches=kv_cache,
+                is_prefill=is_prefill,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=encoder_attention_mask,
-                layer_head_mask=(head_mask[idx] if head_mask is not None else None),
-                cross_attn_layer_head_mask=(
-                    cross_attn_head_mask[idx] if cross_attn_head_mask is not None else None
-                ),
-                output_attentions=output_attentions,
                 use_cache=use_cache,
             )
             hidden_states = layer_outputs[0]
 
             if use_cache:
-                next_decoder_cache += (layer_outputs[3 if output_attentions else 1],)
-
-            if output_attentions:
-                all_self_attns += (layer_outputs[1],)
-
-                if encoder_hidden_states is not None:
-                    all_cross_attentions += (layer_outputs[2],)
+                next_decoder_cache += (layer_outputs[1],)
 
         hidden_states = self.layer_norm(hidden_states)
-
-        # add hidden states from the last decoder layer
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
 
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
@@ -586,10 +480,6 @@ class MBartMoE(MBartForCausalLM):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
@@ -601,29 +491,19 @@ class MBartMoE(MBartForCausalLM):
             langs=langs,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
-            head_mask=head_mask,
-            cross_attn_head_mask=cross_attn_head_mask,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
 
         logits = self.lm_head(outputs[0])
 
-        loss = None
-        if labels is not None:
-            labels = labels.to(logits.device)
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            loss = loss_fct(logits.view(-1, self.config.vocab_size), labels.view(-1))
-
         if not return_dict:
             output = (logits,) + outputs[1:]
-            return (loss,) + output if loss is not None else output
+            return output
 
         return CausalLMOutputWithCrossAttentions(
-            loss=loss,
+            loss=None,
             logits=logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,

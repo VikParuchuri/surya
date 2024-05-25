@@ -71,6 +71,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
 
         with torch.inference_mode():
             while token_count < settings.RECOGNITION_MAX_TOKENS:
+                is_prefill = token_count == 0
                 inference_token_count = batch_decoder_input.shape[-1]
                 return_dict = model(
                     decoder_input_ids=batch_decoder_input,
@@ -101,8 +102,9 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                     decoder_cache[layer_idx, 0, :, :, token_count:(token_count + inference_token_count), :] = layer[0]
                     decoder_cache[layer_idx, 1, :, :, token_count:(token_count + inference_token_count), :] = layer[1]
 
-                    encoder_cache[layer_idx, 0, :, :, :, :] = layer[2]
-                    encoder_cache[layer_idx, 1, :, :, :, :] = layer[3]
+                    if is_prefill:
+                        encoder_cache[layer_idx, 0, :, :, :, :] = layer[2]
+                        encoder_cache[layer_idx, 1, :, :, :, :] = layer[3]
 
                 if all_done.all():
                     break
