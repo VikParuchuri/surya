@@ -90,19 +90,6 @@ class MBartExpertLayer(nn.Module):
         return final_hidden_states
 
 
-def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """
-    From llama
-    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
-    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
-    """
-    batch, num_key_value_heads, slen, head_dim = hidden_states.shape
-    if n_rep == 1:
-        return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
-    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
-
-
 class MBartGQAttention(nn.Module):
     def __init__(
         self,
@@ -161,43 +148,43 @@ class MBartGQAttention(nn.Module):
         # `past_key_value[0].shape[2] == key_value_states.shape[1]`
         # is checking that the `sequence_length` of the `past_key_value` is the same as
         # the provided `key_value_states` to support prefix tuning
-        if (
-            is_cross_attention
-            and not is_prefill
-        ):
-            # reuse k,v, cross_attentions
-            key_states = past_key_value[0]
-            value_states = past_key_value[1]
-            past_key_value = (None, None)
-        elif is_cross_attention:
-            # cross_attentions
-            key_states = self._shape_key_value(self.k_proj(key_value_states), -1, bsz)
-            value_states = self._shape_key_value(self.v_proj(key_value_states), -1, bsz)
-            past_key_value = (key_states, value_states)
-        elif not is_prefill:
-            # reuse k, v, self_attention
-            key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
-            value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
-            past_key_value = (key_states[:, :, -tgt_len:], value_states[:, :, -tgt_len:])
+        if is_cross_attention:
+            if is_prefill:
+                # cross_attentions
+                key_states = self._shape_key_value(self.k_proj(key_value_states), -1, bsz)
+                value_states = self._shape_key_value(self.v_proj(key_value_states), -1, bsz)
+                past_key_value = torch.cat([key_states.unsqueeze(0), value_states.unsqueeze(0)], dim=0)
+            else:
+                # reuse k,v, cross_attentions
+                key_states = past_key_value[0]
+                value_states = past_key_value[1]
+                past_key_value = None
+        # Self-attention
         else:
-            # self_attention
-            key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
-            value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
-            past_key_value = (key_states[:, :, -tgt_len:], value_states[:, :, -tgt_len:])
+            if is_prefill:
+                # initial prompt
+                key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
+                value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
+                past_key_value = torch.cat([key_states[:, :, -tgt_len:].unsqueeze(0), value_states[:, :, -tgt_len:].unsqueeze(0)], dim=0)
+            else:
+                # reuse k, v, self_attention
+                key_states = self._shape_key_value(self.k_proj(hidden_states), -1, bsz)
+                value_states = self._shape_key_value(self.v_proj(hidden_states), -1, bsz)
+                key_states = torch.cat([past_key_value[0], key_states], dim=2)
+                value_states = torch.cat([past_key_value[1], value_states], dim=2)
+                past_key_value = torch.cat([key_states[:, :, -tgt_len:].unsqueeze(0), value_states[:, :, -tgt_len:].unsqueeze(0)], dim=0)
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
 
         # Expand kv heads, then match query shape
-        key_states = repeat_kv(key_states, self.num_kv_groups).reshape(*proj_shape)
-        value_states = repeat_kv(value_states, self.num_kv_groups).reshape(*proj_shape)
+        key_states = key_states.repeat_interleave(self.num_kv_groups, dim=1).reshape(*proj_shape)
+        value_states = value_states.repeat_interleave(self.num_kv_groups, dim=1).reshape(*proj_shape)
 
         src_len = key_states.size(1)
         attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
 
-        if attention_mask is not None:
+        if not is_cross_attention:
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
@@ -295,7 +282,7 @@ class MBartMoEDecoderLayer(nn.Module):
             hidden_states = residual + hidden_states
 
             # add cross-attn to positions 3,4 of present_key_value tuple
-            present_key_value = present_key_value + cross_attn_present_key_value
+            present_key_value = (present_key_value, cross_attn_present_key_value)
 
         # Fully Connected
         residual = hidden_states
@@ -317,6 +304,7 @@ class MBartMoEDecoderLayer(nn.Module):
 
         return outputs
 
+
 class MBartMoEDecoder(MBartDecoder):
     def __init__(self, config: MBartConfig, embed_tokens: Optional[nn.Embedding] = None):
         MBartPreTrainedModel.__init__(self, config)
@@ -337,7 +325,6 @@ class MBartMoEDecoder(MBartDecoder):
         )
         # Language-specific MoE goes at second and second-to-last layer
         self.layers = nn.ModuleList([MBartMoEDecoderLayer(config, has_moe=(i in config.moe_layers) and config.use_moe) for i in range(config.decoder_layers)])
-        self._use_flash_attention_2 = config._attn_implementation == "flash_attention_2"
         self.layernorm_embedding = nn.LayerNorm(config.d_model)
         self.layer_norm = nn.LayerNorm(config.d_model)
 
@@ -368,18 +355,6 @@ class MBartMoEDecoder(MBartDecoder):
         # past_key_values_length
         past_key_values_length = past_token_count if kv_caches is not None else 0
         inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
-
-        # 4d mask is passed through the layers
-        attention_mask = _prepare_4d_causal_attention_mask(
-            attention_mask, input_shape, inputs_embeds, past_key_values_length
-        )
-
-        # expand encoder attention mask
-        if encoder_hidden_states is not None and encoder_attention_mask is not None:
-            # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-            encoder_attention_mask = _prepare_4d_attention_mask(
-                encoder_attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
-            )
 
         # embed positions
         positions = self.embed_positions(input, past_key_values_length)
@@ -510,33 +485,6 @@ class MBartMoE(MBartForCausalLM):
             attentions=outputs.attentions,
             cross_attentions=outputs.cross_attentions,
         )
-
-    def prepare_inputs_for_generation(
-        self, input_ids, past_key_values=None, attention_mask=None, langs=None, use_cache=None, **kwargs
-    ):
-        # if model is used as a decoder in encoder-decoder model, the decoder attention mask is created on the fly
-        if attention_mask is None:
-            attention_mask = input_ids.new_ones(input_ids.shape)
-
-        if past_key_values:
-            past_length = past_key_values[0][0].shape[2]
-
-            # Some generation methods already pass only the last input ID
-            if input_ids.shape[1] > past_length:
-                remove_prefix_length = past_length
-            else:
-                # Default to old behavior: keep only final ID
-                remove_prefix_length = input_ids.shape[1] - 1
-
-            input_ids = input_ids[:, remove_prefix_length:]
-        # first step, decoder_cached_states are empty
-        return {
-            "input_ids": input_ids,  # encoder_outputs is defined. input_ids not needed
-            "attention_mask": attention_mask,
-            "past_key_values": past_key_values,
-            "use_cache": use_cache,
-            "langs": langs
-        }
 
     def prune_moe_experts(self, keep_keys: List[int]):
         # Remove experts not specified in keep_keys
