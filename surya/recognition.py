@@ -102,10 +102,11 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                 return_dict = model(
                     decoder_input_ids=batch_decoder_input,
                     decoder_attention_mask=attention_mask,
-                    decoder_kv_caches=None if is_prefill else [decoder_cache, encoder_cache],
+                    decoder_self_kv_cache=None if is_prefill else decoder_cache,
+                    decoder_cross_kv_cache=None if is_prefill else encoder_cache,
                     decoder_past_token_count=token_count,
-                    pixel_values=batch_pixel_values,
                     decoder_langs=batch_langs,
+                    pixel_values=batch_pixel_values,
                     encoder_outputs=encoder_outputs,
                     return_dict=True,
                 )
