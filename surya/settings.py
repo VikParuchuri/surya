@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     RECOGNITION_FONT_DL_BASE: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0"
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
+    RECOGNITION_STATIC_CACHE: bool = False # Static cache for torch compile
+    RECOGNITION_MAX_LANGS: int = 4
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout2"

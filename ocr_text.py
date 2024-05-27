@@ -2,6 +2,8 @@ import argparse
 import json
 from collections import defaultdict
 
+import torch
+
 from surya.input.langs import replace_lang_with_code, get_unique_langs
 from surya.input.load import load_from_folder, load_from_file, load_lang_file
 from surya.model.detection.segformer import load_model as load_detection_model, load_processor as load_detection_processor

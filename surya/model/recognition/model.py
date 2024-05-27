@@ -1,10 +1,13 @@
 import warnings
+
+import torch
+
 warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
 
 import logging
 logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from transformers import VisionEncoderDecoderModel, VisionEncoderDecoderConfig, AutoModel, AutoModelForCausalLM
 from surya.model.recognition.config import MBartMoEConfig, VariableDonutSwinConfig
 from surya.model.recognition.encoder import VariableDonutSwinModel
@@ -58,3 +61,4 @@ class LangVisionEncoderDecoderModel(VisionEncoderDecoderModel):
             "decoder_langs": decoder_inputs["langs"],
         }
         return input_dict
+
