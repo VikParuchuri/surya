@@ -84,9 +84,8 @@ class MBartExpertLayer(nn.Module):
         # Set weights to 1 if zero experts activated
         routing_weights[torch.isinf(routing_weights)] = 1
 
-        unique_langs = langs.unique(dim=None).tolist()
-        unique_langs = [l for l in unique_langs if l in self.lang_codes]
-        unique_langs = sorted(unique_langs)
+        unique_langs = langs.unique(dim=None, sorted=True)
+        unique_langs = unique_langs[unique_langs > 3] # Remove start token
 
         # Loop over all available experts in the model and perform the computation on each expert
         for expert_lang in unique_langs:
@@ -97,7 +96,7 @@ class MBartExpertLayer(nn.Module):
             if idx.shape[0] == 0:
                 continue
 
-            expert_layer = self.experts[str(expert_lang)]
+            expert_layer = self.experts[str(expert_lang.item())]
 
             current_state = hidden_states[idx]
             current_hidden_states = expert_layer(current_state.view(-1, hidden_dim))
