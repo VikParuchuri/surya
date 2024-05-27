@@ -1,10 +1,10 @@
-from typing import Dict, Union, Optional, List
+from typing import Dict, Union, Optional, List, Iterable
 
 import cv2
 from torch import TensorType
 from transformers import DonutImageProcessor, DonutProcessor
 from transformers.image_processing_utils import BatchFeature
-from transformers.image_transforms import pad
+from transformers.image_transforms import pad, normalize
 from transformers.image_utils import PILImageResampling, ImageInput, ChannelDimension, make_list_of_images, get_image_size
 import numpy as np
 from PIL import Image
@@ -29,7 +29,8 @@ class SuryaImageProcessor(DonutImageProcessor):
         self.max_size = max_size
         self.train = train
 
-    def numpy_resize(self, image: np.ndarray, size, interpolation=cv2.INTER_LANCZOS4):
+    @classmethod
+    def numpy_resize(cls, image: np.ndarray, size, interpolation=cv2.INTER_LANCZOS4):
         height, width = image.shape[:2]
         max_width, max_height = size["width"], size["height"]
 
@@ -50,14 +51,14 @@ class SuryaImageProcessor(DonutImageProcessor):
         assert images[0].shape[2] == 3 # RGB input images, channel dim last
 
         # Rotate if the bbox is wider than it is tall
-        images = [self.align_long_axis(image, size=self.max_size, input_data_format=ChannelDimension.LAST) for image in images]
+        images = [SuryaImageProcessor.align_long_axis(image, size=self.max_size, input_data_format=ChannelDimension.LAST) for image in images]
 
         # Verify that the image is wider than it is tall
         for img in images:
             assert img.shape[1] >= img.shape[0]
 
         # This also applies the right channel dim format, to channel x height x width
-        images = [self.numpy_resize(img, self.max_size, self.resample) for img in images]
+        images = [SuryaImageProcessor.numpy_resize(img, self.max_size, self.resample) for img in images]
         assert images[0].shape[0] == 3 # RGB input images, channel dim first
 
         # Convert to float32 for rescale/normalize
@@ -67,7 +68,7 @@ class SuryaImageProcessor(DonutImageProcessor):
         # Pad to max size to improve performance
         max_size = self.max_size
         images = [
-            self.pad_image(
+            SuryaImageProcessor.pad_image(
                 image=image,
                 size=max_size,
                 input_data_format=ChannelDimension.FIRST,
@@ -79,7 +80,7 @@ class SuryaImageProcessor(DonutImageProcessor):
         for idx in range(len(images)):
             images[idx] = images[idx] * self.rescale_factor
         images = [
-            self.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
+            SuryaImageProcessor.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
             for img in images
         ]
 
@@ -110,11 +111,13 @@ class SuryaImageProcessor(DonutImageProcessor):
         # Convert to numpy for later processing steps
         images = [np.array(img) for img in images]
         images = self.process_inner(images)
+
         data = {"pixel_values": images}
         return BatchFeature(data=data, tensor_type=return_tensors)
 
+    @classmethod
     def pad_image(
-        self,
+        cls,
         image: np.ndarray,
         size: Dict[str, int],
         data_format: Optional[Union[str, ChannelDimension]] = None,
@@ -138,8 +141,9 @@ class SuryaImageProcessor(DonutImageProcessor):
         padding = ((pad_top, pad_bottom), (pad_left, pad_right))
         return pad(image, padding, data_format=data_format, input_data_format=input_data_format, constant_values=pad_value)
 
+    @classmethod
     def align_long_axis(
-        self,
+        cls,
         image: np.ndarray,
         size: Dict[str, int],
         data_format: Optional[Union[str, ChannelDimension]] = None,
@@ -154,6 +158,20 @@ class SuryaImageProcessor(DonutImageProcessor):
             image = np.rot90(image, 3)
 
         return image
+
+    @classmethod
+    def normalize(
+        cls,
+        image: np.ndarray,
+        mean: Union[float, Iterable[float]],
+        std: Union[float, Iterable[float]],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
+        return normalize(
+            image, mean=mean, std=std, data_format=data_format, input_data_format=input_data_format, **kwargs
+        )
 
 
 class SuryaProcessor(DonutProcessor):

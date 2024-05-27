@@ -33,11 +33,27 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     output_text = []
     confidences = []
 
+    dec_config = model.config.decoder
+    layer_count = dec_config.decoder_layers
+    kv_heads = dec_config.kv_heads
+    head_dim = int(dec_config.d_model / dec_config.decoder_attention_heads)
+    min_val = torch.finfo(model.dtype).min
+
     if settings.RECOGNITION_STATIC_CACHE:
-        min_val = torch.finfo(model.dtype).min
+        # We'll re-use these for all batches to avoid recopying
         kv_mask = torch.full((batch_size, 1, 1, settings.RECOGNITION_MAX_TOKENS + 1), min_val, dtype=model.dtype, device=model.device)
         # The +1 accounts for start token
-        orig_attention_mask = torch.full((batch_size, 1, settings.RECOGNITION_MAX_LANGS + 1, settings.RECOGNITION_MAX_LANGS + 1), min_val, dtype=model.dtype, device=model.device)
+        initial_attn_mask = torch.full((batch_size, 1, settings.RECOGNITION_MAX_LANGS + 1, settings.RECOGNITION_MAX_LANGS + 1), min_val, dtype=model.dtype, device=model.device)
+
+        # Decoder kv cache
+        # 7 (layers) x 2 (kv) x bs x 4 (heads) x max tokens x 64 (head dim)
+        decoder_cache = [torch.zeros((2, batch_size, kv_heads, settings.RECOGNITION_MAX_TOKENS, head_dim), dtype=model.dtype, device=model.device) for _ in range(layer_count)]
+
+        # Prefill
+        decoder_input = torch.zeros((batch_size, settings.RECOGNITION_MAX_LANGS + 1), dtype=torch.long, device=model.device)
+    else:
+        initial_kv_mask = torch.zeros((batch_size, 1, 1, 1), dtype=model.dtype, device=model.device)
+        initial_attn_mask = torch.zeros((batch_size, 1, settings.RECOGNITION_MAX_LANGS + 1, settings.RECOGNITION_MAX_LANGS + 1), dtype=model.dtype, device=model.device)
 
     processed_batches = processor(text=[""] * len(images), images=images, lang=languages)
 
@@ -58,37 +74,46 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         inference_token_count = batch_decoder_input.shape[-1]
         batch_predictions = [[] for _ in range(current_batch_size)]
 
-        # Decoder kv cache
-        # 7 (layers) x 2 (kv) x bs x 4 (heads) x max tokens x 64 (head dim)
-        dec_config = model.config.decoder
-        layer_count = dec_config.decoder_layers
-        kv_heads = dec_config.kv_heads
-        head_dim = int(dec_config.d_model / dec_config.decoder_attention_heads)
         decoder_input_pad = torch.zeros((batch_size - current_batch_size, 1), dtype=torch.long, device=model.device)
 
         if settings.RECOGNITION_STATIC_CACHE:
-            decoder_cache = [torch.zeros((2, batch_size, kv_heads, settings.RECOGNITION_MAX_TOKENS, head_dim), dtype=model.dtype, device=model.device) for _ in range(layer_count)]
+            # Reset shared tensors
+            if i > 0:
+                # Decoder cache
+                for layer_cache in decoder_cache:
+                    layer_cache.fill_(0)
 
-            # Reset kv mask
-            kv_mask.fill_(min_val)
-            kv_mask[:, :, :, -1] = 0
-            kv_mask[:, :, :, :inference_token_count] = 0
+                # KV mask
+                kv_mask.fill_(min_val)
+                kv_mask[:, :, :, -1] = 0
+                kv_mask[:, :, :, :inference_token_count] = 0
 
-            # Reset attention mask
-            orig_attention_mask.fill_(min_val)
-            attention_mask = orig_attention_mask
+                # Attention mask
+                initial_attn_mask.fill_(min_val)
+
+                # Prefill
+                decoder_input.fill_(0)
+
+            # Prefill attention mask
+            attention_mask = initial_attn_mask
             attention_mask[:, :, -inference_token_count:, -inference_token_count:] = 0
 
-            decoder_input = torch.zeros((batch_size, settings.RECOGNITION_MAX_LANGS + 1), dtype=torch.long, device=model.device)
+            # Prefill input
             decoder_input[:current_batch_size, -inference_token_count:] = batch_decoder_input
             batch_decoder_input = decoder_input
 
+            # Pad to max batch size
             batch_langs = torch.cat([batch_langs, torch.zeros((batch_size - current_batch_size, batch_langs.shape[-1]), dtype=torch.long, device=model.device)], dim=0)
             batch_pixel_values = torch.cat([batch_pixel_values, torch.zeros((batch_size - current_batch_size,) + batch_pixel_values.shape[1:], dtype=model.dtype, device=model.device)], dim=0)
         else:
-            kv_mask = torch.zeros((current_batch_size, 1, 1, 1), dtype=model.dtype, device=model.device)
+            # Select seed attention mask
+            kv_mask = initial_kv_mask[:current_batch_size]
+            kv_mask.fill_(0)
+
+            # Select prefill attention mask
+            attention_mask = initial_attn_mask[:current_batch_size, :, :inference_token_count, :inference_token_count]
+
             decoder_cache = [None] * layer_count
-            attention_mask = torch.zeros((current_batch_size, 1, inference_token_count, inference_token_count), dtype=model.dtype, device=model.device)
 
         encoder_outputs = None
         sequence_scores = None
@@ -111,7 +136,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                     return_dict=True,
                 )
 
-                logits = return_dict["logits"][:current_batch_size]
+                logits = return_dict["logits"][:current_batch_size] # Ignore batch padding
                 preds = torch.argmax(logits[:, -1], dim=-1)
                 scores = torch.max(F.softmax(logits, dim=-1), dim=-1).values
                 done = (preds == processor.tokenizer.eos_id) | (preds == processor.tokenizer.pad_id)
@@ -137,8 +162,10 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                         encoder_cache[layer_idx] = layer[1]
 
                     if settings.RECOGNITION_STATIC_CACHE:
+                        # Fill in entries in static kv cache
                         decoder_cache[layer_idx][:, :, :, token_range, :] = layer[0][:, :, :, -inference_token_count:, :]
                     else:
+                        # Cat to generate new kv cache including current tokens
                         if is_prefill:
                             decoder_cache[layer_idx] = layer[0]
                         else:
@@ -146,8 +173,9 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
 
                 batch_decoder_input = preds.unsqueeze(1)
                 if settings.RECOGNITION_STATIC_CACHE:
+                    # Setup new attention mask and input token
                     kv_mask[:, :, :, token_count:(token_count + inference_token_count)] = 0
-                    batch_decoder_input = torch.cat([batch_decoder_input, decoder_input_pad], dim=0)
+                    batch_decoder_input = torch.cat([batch_decoder_input, decoder_input_pad], dim=0) # Pad to full batch
                 else:
                     kv_mask = torch.cat([kv_mask, torch.zeros((current_batch_size, 1, 1, inference_token_count), dtype=model.dtype, device=model.device)], dim=-1)
 
