@@ -67,15 +67,15 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
 
             min_val = torch.finfo(model.dtype).min
             kv_mask = torch.full((batch_size, 1, 1, settings.RECOGNITION_MAX_TOKENS + 1), min_val, dtype=model.dtype, device=model.device)
-            kv_mask[:current_batch_size, :, :, -1] = 0
-            kv_mask[:current_batch_size, :, :, :inference_token_count] = 0
+            kv_mask[:, :, :, -1] = 0
+            kv_mask[:, :, :, :inference_token_count] = 0
 
             # The +1 accounts for start token
             attention_mask = torch.full((batch_size, 1, settings.RECOGNITION_MAX_LANGS + 1, settings.RECOGNITION_MAX_LANGS + 1), min_val, dtype=model.dtype, device=model.device)
-            attention_mask[:current_batch_size, :, :inference_token_count, :inference_token_count] = 0
+            attention_mask[:, :, -inference_token_count:, -inference_token_count:] = 0
 
             decoder_input = torch.zeros((batch_size, settings.RECOGNITION_MAX_LANGS + 1), dtype=torch.long, device=model.device)
-            decoder_input[:current_batch_size, :inference_token_count] = batch_decoder_input
+            decoder_input[:current_batch_size, -inference_token_count:] = batch_decoder_input
             batch_decoder_input = decoder_input
 
             batch_langs = torch.cat([batch_langs, torch.zeros((batch_size - current_batch_size, batch_langs.shape[-1]), dtype=torch.long, device=model.device)], dim=0)
@@ -98,7 +98,6 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         # Run post-prefill tokens
         while token_count < settings.RECOGNITION_MAX_TOKENS:
             is_prefill = token_count == 0
-            inference_token_count = batch_decoder_input.shape[-1]
             with torch.no_grad():
                 return_dict = model(
                     decoder_input_ids=batch_decoder_input,
@@ -133,7 +132,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
             token_range = torch.arange(token_count, token_count + inference_token_count, device=model.device)
             for layer_idx, layer in enumerate(past_key_values):
                 if settings.RECOGNITION_STATIC_CACHE:
-                    decoder_cache[layer_idx, :, :, :, token_range, :] = layer[0][:, :, :, :inference_token_count, :]
+                    decoder_cache[layer_idx, :, :, :, token_range, :] = layer[0][:, :, :, -inference_token_count:, :]
                 else:
                     if is_prefill:
                         decoder_cache[layer_idx] = layer[0]
@@ -157,6 +156,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                     batch_predictions[j].append(int(pred))
 
             token_count += inference_token_count
+            inference_token_count = batch_decoder_input.shape[-1]
 
         sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
         detected_text = processor.tokenizer.batch_decode(batch_predictions)

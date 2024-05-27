@@ -1,6 +1,8 @@
 import argparse
 from collections import defaultdict
 
+import torch
+
 from benchmark.scoring import overlap_score
 from surya.model.recognition.model import load_model as load_recognition_model
 from surya.model.recognition.processor import load_processor as load_recognition_processor
@@ -30,6 +32,9 @@ def main():
 
     rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
+
+    if settings.RECOGNITION_COMPILE:
+        rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
 
     split = "train"
     if args.max:

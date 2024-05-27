@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
     RECOGNITION_STATIC_CACHE: bool = False # Static cache for torch compile
     RECOGNITION_MAX_LANGS: int = 4
+    RECOGNITION_COMPILE: bool = False
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout2"
