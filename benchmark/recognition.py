@@ -33,9 +33,6 @@ def main():
     rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
 
-    if settings.RECOGNITION_COMPILE:
-        rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
-
     split = "train"
     if args.max:
         split = f"train[:{args.max}]"

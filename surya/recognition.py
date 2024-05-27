@@ -50,9 +50,9 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         batch_decoder_input = [[model.config.decoder_start_token_id] + lang for lang in batch_langs]
         current_batch_size = len(batch_pixel_values)
 
-        batch_langs = torch.tensor(np.vstack(batch_langs), dtype=torch.long, device=model.device)
-        batch_pixel_values = torch.tensor(np.vstack(batch_pixel_values), dtype=model.dtype, device=model.device)
-        batch_decoder_input = torch.tensor(np.vstack(batch_decoder_input), dtype=torch.long, device=model.device)
+        batch_langs = torch.tensor(np.stack(batch_langs, axis=0), dtype=torch.long, device=model.device)
+        batch_pixel_values = torch.tensor(np.stack(batch_pixel_values, axis=0), dtype=model.dtype, device=model.device)
+        batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
 
         token_count = 0
         inference_token_count = batch_decoder_input.shape[-1]

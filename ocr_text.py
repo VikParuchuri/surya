@@ -58,9 +58,6 @@ def main():
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    if settings.RECOGNITION_COMPILE:
-        rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
-
     predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
 
     if args.images:

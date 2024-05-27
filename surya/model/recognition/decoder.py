@@ -84,8 +84,9 @@ class MBartExpertLayer(nn.Module):
         # Set weights to 1 if zero experts activated
         routing_weights[torch.isinf(routing_weights)] = 1
 
-        unique_langs = langs.view(-1).unique(sorted=True).tolist()
+        unique_langs = langs.unique(dim=None).tolist()
         unique_langs = [l for l in unique_langs if l in self.lang_codes]
+        unique_langs = sorted(unique_langs)
 
         # Loop over all available experts in the model and perform the computation on each expert
         for expert_lang in unique_langs:
@@ -371,7 +372,7 @@ class MBartMoEDecoder(MBartDecoder):
         # embed positions
         positions = self.embed_positions(input, past_key_values_length)
 
-        hidden_states = inputs_embeds + positions.to(inputs_embeds.device)
+        hidden_states = inputs_embeds + positions
         hidden_states = self.layernorm_embedding(hidden_states)
 
         # decoder layers
