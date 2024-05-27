@@ -121,6 +121,16 @@ rec_model, rec_processor = load_model(), load_processor()
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
 ```
 
+### Compilation
+
+The OCR model can be compiled to get an ~15% speedup in total inference time.  The first run will be slow while it compiles, though. First set `RECOGNITION_STATIC_CACHE=true`, then:
+
+```python
+import torch
+
+rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
+```
+
 ## Text line detection
 
 This command will write out a json file with the detected bboxes.

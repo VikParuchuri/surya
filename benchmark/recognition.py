@@ -1,6 +1,8 @@
 import argparse
 from collections import defaultdict
 
+import torch
+
 from benchmark.scoring import overlap_score
 from surya.model.recognition.model import load_model as load_recognition_model
 from surya.model.recognition.processor import load_processor as load_recognition_processor
@@ -26,7 +28,11 @@ def main():
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
+    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
+
+    if args.compile:
+        assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
 
     rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
@@ -55,6 +61,11 @@ def main():
             lang_list.append([l])
         else:
             lang_list.append(l)
+
+    if args.compile:
+        rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
+        # Run through one batch to compile the model
+        run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 
     start = time.time()
     predictions_by_image = run_recognition(images, lang_list, rec_model, rec_processor, bboxes=bboxes)
