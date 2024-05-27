@@ -4,13 +4,33 @@ from typing import Optional, List, Union, Tuple
 from transformers import MBartForCausalLM, MBartConfig
 from torch import nn
 from transformers.activations import ACT2FN
-from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask, _prepare_4d_attention_mask
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions, BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.mbart.modeling_mbart import MBartPreTrainedModel, MBartDecoder, \
-    MBartLearnedPositionalEmbedding
+from transformers.models.mbart.modeling_mbart import MBartPreTrainedModel, MBartDecoder
 from surya.model.recognition.config import MBartMoEConfig
 import torch
 import math
+
+
+class MBartLearnedPositionalEmbedding(nn.Embedding):
+    """
+    This module learns positional embeddings up to a fixed maximum size.
+    """
+
+    def __init__(self, num_embeddings: int, embedding_dim: int):
+        # MBart is set up so that if padding_idx is specified then offset the embedding ids by 2
+        # and adjust num_embeddings appropriately. Other models don't have this hack
+        self.offset = 2
+        super().__init__(num_embeddings + self.offset, embedding_dim)
+
+    def forward(self, input_ids: torch.Tensor, past_key_values_length: int = 0):
+        """`input_ids' shape is expected to be [bsz x seqlen]."""
+
+        bsz, seq_len = input_ids.shape[:2]
+        positions = torch.arange(
+            past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
+        ).expand(bsz, -1)
+
+        return super().forward(positions + self.offset)
 
 
 class MBartExpertMLP(nn.Module):
@@ -32,7 +52,6 @@ class MBartExpertMLP(nn.Module):
 
     def forward(self, hidden_states):
         current_hidden_states = self.act_fn(self.w1(hidden_states)) * self.w3(hidden_states)
-        current_hidden_states = self.dropout(current_hidden_states)
         current_hidden_states = self.w2(current_hidden_states)
         return current_hidden_states
 
@@ -65,8 +84,11 @@ class MBartExpertLayer(nn.Module):
         # Set weights to 1 if zero experts activated
         routing_weights[torch.isinf(routing_weights)] = 1
 
+        unique_langs = langs.view(-1).unique(sorted=True).tolist()
+        unique_langs = [l for l in unique_langs if l in self.lang_codes]
+
         # Loop over all available experts in the model and perform the computation on each expert
-        for expert_idx, expert_lang in enumerate(self.lang_codes):
+        for expert_lang in unique_langs:
             # Check which samples match with this expert
             lang_match = (langs == expert_lang).any(dim=-1)
             idx = torch.nonzero(lang_match, as_tuple=True)[0]
@@ -78,7 +100,6 @@ class MBartExpertLayer(nn.Module):
 
             current_state = hidden_states[idx]
             current_hidden_states = expert_layer(current_state.view(-1, hidden_dim))
-            current_hidden_states = self.dropout(current_hidden_states)
             current_hidden_states = current_hidden_states.view(-1, sequence_length, hidden_dim)
 
             # Weight by number of languages in the input
@@ -190,8 +211,7 @@ class MBartGQAttention(nn.Module):
 
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
-        attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
-        attn_output = torch.bmm(attn_probs, value_states).view(bsz, self.num_heads, tgt_len, self.head_dim).transpose(1,2)
+        attn_output = torch.bmm(attn_weights, value_states).view(bsz, self.num_heads, tgt_len, self.head_dim).transpose(1,2)
 
         # Use the `embed_dim` from the config (stored in the class) rather than `hidden_state` because `attn_output` can be
         # partitioned across GPUs when using tensor-parallelism.
@@ -261,7 +281,6 @@ class MBartMoEDecoderLayer(nn.Module):
             is_prefill=is_prefill,
             attention_mask=attention_mask,
         )
-        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
         # Cross-Attention Block
@@ -277,7 +296,6 @@ class MBartMoEDecoderLayer(nn.Module):
                 attention_mask=encoder_attention_mask,
                 past_key_value=cross_kv_cache,
             )
-            hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
             hidden_states = residual + hidden_states
 
             # add cross-attn to positions 3,4 of present_key_value tuple
@@ -290,9 +308,7 @@ class MBartMoEDecoderLayer(nn.Module):
             hidden_states = self.moe(hidden_states, langs)
         else:
             hidden_states = self.activation_fn(self.fc1(hidden_states))
-            hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
             hidden_states = self.fc2(hidden_states)
-            hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
         hidden_states = residual + hidden_states
 
@@ -357,8 +373,6 @@ class MBartMoEDecoder(MBartDecoder):
 
         hidden_states = inputs_embeds + positions.to(inputs_embeds.device)
         hidden_states = self.layernorm_embedding(hidden_states)
-
-        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
         # decoder layers
         all_hidden_states = None
