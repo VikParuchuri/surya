@@ -48,9 +48,9 @@ def split_image(img, processor):
 def prepare_image_detection(img, processor):
     new_size = (processor.size["width"], processor.size["height"])
 
-    img = np.asarray(img, dtype=np.uint8)
-    img = cv2.resize(img, new_size, interpolation=cv2.INTER_LANCZOS4)
+    img = img.resize(new_size, Image.Resampling.LANCZOS) # Stretch smaller dimension to fit new size
 
+    img = np.asarray(img, dtype=np.uint8)
     img = processor(img)["pixel_values"][0]
     img = torch.from_numpy(img)
     return img
