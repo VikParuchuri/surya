@@ -7,7 +7,7 @@ from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
 from surya.model.detection.segformer import load_model, load_processor
-from surya.input.processing import open_pdf, get_page_images
+from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.detection import batch_text_detection
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
@@ -47,7 +47,7 @@ def main():
         # These have already been shuffled randomly, so sampling from the start is fine
         dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
-        images = [i.convert("RGB") for i in images]
+        images = convert_if_not_rgb(images)
         correct_boxes = []
         for i, boxes in enumerate(dataset["bboxes"]):
             img_size = images[i].size

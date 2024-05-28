@@ -2,13 +2,14 @@ from typing import List
 from PIL import Image
 
 from surya.detection import batch_text_detection
-from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image
+from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image, convert_if_not_rgb
 from surya.postprocessing.text import sort_text_lines
 from surya.recognition import batch_recognition
 from surya.schema import TextLine, OCRResult
 
 
 def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None, batch_size=None) -> List[OCRResult]:
+    images = convert_if_not_rgb(images)
     # Polygons need to be in corner format - [[x1, y1], [x2, y2], [x3, y3], [x4, y4]], bboxes in [x1, y1, x2, y2] format
     assert bboxes is not None or polygons is not None
     assert len(images) == len(langs), "You need to pass in one list of languages for each image"
@@ -57,6 +58,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
 
 
 def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor, batch_size=None) -> List[OCRResult]:
+    images = convert_if_not_rgb(images)
     det_predictions = batch_text_detection(images, det_model, det_processor)
 
     all_slices = []

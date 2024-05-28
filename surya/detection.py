@@ -7,7 +7,7 @@ from PIL import Image
 from surya.model.detection.segformer import SegformerForRegressionMask
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image_detection, split_image, get_total_splits
+from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -51,7 +51,7 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
     all_preds = []
     for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
         batch_image_idxs = batches[batch_idx]
-        batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
+        batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
 
         split_index = []
         split_heights = []

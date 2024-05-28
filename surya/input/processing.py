@@ -1,5 +1,3 @@
-import os
-import random
 from typing import List
 
 import cv2
@@ -9,6 +7,15 @@ import pypdfium2
 from PIL import Image, ImageOps, ImageDraw
 import torch
 from surya.settings import settings
+
+
+def convert_if_not_rgb(images: List[Image.Image]) -> List[Image.Image]:
+    new_images = []
+    for image in images:
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        new_images.append(image)
+    return new_images
 
 
 def get_total_splits(image_size, processor):
@@ -48,6 +55,8 @@ def split_image(img, processor):
 def prepare_image_detection(img, processor):
     new_size = (processor.size["width"], processor.size["height"])
 
+    # This double resize actually necessary for downstream accuracy
+    img.thumbnail(new_size, Image.Resampling.LANCZOS)
     img = img.resize(new_size, Image.Resampling.LANCZOS) # Stretch smaller dimension to fit new size
 
     img = np.asarray(img, dtype=np.uint8)
