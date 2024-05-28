@@ -4,6 +4,7 @@ from collections import defaultdict
 import torch
 
 from benchmark.scoring import overlap_score
+from surya.input.processing import convert_if_not_rgb
 from surya.model.recognition.model import load_model as load_recognition_model
 from surya.model.recognition.processor import load_processor as load_recognition_processor
 from surya.ocr import run_recognition
@@ -48,7 +49,7 @@ def main():
         dataset = dataset.filter(lambda x: x["language"] in langs)
 
     images = list(dataset["image"])
-    images = [i.convert("RGB") for i in images]
+    images = convert_if_not_rgb(images)
     bboxes = list(dataset["bboxes"])
     line_text = list(dataset["text"])
     languages = list(dataset["language"])

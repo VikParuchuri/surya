@@ -3,6 +3,7 @@ from typing import List
 import torch
 from PIL import Image
 
+from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
 from surya.schema import OrderBox, OrderResult
 from surya.settings import settings
@@ -37,7 +38,7 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model: OrderVi
     if batch_size is None:
         batch_size = get_batch_size()
 
-    images = [image.convert("RGB") for image in images]
+    images = convert_if_not_rgb(images)
 
     output_order = []
     for i in tqdm(range(0, len(images), batch_size), desc="Finding reading order"):
