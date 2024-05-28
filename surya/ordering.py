@@ -38,7 +38,7 @@ def batch_ordering(images: List, bboxes: List[List[List[float]]], model: OrderVi
     if batch_size is None:
         batch_size = get_batch_size()
 
-    images = convert_if_not_rgb(images)
+    images = [image.convert("RGB") for image in images] # also copies the images
 
     output_order = []
     for i in tqdm(range(0, len(images), batch_size), desc="Finding reading order"):

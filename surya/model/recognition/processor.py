@@ -35,6 +35,7 @@ class SuryaImageProcessor(DonutImageProcessor):
         max_width, max_height = size["width"], size["height"]
 
         if (height == max_height and width <= max_width) or (width == max_width and height <= max_height):
+            image = image.transpose(2, 0, 1)
             return image
 
         scale = min(max_width / width, max_height / height)

@@ -30,6 +30,8 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
         batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
 
+    images = [image.convert("RGB") for image in images]  # also copies the images
+
     orig_sizes = [image.size for image in images]
     splits_per_image = [get_total_splits(size, processor) for size in orig_sizes]
 
