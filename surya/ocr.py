@@ -9,10 +9,12 @@ from surya.schema import TextLine, OCRResult
 
 
 def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None, batch_size=None) -> List[OCRResult]:
-    images = convert_if_not_rgb(images)
     # Polygons need to be in corner format - [[x1, y1], [x2, y2], [x3, y3], [x4, y4]], bboxes in [x1, y1, x2, y2] format
     assert bboxes is not None or polygons is not None
     assert len(images) == len(langs), "You need to pass in one list of languages for each image"
+
+    images = convert_if_not_rgb(images)
+
     slice_map = []
     all_slices = []
     all_langs = []
