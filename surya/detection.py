@@ -12,6 +12,7 @@ from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import torch.nn.functional as F
 
 
@@ -131,9 +132,7 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
             results.append(result)
     else:
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(parallel_get_lines, preds, orig_sizes))
 
     return results
-
-
