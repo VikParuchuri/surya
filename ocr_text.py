@@ -1,3 +1,4 @@
+import os
 import argparse
 import json
 from collections import defaultdict
@@ -13,7 +14,6 @@ from surya.model.recognition.tokenizer import _tokenize
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
-import os
 
 
 def main():

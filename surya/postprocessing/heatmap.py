@@ -108,7 +108,11 @@ def detect_boxes(linemap, text_threshold, low_text):
         segmap[labels == k] = 255
         x, y = stats[k, cv2.CC_STAT_LEFT], stats[k, cv2.CC_STAT_TOP]
         w, h = stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]
-        niter = int(math.sqrt(size * min(w, h) / (w * h)) * 2)
+        try:
+            niter = int(math.sqrt(size * min(w, h) / (w * h)) * 2)
+        except ValueError:
+            # Overflow when size is too large
+            niter = 0
         sx, ex, sy, ey = x - niter, x + w + niter + 1, y - niter, y + h + niter + 1
 
         # boundary checks

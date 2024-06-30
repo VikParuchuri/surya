@@ -1,3 +1,4 @@
+import os
 import argparse
 import copy
 import json
@@ -12,7 +13,6 @@ from surya.model.ordering.processor import load_processor
 from surya.ordering import batch_ordering
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
-import os
 
 
 def main():

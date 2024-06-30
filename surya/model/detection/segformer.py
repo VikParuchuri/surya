@@ -435,7 +435,7 @@ class SegformerModel(SegformerPreTrainedModel):
         return encoder_outputs
 
 class SegformerForRegressionMask(SegformerForSemanticSegmentation):
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super().__init__(config)
         self.segformer = SegformerModel(config)
         self.decode_head = SegformerForMaskDecodeHead(config)
@@ -446,6 +446,7 @@ class SegformerForRegressionMask(SegformerForSemanticSegmentation):
     def forward(
         self,
         pixel_values: torch.FloatTensor,
+        **kwargs
     ) -> Union[Tuple, SemanticSegmenterOutput]:
 
         encoder_hidden_states = self.segformer(

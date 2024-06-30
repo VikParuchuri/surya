@@ -391,7 +391,7 @@ class VariableDonutSwinEncoder(nn.Module):
 
 class VariableDonutSwinModel(DonutSwinModel):
     config_class = VariableDonutSwinConfig
-    def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
+    def __init__(self, config, add_pooling_layer=True, use_mask_token=False, **kwargs):
         super().__init__(config)
         self.config = config
         self.num_layers = len(config.depths)
@@ -413,6 +413,7 @@ class VariableDonutSwinModel(DonutSwinModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        **kwargs
     ) -> Union[Tuple, DonutSwinModelOutput]:
         r"""
         bool_masked_pos (`torch.BoolTensor` of shape `(batch_size, num_patches)`):
