@@ -436,7 +436,7 @@ class MBartMoE(MBartForCausalLM):
     config_class = MBartMoEConfig
     _tied_weights_keys = ["lm_head.weight"]
 
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         config = copy.deepcopy(config)
         config.is_decoder = True
         config.is_encoder_decoder = False
@@ -467,6 +467,7 @@ class MBartMoE(MBartForCausalLM):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        **kwargs
     ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 

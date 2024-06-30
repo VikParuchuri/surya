@@ -487,7 +487,7 @@ class MBartOrder(MBartForCausalLM):
     config_class = MBartOrderConfig
     _tied_weights_keys = []
 
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         config = copy.deepcopy(config)
         config.is_decoder = True
         config.is_encoder_decoder = False
@@ -515,6 +515,7 @@ class MBartOrder(MBartForCausalLM):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        **kwargs
     ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
