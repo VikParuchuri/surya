@@ -1,18 +1,23 @@
+from concurrent.futures import ProcessPoolExecutor
 from typing import List, Tuple
 
-import torch
 import numpy as np
+import torch
+import torch.nn.functional as F
 from PIL import Image
+from tqdm import tqdm
 
+from surya.input.processing import (
+    convert_if_not_rgb,
+    get_total_splits,
+    prepare_image_detection,
+    split_image,
+)
 from surya.model.detection.segformer import SegformerForRegressionMask
-from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
+from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.schema import TextDetectionResult
 from surya.settings import settings
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
-import torch.nn.functional as F
 
 
 def get_batch_size():
@@ -24,7 +29,13 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model: SegformerForRegressionMask, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(
+    images: List,
+    model: SegformerForRegressionMask,
+    processor,
+    batch_size=None,
+    show_progress=True,
+) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
@@ -51,7 +62,9 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
         batches.append(current_batch)
 
     all_preds = []
-    for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
+    for batch_idx in tqdm(
+        range(len(batches)), desc="Detecting bboxes", disable=not show_progress
+    ):
         batch_image_idxs = batches[batch_idx]
         batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
 
@@ -64,7 +77,9 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
             split_index.extend([image_idx] * len(image_parts))
             split_heights.extend(split_height)
 
-        image_splits = [prepare_image_detection(image, processor) for image in image_splits]
+        image_splits = [
+            prepare_image_detection(image, processor) for image in image_splits
+        ]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
 
@@ -75,7 +90,9 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
         correct_shape = [processor.size["height"], processor.size["width"]]
         current_shape = list(logits.shape[2:])
         if current_shape != correct_shape:
-            logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
+            logits = F.interpolate(
+                logits, size=correct_shape, mode="bilinear", align_corners=False
+            )
 
         logits = logits.cpu().detach().numpy().astype(np.float32)
         preds = []
@@ -90,7 +107,9 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
 
                 if height < processor.size["height"]:
                     # Cut off padding to get original height
-                    pred_heatmaps = [pred_heatmap[:height, :] for pred_heatmap in pred_heatmaps]
+                    pred_heatmaps = [
+                        pred_heatmap[:height, :] for pred_heatmap in pred_heatmaps
+                    ]
 
                 for k in range(heatmap_count):
                     heatmaps[k] = np.vstack([heatmaps[k], pred_heatmaps[k]])
@@ -117,15 +136,21 @@ def parallel_get_lines(preds, orig_sizes):
         vertical_lines=vertical_lines,
         heatmap=heat_img,
         affinity_map=aff_img,
-        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]],
     )
     return result
 
 
-def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
-    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
+def batch_text_detection(
+    images: List, model, processor, batch_size=None, show_progress=True
+) -> List[TextDetectionResult]:
+    preds, orig_sizes = batch_detection(
+        images, model, processor, batch_size=batch_size, show_progress=show_progress
+    )
     results = []
-    if settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH: # Ensures we don't parallelize with streamlit, or with very few images
+    if (
+        settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH
+    ):  # Ensures we don't parallelize with streamlit, or with very few images
         for i in range(len(images)):
             result = parallel_get_lines(preds[i], orig_sizes[i])
             results.append(result)
@@ -135,5 +160,3 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
             results = list(executor.map(parallel_get_lines, preds, orig_sizes))
 
     return results
-
-
