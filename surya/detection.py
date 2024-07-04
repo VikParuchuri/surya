@@ -24,7 +24,7 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model: SegformerForRegressionMask, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(images: List, model: SegformerForRegressionMask, processor, batch_size=None, show_progress=True) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
@@ -51,7 +51,7 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
         batches.append(current_batch)
 
     all_preds = []
-    for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
+    for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes", disable=not show_progress):
         batch_image_idxs = batches[batch_idx]
         batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
 
@@ -122,8 +122,8 @@ def parallel_get_lines(preds, orig_sizes):
     return result
 
 
-def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
-    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
+def batch_text_detection(images: List, model, processor, batch_size=None, show_progress=True) -> List[TextDetectionResult]:
+    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size, show_progress=show_progress)
     results = []
     if settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH: # Ensures we don't parallelize with streamlit, or with very few images
         for i in range(len(images)):
