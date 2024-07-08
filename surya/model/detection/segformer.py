@@ -11,6 +11,8 @@ from typing import Optional, Tuple, Union
 
 from transformers import SegformerConfig, SegformerForSemanticSegmentation, SegformerDecodeHead, \
     SegformerPreTrainedModel
+from surya.model.detection.config import EfficientViTConfig
+from surya.model.detection.efficientvit import EfficientVitForSemanticSegmentation
 from surya.model.detection.processor import SegformerImageProcessor
 import torch
 from torch import nn
@@ -19,7 +21,16 @@ from transformers.modeling_outputs import SemanticSegmenterOutput, BaseModelOutp
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
+def load_model(checkpoint="", device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
+    config = EfficientViTConfig()
+    model = EfficientVitForSemanticSegmentation(config, torch_dtype=dtype)
+    model = model.to(device)
+    model = model.eval()
+    print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
+    return model
+
+
+def load_model_sg(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
     config = SegformerConfig.from_pretrained(checkpoint)
     model = SegformerForRegressionMask.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
     if "mps" in device:
@@ -130,11 +141,8 @@ class SegformerOverlapPatchEmbeddings(nn.Module):
         return embeddings, height, width
 
 
-class SegformerEfficientSelfAttention(nn.Module):
-    """SegFormer's efficient self-attention mechanism. Employs the sequence reduction process introduced in the [PvT
-    paper](https://arxiv.org/abs/2102.12122)."""
-
-    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio):
+class SegformerWindowSelfAttention(nn.Module):
+    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio, window_size):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
@@ -152,6 +160,89 @@ class SegformerEfficientSelfAttention(nn.Module):
         self.key = nn.Linear(self.hidden_size, self.all_head_size)
         self.value = nn.Linear(self.hidden_size, self.all_head_size)
 
+        self.window_size = window_size
+
+    def build_windows(self, hidden_states, height, width):
+        batch, seq_len, num_channels = hidden_states.shape
+        hidden_states = hidden_states.view(batch, height // self.window_size, self.window_size, width // self.window_size, self.window_size, num_channels)
+
+        # Reshape to batch, grid_height, grid_width, window_height, window_width, num_channels
+        windows = hidden_states.permute(0, 1, 3, 2, 4, 5).contiguous()
+
+        # Reshape to (windows, window_seq_len, attn_head, head_dim)
+        windows = windows.view(-1, self.window_size * self.window_size, self.num_attention_heads, self.attention_head_size)
+
+        # Shift to (batch, attn_head, window_seq_len, head_dim)
+        return windows.permute(0, 2, 1, 3)
+
+    def undo_windows(self, context_layer, height, width):
+        context_layer = context_layer.view(
+            -1, height // self.window_size, width // self.window_size, self.window_size,self.window_size, self.all_head_size
+        )
+
+        # Reshape to (batch, grid_height, window_height, grid_width, window_width, num_channels)
+        context_layer = context_layer.permute(0, 1, 3, 2, 4, 5).contiguous()
+        # Return batch, seq len, num channels
+        return context_layer.view(-1, height * width, self.all_head_size)
+
+    def forward(
+            self,
+            hidden_states,
+            height,
+            width,
+            output_attentions=False,
+    ):
+        query_layer = self.build_windows(self.query(hidden_states), height, width)
+
+        key_layer = self.build_windows(self.key(hidden_states), height, width)
+        value_layer = self.build_windows(self.value(hidden_states), height, width)
+
+        # Take the dot product between "query" and "key" to get the raw attention scores.
+        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+
+        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+
+        # Normalize the attention scores to probabilities.
+        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+
+        context_layer = torch.matmul(attention_probs, value_layer)
+
+        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        context_layer = context_layer.view(new_context_layer_shape)
+
+        context_layer = context_layer.view(-1, height // self.window_size, width // self.window_size, self.window_size, self.window_size, self.all_head_size)
+        context_layer = self.undo_windows(context_layer, height, width)
+
+        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
+        return outputs
+
+
+class SegformerEfficientSelfAttention(nn.Module):
+    """SegFormer's efficient self-attention mechanism. Employs the sequence reduction process introduced in the [PvT
+    paper](https://arxiv.org/abs/2102.12122)."""
+
+    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.num_kv_heads = 1
+
+        if self.hidden_size % self.num_attention_heads != 0:
+            raise ValueError(
+                f"The hidden size ({self.hidden_size}) is not a multiple of the number of attention "
+                f"heads ({self.num_attention_heads})"
+            )
+
+        self.attention_head_size = int(self.hidden_size / self.num_attention_heads)
+        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.kv_head_size = self.num_kv_heads * self.attention_head_size
+
+        self.query = nn.Linear(self.hidden_size, self.all_head_size)
+        self.key = nn.Linear(self.hidden_size, self.kv_head_size)
+        self.value = nn.Linear(self.hidden_size, self.kv_head_size)
+        self.kv_repeats = self.num_attention_heads // self.num_kv_heads
+
         self.sr_ratio = sequence_reduction_ratio
         if sequence_reduction_ratio > 1:
             self.sr = nn.Conv2d(
@@ -159,8 +250,8 @@ class SegformerEfficientSelfAttention(nn.Module):
             )
             self.layer_norm = nn.LayerNorm(hidden_size)
 
-    def transpose_for_scores(self, hidden_states):
-        new_shape = hidden_states.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+    def transpose_for_scores(self, hidden_states, attn_head_count):
+        new_shape = hidden_states.size()[:-1] + (attn_head_count, self.attention_head_size)
         hidden_states = hidden_states.view(new_shape)
         return hidden_states.permute(0, 2, 1, 3)
 
@@ -171,7 +262,7 @@ class SegformerEfficientSelfAttention(nn.Module):
         width,
         output_attentions=False,
     ):
-        query_layer = self.transpose_for_scores(self.query(hidden_states))
+        query_layer = self.transpose_for_scores(self.query(hidden_states), self.num_attention_heads)
 
         if self.sr_ratio > 1:
             batch_size, seq_len, num_channels = hidden_states.shape
@@ -183,8 +274,10 @@ class SegformerEfficientSelfAttention(nn.Module):
             hidden_states = hidden_states.reshape(batch_size, num_channels, -1).permute(0, 2, 1)
             hidden_states = self.layer_norm(hidden_states)
 
-        key_layer = self.transpose_for_scores(self.key(hidden_states))
-        value_layer = self.transpose_for_scores(self.value(hidden_states))
+        key_layer = self.transpose_for_scores(self.key(hidden_states), self.num_kv_heads)
+        value_layer = self.transpose_for_scores(self.value(hidden_states), self.num_kv_heads)
+        #key_layer = key_layer.repeat(1, self.kv_repeats, 1, 1)
+        #value_layer = value_layer.repeat(1, self.kv_repeats, 1, 1)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
@@ -238,6 +331,8 @@ class SegformerEncoder(nn.Module):
                         num_attention_heads=config.num_attention_heads[i],
                         sequence_reduction_ratio=config.sr_ratios[i],
                         mlp_ratio=config.mlp_ratios[i],
+                        window_size=config.window_sizes[i],
+                        attn_method="window" if (j < config.depths[i] - 1 and config.use_window[i]) else "global",
                     )
                 )
             blocks.append(nn.ModuleList(layers))
@@ -291,14 +386,23 @@ class SegformerSelfOutput(nn.Module):
 
 
 class SegformerAttention(nn.Module):
-    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio):
+    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio, window_size, attn_method="global"):
         super().__init__()
-        self.self = SegformerEfficientSelfAttention(
-            config=config,
-            hidden_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            sequence_reduction_ratio=sequence_reduction_ratio,
-        )
+        if attn_method == "global":
+            self.self = SegformerEfficientSelfAttention(
+                config=config,
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                sequence_reduction_ratio=sequence_reduction_ratio,
+            )
+        else:
+            self.self = SegformerWindowSelfAttention(
+                config=config,
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                sequence_reduction_ratio=sequence_reduction_ratio,
+                window_size=window_size,
+            )
         self.output = SegformerSelfOutput(config, hidden_size=hidden_size)
         self.pruned_heads = set()
 
@@ -321,6 +425,7 @@ class SegformerAttention(nn.Module):
         self.pruned_heads = self.pruned_heads.union(heads)
 
     def forward(self, hidden_states, height, width, output_attentions=False):
+        print(f"In attention with shape {hidden_states.shape}.  Height {height}, width {width}.")
         self_outputs = self.self(hidden_states, height, width, output_attentions)
 
         attention_output = self.output(self_outputs[0], hidden_states)
@@ -364,7 +469,7 @@ class SegformerMixFFN(nn.Module):
 class SegformerLayer(nn.Module):
     """This corresponds to the Block class in the original implementation."""
 
-    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio, mlp_ratio):
+    def __init__(self, config, hidden_size, num_attention_heads, sequence_reduction_ratio, mlp_ratio, window_size, attn_method="global"):
         super().__init__()
         self.layer_norm_1 = nn.LayerNorm(hidden_size)
         self.attention = SegformerAttention(
@@ -372,6 +477,8 @@ class SegformerLayer(nn.Module):
             hidden_size=hidden_size,
             num_attention_heads=num_attention_heads,
             sequence_reduction_ratio=sequence_reduction_ratio,
+            window_size=window_size,
+            attn_method=attn_method,
         )
         self.layer_norm_2 = nn.LayerNorm(hidden_size)
         mlp_hidden_size = int(hidden_size * mlp_ratio)
