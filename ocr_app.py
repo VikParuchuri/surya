@@ -7,7 +7,7 @@ import pypdfium2
 import streamlit as st
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.ordering.processor import load_processor as load_order_processor

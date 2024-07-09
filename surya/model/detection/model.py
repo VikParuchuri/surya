@@ -19,6 +19,22 @@ from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
 
 from surya.model.detection.config import EfficientViTConfig
+from surya.model.detection.processor import SegformerImageProcessor
+from surya.settings import settings
+
+
+def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
+    config = EfficientViTConfig.from_pretrained(checkpoint)
+    model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
+    model = model.to(device)
+    model = model.eval()
+    print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
+    return model
+
+
+def load_processor(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT):
+    processor = SegformerImageProcessor.from_pretrained(checkpoint)
+    return processor
 
 
 def val2list(x: list or tuple or any, repeat_time=1):
@@ -338,6 +354,7 @@ class LiteMLA(nn.Module):
         return out.to(dtype)
 
     def forward(self, x):
+        # Shape is B, C, H, W
         B, _, H, W = x.shape
 
         # generate multi-scale q, k, v
@@ -347,6 +364,7 @@ class LiteMLA(nn.Module):
             multi_scale_qkv.append(op(qkv))
         multi_scale_qkv = torch.cat(multi_scale_qkv, dim=1)
         multi_scale_qkv = multi_scale_qkv.reshape(B, -1, 3 * self.dim, H * W).transpose(-1, -2)
+        # Shape for each is B, C, HW, head_dim
         q, k, v = multi_scale_qkv.chunk(3, dim=-1)
 
         # lightweight global attention
@@ -354,11 +372,7 @@ class LiteMLA(nn.Module):
         k = self.kernel_func(k)
         v = F.pad(v, (0, 1), mode="constant", value=1.)
 
-        if not torch.jit.is_scripting():
-            with torch.autocast(device_type=v.device.type, enabled=False):
-                out = self._attn(q, k, v)
-        else:
-            out = self._attn(q, k, v)
+        out = self._attn(q, k, v)
 
         # final projection
         out = out.transpose(-1, -2).reshape(B, -1, H, W)
@@ -715,7 +729,7 @@ class DecodeHead(EfficientViTPreTrainedModel):
         return logits
 
 
-class EfficientVitForSemanticSegmentation(EfficientViTPreTrainedModel):
+class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
     def __init__(self, config, **kwargs):
         super().__init__(config)
         self.vit = EfficientVitLarge(config)

@@ -1,10 +1,11 @@
 import argparse
 import copy
 import json
+import time
 from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.detection import batch_text_detection
 from surya.postprocessing.affinity import draw_lines_on_image
 from surya.postprocessing.heatmap import draw_polys_on_image
@@ -34,9 +35,13 @@ def main():
         images, names = load_from_file(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
+    start = time.time()
     predictions = batch_text_detection(images, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
+    end = time.time()
+    if args.debug:
+        print(f"Detection took {end - start} seconds")
 
     if args.images:
         for idx, (image, pred, name) in enumerate(zip(images, predictions, names)):
