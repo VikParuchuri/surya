@@ -57,48 +57,36 @@ def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
 
 
 def get_dynamic_thresholds(linemap, text_threshold, low_text, typical_top10_avg=0.7):
-    # Find average intensity of top 10% pixels
-    flat_map = linemap.ravel()  # ravel() is slightly faster than flatten()
-    top_10_count = int(len(flat_map) * 0.1)
-    avg_intensity = np.mean(np.partition(flat_map, -top_10_count)[-top_10_count:])
+    avg_intensity = np.percentile(linemap, 90)
+    scaling_factor = np.minimum(1, (avg_intensity / typical_top10_avg) ** 0.5)
 
-    # Adjust thresholds based on normalized intensity
-    scaling_factor = min(1, (avg_intensity / typical_top10_avg) ** 0.5)
+    low_text = np.clip(low_text * scaling_factor, 0.1, 0.6)
+    text_threshold = np.clip(text_threshold * scaling_factor, 0.15, 0.8)
 
-    low_text = max(low_text * scaling_factor, 0.1)
-    text_threshold = max(text_threshold * scaling_factor, 0.15)
-
-    low_text = min(low_text, 0.6)
-    text_threshold = min(text_threshold, 0.8)
     return text_threshold, low_text
 
 
 def fast_contours_cumsum(segmap):
+    # Nonzero is slow, so use this, then mod and div to get x, y
+    # x and y are flipped in the output because openCV uses (y, x) instead of (x, y)
     flat_indices = np.flatnonzero(segmap)
-    result = np.empty((len(flat_indices), 2), dtype=int)
+    return np.column_stack((flat_indices % segmap.shape[1], flat_indices // segmap.shape[1]))
 
-    # Coordinates are stored in (y, x) order for opencv
-    result[:, 0] = flat_indices % segmap.shape[1]
-    result[:, 1] = flat_indices // segmap.shape[1]
-
-    return result
 
 def detect_boxes(linemap, text_threshold, low_text):
     # From CRAFT - https://github.com/clovaai/CRAFT-pytorch
-    # prepare data
+    # Modified to return boxes and for speed, accuracy
     img_h, img_w = linemap.shape
 
     text_threshold, low_text = get_dynamic_thresholds(linemap, text_threshold, low_text)
 
-    ret, text_score = cv2.threshold(linemap, low_text, 1, cv2.THRESH_BINARY)
-
-    text_score_comb = np.clip(text_score, 0, 1).astype(np.uint8)
+    text_score_comb = (linemap > low_text).astype(np.uint8)
     label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb, connectivity=4)
 
     det = []
     confidences = []
     max_confidence = 0
-    mask = np.zeros_like(linemap, dtype=np.uint8)
+    segmap = np.zeros_like(labels, dtype=np.uint8)
 
     for k in range(1, label_count):
         # size filtering
@@ -106,15 +94,18 @@ def detect_boxes(linemap, text_threshold, low_text):
         if size < 10:
             continue
 
+        mask = labels == k
+        selected_linemap = linemap[mask]
+
         # thresholding
-        if np.max(linemap[labels == k]) < text_threshold:
+        if np.max(selected_linemap) < text_threshold:
             continue
 
         # make segmentation map
-        x, y = stats[k, cv2.CC_STAT_LEFT], stats[k, cv2.CC_STAT_TOP]
-        w, h = stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]
+        x, y, w, h = stats[k, [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT]]
+
         try:
-            niter = int(math.sqrt(size * min(w, h) / (w * h)) * 2)
+            niter = int(np.sqrt(size * min(w, h) / (w * h)) * 2)
         except ValueError:
             # Overflow when size is too large
             niter = 0
@@ -122,7 +113,8 @@ def detect_boxes(linemap, text_threshold, low_text):
         sx, sy = max(0, x - niter), max(0, y - niter)
         ex, ey = min(img_w, x + w + niter + 1), min(img_h, y + h + niter + 1)
 
-        segmap = (labels == k).astype(np.uint8) * 255
+        segmap.fill(0)
+        segmap[mask] = 255
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1 + niter, 1 + niter))
         segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
@@ -145,14 +137,8 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
-        mask.fill(0)
-        cv2.fillPoly(mask, [np.int32(box)], 1)
-
-        roi = np.where(mask == 1, linemap, 0)
-        confidence = np.mean(roi[roi != 0])
-
-        if confidence > max_confidence:
-            max_confidence = confidence
+        confidence = np.mean(selected_linemap[selected_linemap > low_text])
+        max_confidence = max(max_confidence, confidence)
 
         confidences.append(confidence)
         det.append(box)
