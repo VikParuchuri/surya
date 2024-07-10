@@ -25,7 +25,7 @@ from surya.settings import settings
 
 def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
     config = EfficientViTConfig.from_pretrained(checkpoint)
-    model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config)
+    model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
     model = model.to(device)
     model = model.eval()
     print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
@@ -493,15 +493,15 @@ def build_local_block(
 
 
 class Stem(nn.Sequential):
-    def __init__(self, in_chs, out_chs, depth, norm_layer, act_layer, block_type='default'):
+    def __init__(self, in_chs, out_chs, depth, stride, norm_layer, act_layer, block_type='default'):
         super().__init__()
-        self.stride = 2
+        self.stride = stride
 
         self.add_module(
             'in_conv',
             ConvNormAct(
                 in_chs, out_chs,
-                kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer,
+                kernel_size=stride + 1, stride=stride, norm_layer=norm_layer, act_layer=act_layer,
             )
         )
         stem_block = 0
@@ -598,8 +598,8 @@ class EfficientVitLarge(nn.Module):
         norm_layer = partial(norm_layer, eps=self.norm_eps)
 
         # input stem
-        self.stem = Stem(config.num_channels, config.widths[0], config.depths[0], norm_layer, act_layer, block_type='large')
-        stride = self.stem.stride
+        self.stem = Stem(config.num_channels, config.widths[0], config.depths[0], config.strides[0], norm_layer, act_layer, block_type='large')
+        stride = config.strides[0]
 
         # stages
         self.feature_info = []

@@ -68,7 +68,7 @@ Model weights will automatically download the first time you run surya.  Note th
 # Usage
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
-- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. For text detection, the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`.
 
 ## Interactive App
 

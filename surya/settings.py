@@ -43,12 +43,11 @@ class Settings(BaseSettings):
         if torch.backends.mps.is_available():
             return "mps"
 
-        # Does not work with mps
         return "cpu"
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det2"
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector_3"
     DETECTOR_MATH_MODEL_CHECKPOINT: str = "vikp/surya_det_math"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
@@ -75,7 +74,7 @@ class Settings(BaseSettings):
     RECOGNITION_MAX_LANGS: int = 4
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout2"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout4"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering

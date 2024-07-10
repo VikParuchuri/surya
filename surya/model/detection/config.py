@@ -15,6 +15,7 @@ class EfficientViTConfig(PretrainedConfig):
         head_dim=32,
         num_stages=4,
         depths=(1, 1, 1, 6, 6),
+        strides=(2, 2, 2, 2, 2),
         hidden_sizes=(32, 64, 160, 256),
         patch_size=(7, 7),
         hidden_dropout_prob=0.0,
@@ -36,6 +37,7 @@ class EfficientViTConfig(PretrainedConfig):
         self.num_channels = num_channels
         self.num_stages = num_stages
         self.depths = depths
+        self.strides = strides
         self.hidden_sizes = hidden_sizes
         self.patch_size = patch_size
         self.hidden_dropout_prob = hidden_dropout_prob
