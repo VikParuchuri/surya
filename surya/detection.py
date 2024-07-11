@@ -19,6 +19,8 @@ def get_batch_size():
     batch_size = settings.DETECTOR_BATCH_SIZE
     if batch_size is None:
         batch_size = 6
+        if settings.TORCH_DEVICE_MODEL == "mps":
+            batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
             batch_size = 24
     return batch_size

@@ -61,7 +61,6 @@ def get_dynamic_thresholds(linemap, text_threshold, low_text, typical_top10_avg=
     flat_map = linemap.ravel()
     top_10_count = int(len(flat_map) * 0.9)
     avg_intensity = np.mean(np.partition(flat_map, top_10_count)[top_10_count:])
-
     scaling_factor = np.clip(avg_intensity / typical_top10_avg, 0, 1) ** (1 / 2)
 
     low_text = np.clip(low_text * scaling_factor, 0.1, 0.6)

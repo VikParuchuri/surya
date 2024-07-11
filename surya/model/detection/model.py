@@ -23,7 +23,7 @@ from surya.model.detection.processor import SegformerImageProcessor
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_DETECTION, dtype=settings.MODEL_DTYPE_DETECTION):
+def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
     config = EfficientViTConfig.from_pretrained(checkpoint)
     model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
     model = model.to(device)
@@ -759,6 +759,9 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
         )
 
         logits = self.decode_head(encoder_hidden_states)
+
+        # Apply sigmoid to get 0-1 output
+        logits = torch.special.expit(logits)
 
         return SemanticSegmenterOutput(
             loss=None,
