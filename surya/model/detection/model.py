@@ -442,6 +442,7 @@ def build_local_block(
         in_channels: int,
         out_channels: int,
         stride: int,
+        kernel_size: int,
         expand_ratio: float,
         norm_layer: str,
         act_layer: str,
@@ -455,6 +456,7 @@ def build_local_block(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 stride=stride,
+                kernel_size=kernel_size,
                 use_bias=(True, False) if fewer_norm else False,
                 norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
                 act_layer=(act_layer, None),
@@ -464,6 +466,7 @@ def build_local_block(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 stride=stride,
+                kernel_size=kernel_size,
                 use_bias=(True, False) if fewer_norm else False,
                 norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
                 act_layer=(act_layer, None),
@@ -474,6 +477,7 @@ def build_local_block(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 stride=stride,
+                kernel_size=kernel_size,
                 expand_ratio=expand_ratio,
                 use_bias=(True, True, False) if fewer_norm else False,
                 norm_layer=(None, None, norm_layer) if fewer_norm else norm_layer,
@@ -484,6 +488,7 @@ def build_local_block(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 stride=stride,
+                kernel_size=kernel_size,
                 expand_ratio=expand_ratio,
                 use_bias=(True, False) if fewer_norm else False,
                 norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
@@ -511,6 +516,7 @@ class Stem(nn.Sequential):
                     in_channels=out_chs,
                     out_channels=out_chs,
                     stride=1,
+                    kernel_size=3,
                     expand_ratio=1,
                     norm_layer=norm_layer,
                     act_layer=act_layer,
@@ -527,6 +533,7 @@ class EfficientVitLargeStage(nn.Module):
             in_chs,
             out_chs,
             depth,
+            stride,
             norm_layer,
             act_layer,
             head_dim,
@@ -538,7 +545,8 @@ class EfficientVitLargeStage(nn.Module):
             build_local_block(
                 in_channels=in_chs,
                 out_channels=out_chs,
-                stride=2,
+                stride=stride,
+                kernel_size=stride + 1,
                 expand_ratio=24 if vit_stage else 16,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
@@ -569,6 +577,7 @@ class EfficientVitLargeStage(nn.Module):
                         in_channels=in_chs,
                         out_channels=out_chs,
                         stride=1,
+                        kernel_size=3,
                         expand_ratio=4,
                         norm_layer=norm_layer,
                         act_layer=act_layer,
@@ -605,18 +614,19 @@ class EfficientVitLarge(nn.Module):
         self.feature_info = []
         self.stages = nn.Sequential()
         in_channels = config.widths[0]
-        for i, (w, d) in enumerate(zip(config.widths[1:], config.depths[1:])):
+        for i, (w, d, s) in enumerate(zip(config.widths[1:], config.depths[1:], config.strides[1:])):
             self.stages.append(EfficientVitLargeStage(
                 in_channels,
                 w,
                 depth=d,
+                stride=s,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 head_dim=config.head_dim,
                 vit_stage=i >= 3,
                 fewer_norm=i >= 2,
             ))
-            stride *= 2
+            stride *= s
             in_channels = w
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
 
@@ -740,8 +750,7 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
 
     def forward(
         self,
-        pixel_values: torch.FloatTensor,
-        labels: Optional[torch.LongTensor] = None
+        pixel_values: torch.FloatTensor
     ) -> Union[Tuple, SemanticSegmenterOutput]:
 
         # Pixel values should be B,C,H,W
@@ -751,28 +760,8 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
 
         logits = self.decode_head(encoder_hidden_states)
 
-        loss = None
-        if labels is not None:
-            # upsample logits to the images' original size if needed
-            if logits.shape[-2:] != labels.shape[-2:]:
-                upsampled_logits = nn.functional.interpolate(
-                    logits, size=labels.shape[-2:], mode="bilinear", align_corners=False
-                )
-            valid_mask = ((labels >= 0) & (labels != self.config.semantic_loss_ignore_index)).float()
-
-            # Loss is penalized more for missing text than for missing blank space
-            loss_fct = BCEWithLogitsLoss(reduction='none', )
-
-            assert upsampled_logits.shape == labels.shape
-            loss = loss_fct(upsampled_logits, labels.float())
-            loss = (loss * valid_mask).mean()
-
-
-        # Apply sigmoid to get 0-1 output
-        logits = torch.special.expit(logits)
-
         return SemanticSegmenterOutput(
-            loss=loss,
+            loss=None,
             logits=logits,
             hidden_states=encoder_hidden_states
         )
