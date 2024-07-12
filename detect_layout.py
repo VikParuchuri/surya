@@ -6,7 +6,7 @@ from collections import defaultdict
 from surya.detection import batch_text_detection
 from surya.input.load import load_from_folder, load_from_file
 from surya.layout import batch_layout_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os

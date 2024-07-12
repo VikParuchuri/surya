@@ -1,5 +1,3 @@
-import os
-import argparse
 import io
 from typing import List
 
@@ -7,7 +5,7 @@ import pypdfium2
 import streamlit as st
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.ordering.processor import load_processor as load_order_processor
@@ -22,18 +20,9 @@ from surya.input.langs import replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult
 from surya.settings import settings
 
-parser = argparse.ArgumentParser(description="Run OCR on an image or PDF.")
-parser.add_argument("--math", action="store_true", help="Use math model for detection", default=False)
-
-try:
-    args = parser.parse_args()
-except SystemExit as e:
-    print(f"Error parsing arguments: {e}")
-    os._exit(e.code)
-
 @st.cache_resource()
 def load_det_cached():
-    checkpoint = settings.DETECTOR_MATH_MODEL_CHECKPOINT if args.math else settings.DETECTOR_MODEL_CHECKPOINT
+    checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
     return load_model(checkpoint=checkpoint), load_processor(checkpoint=checkpoint)
 
 

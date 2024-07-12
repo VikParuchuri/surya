@@ -68,7 +68,7 @@ Model weights will automatically download the first time you run surya.  Note th
 # Usage
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
-- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. For text detection, the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`.
 
 ## Interactive App
 
@@ -78,8 +78,6 @@ I've included a streamlit app that lets you interactively try Surya on images or
 pip install streamlit
 surya_gui
 ```
-
-Pass the `--math` command line argument to use the math text detection model instead of the default model.  This will detect math better, but will be worse at everything else.
 
 ## OCR (text recognition)
 
@@ -151,7 +149,6 @@ surya_detect DATA_PATH --images
 - `--images` will save images of the pages and detected text lines (optional)
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
-- `--math` uses a specialized math detection model instead of the default model.  This will be better at math, but worse at everything else.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -173,7 +170,7 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 ```python
 from PIL import Image
 from surya.detection import batch_text_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 
 image = Image.open(IMAGE_PATH)
 model, processor = load_model(), load_processor()
@@ -215,7 +212,7 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
@@ -455,6 +452,8 @@ Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a m
 This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
+- [EfficientViT](https://github.com/mit-han-lab/efficientvit) from MIT
+- [timm](https://github.com/huggingface/pytorch-image-models) from Ross Wightman
 - [Donut](https://github.com/clovaai/donut) from Naver
 - [transformers](https://github.com/huggingface/transformers) from huggingface
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
