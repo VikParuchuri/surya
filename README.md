@@ -79,8 +79,6 @@ pip install streamlit
 surya_gui
 ```
 
-Pass the `--math` command line argument to use the math text detection model instead of the default model.  This will detect math better, but will be worse at everything else.
-
 ## OCR (text recognition)
 
 This command will write out a json file with the detected text and bboxes:
@@ -151,7 +149,6 @@ surya_detect DATA_PATH --images
 - `--images` will save images of the pages and detected text lines (optional)
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
-- `--math` uses a specialized math detection model instead of the default model.  This will be better at math, but worse at everything else.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 

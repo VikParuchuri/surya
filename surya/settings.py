@@ -34,8 +34,7 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/line_detector_3"
-    DETECTOR_MATH_MODEL_CHECKPOINT: str = "vikp/surya_det_math"
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det3"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)

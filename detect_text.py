@@ -21,10 +21,9 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
-    parser.add_argument("--math", action="store_true", help="Use math model for detection", default=False)
     args = parser.parse_args()
 
-    checkpoint = settings.DETECTOR_MATH_MODEL_CHECKPOINT if args.math else settings.DETECTOR_MODEL_CHECKPOINT
+    checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
     model = load_model(checkpoint=checkpoint)
     processor = load_processor(checkpoint=checkpoint)
 
