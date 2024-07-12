@@ -63,7 +63,7 @@ Install with:
 pip install surya-ocr
 ```
 
-Model weights will automatically download the first time you run surya.  Note that this does not work with the latest version of transformers `4.37+` [yet](https://github.com/huggingface/transformers/issues/28846#issuecomment-1926109135), so you will need to keep `4.36.2`, which is installed with surya.
+Model weights will automatically download the first time you run surya.
 
 # Usage
 
@@ -163,7 +163,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `440MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `36`, which will use about 16GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `6`.
 
 ### From python
 
@@ -204,7 +204,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `400MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `36`, which will use about 16GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `6`.
 
 ### From python
 
@@ -331,16 +331,16 @@ For Google Cloud, I aligned the output from Google Cloud with the ground truth. 
 
 ![Benchmark chart](static/images/benchmark_chart_small.png)
 
-| Model     |   Time (s) |   Time per page (s) |   precision |   recall |
+| Model     | Time (s)   | Time per page (s)   | precision   |   recall |
 |-----------|------------|---------------------|-------------|----------|
-| surya     |    52.6892 |            0.205817 |    0.844426 | 0.937818 |
-| tesseract |    74.4546 |            0.290838 |    0.631498 | 0.997694 |
+| surya     | 50.2099    | 0.196133            | 0.821061    | 0.956556 |
+| tesseract | 74.4546    | 0.290838            | 0.631498    | 0.997694 |
 
 
-Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A6000 GPU, and a 32 core CPU.  This was the resource usage:
+Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A10 GPU, and a 32 core CPU.  This was the resource usage:
 
 - tesseract - 32 CPU cores, or 8 workers using 4 cores each
-- surya - 32 batch size, for 9GB VRAM usage
+- surya - 36 batch size, for 16GB VRAM usage
 
 **Methodology**
 
@@ -359,14 +359,14 @@ Then we calculate precision and recall for the whole dataset.
 
 ![Benchmark chart](static/images/benchmark_layout_chart.png)
 
-| Layout Type   |   precision |   recall |
-|---------------|-------------|----------|
-| Image         |        0.95 |     0.99 |
-| Table         |        0.95 |     0.96 |
-| Text          |        0.89 |     0.95 |
-| Title         |        0.92 |     0.89 |
+| Layout Type | precision | recall |
+| ----------- | --------- | ------ |
+| Image       | 0.97      | 0.96   |
+| Table       | 0.99      | 0.99   |
+| Text        | 0.9       | 0.97   |
+| Title       | 0.94      | 0.88   |
 
-Time per image - .79 seconds on GPU (A6000).
+Time per image - .4 seconds on GPU (A10).
 
 **Methodology**
 
@@ -443,7 +443,7 @@ python benchmark/ordering.py
 
 # Training
 
-Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
+Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified efficientvit architecture for semantic segmentation.
 
 Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a modified donut model (GQA, MoE layer, UTF-16 decoding, layer config changes).
 

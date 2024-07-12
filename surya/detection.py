@@ -22,7 +22,7 @@ def get_batch_size():
         if settings.TORCH_DEVICE_MODEL == "mps":
             batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 24
+            batch_size = 36
     return batch_size
 
 
