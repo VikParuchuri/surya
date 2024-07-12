@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     RECOGNITION_MAX_LANGS: int = 4
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout4"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering

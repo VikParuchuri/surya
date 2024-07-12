@@ -1,10 +1,10 @@
-""" EfficientViT (by MIT Song Han's Lab)
+"""
+This is an implementation of efficientvit, with some modifications (decode head, etc).
 
-Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computation visual recognition`
-    - https://arxiv.org/abs/2205.14756
+Original paper at https://arxiv.org/abs/2205.14756
 
-Code adapated from timm, https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
-Original code (that timm adapated from) at https://github.com/mit-han-lab/efficientvit
+Code adapted from timm, https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
+Original code (that timm adapted from) at https://github.com/mit-han-lab/efficientvit
 """
 
 from typing import Optional, Union, Tuple
@@ -14,7 +14,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch.nn import BCEWithLogitsLoss
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
 
@@ -95,7 +94,6 @@ class ConvNormAct(nn.Module):
         self.act = act_layer(inplace=True) if act_layer is not None else nn.Identity()
 
     def forward(self, x):
-        x = self.dropout(x)
         x = self.conv(x)
         x = self.norm(x)
         x = self.act(x)
@@ -731,7 +729,6 @@ class DecodeHead(EfficientViTPreTrainedModel):
         hidden_states = self.linear_fuse(torch.cat(all_hidden_states[::-1], dim=1))
         hidden_states = self.batch_norm(hidden_states)
         hidden_states = self.activation(hidden_states)
-        hidden_states = self.dropout(hidden_states)
 
         # logits are of shape (batch_size, num_labels, height/4, width/4)
         logits = self.classifier(hidden_states)

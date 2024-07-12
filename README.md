@@ -452,6 +452,8 @@ Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a m
 This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
+- [EfficientViT](https://github.com/mit-han-lab/efficientvit) from MIT
+- [timm](https://github.com/huggingface/pytorch-image-models) from Ross Wightman
 - [Donut](https://github.com/clovaai/donut) from Naver
 - [transformers](https://github.com/huggingface/transformers) from huggingface
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
