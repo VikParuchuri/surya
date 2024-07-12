@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 
-from surya.model.detection.segformer import SegformerForRegressionMask
+from surya.model.detection.model import EfficientViTForSemanticSegmentation
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
 from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
@@ -19,12 +19,14 @@ def get_batch_size():
     batch_size = settings.DETECTOR_BATCH_SIZE
     if batch_size is None:
         batch_size = 6
+        if settings.TORCH_DEVICE_MODEL == "mps":
+            batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 24
+            batch_size = 36
     return batch_size
 
 
-def batch_detection(images: List, model: SegformerForRegressionMask, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()

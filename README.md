@@ -63,12 +63,12 @@ Install with:
 pip install surya-ocr
 ```
 
-Model weights will automatically download the first time you run surya.  Note that this does not work with the latest version of transformers `4.37+` [yet](https://github.com/huggingface/transformers/issues/28846#issuecomment-1926109135), so you will need to keep `4.36.2`, which is installed with surya.
+Model weights will automatically download the first time you run surya.
 
 # Usage
 
 - Inspect the settings in `surya/settings.py`.  You can override any settings with environment variables.
-- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`. For text detection, the `mps` device has a bug (on the [Apple side](https://github.com/pytorch/pytorch/issues/84936)) that may prevent it from working properly.
+- Your torch device will be automatically detected, but you can override this.  For example, `TORCH_DEVICE=cuda`.
 
 ## Interactive App
 
@@ -78,8 +78,6 @@ I've included a streamlit app that lets you interactively try Surya on images or
 pip install streamlit
 surya_gui
 ```
-
-Pass the `--math` command line argument to use the math text detection model instead of the default model.  This will detect math better, but will be worse at everything else.
 
 ## OCR (text recognition)
 
@@ -151,7 +149,6 @@ surya_detect DATA_PATH --images
 - `--images` will save images of the pages and detected text lines (optional)
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
 - `--results_dir` specifies the directory to save results to instead of the default
-- `--math` uses a specialized math detection model instead of the default model.  This will be better at math, but worse at everything else.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -166,14 +163,14 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `440MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `36`, which will use about 16GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `6`.
 
 ### From python
 
 ```python
 from PIL import Image
 from surya.detection import batch_text_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 
 image = Image.open(IMAGE_PATH)
 model, processor = load_model(), load_processor()
@@ -207,7 +204,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `280MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 9GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `2`.
+Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `400MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `36`, which will use about 16GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `6`.
 
 ### From python
 
@@ -215,7 +212,7 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
@@ -334,16 +331,16 @@ For Google Cloud, I aligned the output from Google Cloud with the ground truth. 
 
 ![Benchmark chart](static/images/benchmark_chart_small.png)
 
-| Model     |   Time (s) |   Time per page (s) |   precision |   recall |
+| Model     | Time (s)   | Time per page (s)   | precision   |   recall |
 |-----------|------------|---------------------|-------------|----------|
-| surya     |    52.6892 |            0.205817 |    0.844426 | 0.937818 |
-| tesseract |    74.4546 |            0.290838 |    0.631498 | 0.997694 |
+| surya     | 50.2099    | 0.196133            | 0.821061    | 0.956556 |
+| tesseract | 74.4546    | 0.290838            | 0.631498    | 0.997694 |
 
 
-Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A6000 GPU, and a 32 core CPU.  This was the resource usage:
+Tesseract is CPU-based, and surya is CPU or GPU.  I ran the benchmarks on a system with an A10 GPU, and a 32 core CPU.  This was the resource usage:
 
 - tesseract - 32 CPU cores, or 8 workers using 4 cores each
-- surya - 32 batch size, for 9GB VRAM usage
+- surya - 36 batch size, for 16GB VRAM usage
 
 **Methodology**
 
@@ -362,14 +359,14 @@ Then we calculate precision and recall for the whole dataset.
 
 ![Benchmark chart](static/images/benchmark_layout_chart.png)
 
-| Layout Type   |   precision |   recall |
-|---------------|-------------|----------|
-| Image         |        0.95 |     0.99 |
-| Table         |        0.95 |     0.96 |
-| Text          |        0.89 |     0.95 |
-| Title         |        0.92 |     0.89 |
+| Layout Type | precision | recall |
+| ----------- | --------- | ------ |
+| Image       | 0.97      | 0.96   |
+| Table       | 0.99      | 0.99   |
+| Text        | 0.9       | 0.97   |
+| Title       | 0.94      | 0.88   |
 
-Time per image - .79 seconds on GPU (A6000).
+Time per image - .4 seconds on GPU (A10).
 
 **Methodology**
 
@@ -446,7 +443,7 @@ python benchmark/ordering.py
 
 # Training
 
-Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified segformer architecture that reduces inference RAM requirements.
+Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified efficientvit architecture for semantic segmentation.
 
 Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a modified donut model (GQA, MoE layer, UTF-16 decoding, layer config changes).
 
@@ -455,6 +452,8 @@ Text recognition was trained on 4x A6000s for 2 weeks.  It was trained using a m
 This work would not have been possible without amazing open source AI work:
 
 - [Segformer](https://arxiv.org/pdf/2105.15203.pdf) from NVIDIA
+- [EfficientViT](https://github.com/mit-han-lab/efficientvit) from MIT
+- [timm](https://github.com/huggingface/pytorch-image-models) from Ross Wightman
 - [Donut](https://github.com/clovaai/donut) from Naver
 - [transformers](https://github.com/huggingface/transformers) from huggingface
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model

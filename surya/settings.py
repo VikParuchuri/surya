@@ -32,25 +32,9 @@ class Settings(BaseSettings):
 
         return "cpu"
 
-    @computed_field
-    def TORCH_DEVICE_DETECTION(self) -> str:
-        if self.TORCH_DEVICE is not None:
-            # Does not work with mps
-            if "mps" in self.TORCH_DEVICE:
-                return "cpu"
-
-            return self.TORCH_DEVICE
-
-        if torch.cuda.is_available():
-            return "cuda"
-
-        # Does not work with mps
-        return "cpu"
-
     # Text detection
-    DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det2"
-    DETECTOR_MATH_MODEL_CHECKPOINT: str = "vikp/surya_det_math"
+    DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det3"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
@@ -76,7 +60,7 @@ class Settings(BaseSettings):
     RECOGNITION_MAX_LANGS: int = 4
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout2"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering
@@ -93,11 +77,6 @@ class Settings(BaseSettings):
     @property
     def MODEL_DTYPE(self) -> torch.dtype:
         return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
-
-    @computed_field
-    @property
-    def MODEL_DTYPE_DETECTION(self) -> torch.dtype:
-        return torch.float32 if self.TORCH_DEVICE_DETECTION == "cpu" else torch.float16
 
     class Config:
         env_file = find_dotenv("local.env")

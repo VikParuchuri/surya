@@ -5,7 +5,7 @@ import json
 
 from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
-from surya.model.detection.segformer import load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.layout import batch_layout_detection
 from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
