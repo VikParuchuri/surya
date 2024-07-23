@@ -26,6 +26,9 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
 
+    if len(images) == 0:
+        return [], []
+
     for l in languages:
         assert len(l) <= settings.RECOGNITION_MAX_LANGS, f"OCR only supports up to {settings.RECOGNITION_MAX_LANGS} languages per image, you passed {l}."
 
