@@ -113,17 +113,21 @@ def detect_boxes(linemap, text_threshold, low_text):
             # Overflow when size is too large
             niter = 0
 
+        buffer = 1
         sx, sy = max(0, x - niter), max(0, y - niter)
-        ex, ey = min(img_w, x + w + niter + 1), min(img_h, y + h + niter + 1)
+        ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
         segmap.fill(0)
-        segmap[mask] = 255
+        segmap[mask] = 1
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1 + niter, 1 + niter))
-        segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
+        ksize = buffer + niter
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(ksize, ksize))
+
+        selected_segmap = segmap[0:ey, 0:ex]
+        selected_segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
 
         # make box
-        np_contours = fast_contours_cumsum(segmap)
+        np_contours = fast_contours_cumsum(selected_segmap)
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
 
