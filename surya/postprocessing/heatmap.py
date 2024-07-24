@@ -91,10 +91,15 @@ def poly_from_region(dilation_map, bbox):
     sx, sy = max(0, bbox[0] - niter), max(0, bbox[1] - niter)
     ex, ey = min(width, bbox[2] + niter + 1), min(height, bbox[3] + niter + 1)
 
+    poly_width = ex - sx
+    poly_height = ey - sy
+    if poly_height == 0 or poly_width == 0:
+        return None
+
     ksize = 1 + niter
     dilated = F.max_pool2d(dilation_map[sy:ey, sx:ex].unsqueeze(0), ksize, stride=1,
                            padding=ksize // 2).squeeze(0)
-    dilation_map[sy:(sy + dilated.shape[0]), sx:(sx + dilated.shape[1])] = dilated
+    dilation_map[sy:ey, sx:ex] = dilated[:poly_height, :poly_width]
 
     # Flip to get to x,y order like bboxes
     selected_indices = torch.nonzero(dilation_map).flip(1).cpu().numpy()
@@ -135,8 +140,8 @@ def connected_component_polygons(img: torch.Tensor, low_text, text_threshold, it
     for batch_item in range(batch):
         batch_polys = []
         for inf_type in range(label_count):
-            seg_map = out[batch, inf_type]
-            linemap = img[batch, inf_type]
+            seg_map = out[batch_item, inf_type]
+            linemap = img[batch_item, inf_type]
             dilation_map = torch.zeros_like(linemap, dtype=torch.uint8)
             unique_labels = torch.unique(seg_map)
             polys = []
@@ -165,8 +170,11 @@ def connected_component_polygons(img: torch.Tensor, low_text, text_threshold, it
                 dilation_map.fill_(0)
                 dilation_map[label_mask] = 1
 
-                poly = poly_from_region(dilation_map, bbox)
-                confidence = torch.mean(selected_linemap[selected_linemap > low_text]).item().cpu()
+                #poly = poly_from_region(dilation_map, bbox)
+                poly = [[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]]]
+                if poly is None:
+                    continue
+                confidence = torch.mean(selected_linemap[selected_linemap > low_text]).item()
                 max_confidence = max(max_confidence, confidence)
                 polys.append(PolygonBox(polygon=poly, confidence=confidence))
             batch_polys.append(polys)
@@ -177,7 +185,7 @@ def connected_component_polygons(img: torch.Tensor, low_text, text_threshold, it
         for b in all_polys:
             for polys in b:
                 for p in polys:
-                    p[1] /= max_confidence
+                    p.confidence /= max_confidence
     return all_polys
 
 
@@ -188,12 +196,13 @@ def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[Pol
     if low_text is None:
         low_text = settings.DETECTOR_BLANK_THRESHOLD
 
+    text_threshold, low_text = get_dynamic_thresholds(textmap, text_threshold, low_text)
+
     no_batch = False
-    if textmap.shape == 2:
+    if len(textmap.shape) == 2:
         no_batch = True
         textmap = textmap.unsqueeze(0).unsqueeze(0)
 
-    text_threshold, low_text = get_dynamic_thresholds(textmap, text_threshold, low_text)
     polygons = connected_component_polygons(textmap, low_text, text_threshold)
     if no_batch:
         return polygons[0][0]

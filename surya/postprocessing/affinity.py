@@ -36,7 +36,7 @@ def get_detected_lines_sobel(image, vertical=True):
 
 def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False) -> List[ColumnLine]:
     assert not (vertical and horizontal)
-    new_image = image.astype(np.float32) * 255  # Convert to 0-255 range
+    new_image = image.numpy().astype(np.float32) * 255  # Convert to 0-255 range
     if vertical or horizontal:
         new_image = get_detected_lines_sobel(new_image, vertical)
     new_image = new_image.astype(np.uint8)
