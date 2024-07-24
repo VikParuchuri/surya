@@ -1,6 +1,8 @@
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
+
+import torch
 from PIL import Image
 import numpy as np
 
@@ -10,8 +12,8 @@ from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
 from surya.settings import settings
 
 
-def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[np.ndarray], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
-    logits = np.stack(heatmaps, axis=0)
+def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[torch.Tensor], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
+    logits = torch.stack(heatmaps, dim=0)
     vertical_line_bboxes = [line for line in detection_result.vertical_lines]
     line_bboxes = detection_result.bboxes
 
@@ -160,16 +162,20 @@ def get_regions(heatmaps: List[np.ndarray], orig_size, id2label, segment_assignm
     return bboxes
 
 
-def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None) -> LayoutResult:
-    logits = np.stack(heatmaps, axis=0)
-    segment_assignment = logits.argmax(axis=0)
+def parallel_get_regions(heatmaps: List[torch.Tensor], orig_size, id2label, detection_results=None, debug=False) -> LayoutResult:
+    logits = torch.stack(heatmaps, dim=0)
+    segment_assignment = logits.argmax(dim=0)
+
     if detection_results is not None:
         bboxes = get_regions_from_detection_result(detection_results, heatmaps, orig_size, id2label,
                                                    segment_assignment)
     else:
         bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
 
-    segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
+    segmentation_img = None
+    if debug:
+        segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
+
 
     result = LayoutResult(
         bboxes=bboxes,
