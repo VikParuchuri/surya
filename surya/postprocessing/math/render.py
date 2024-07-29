@@ -1,6 +1,7 @@
-from playwright.sync_api import sync_playwright
-from PIL import Image
 import io
+
+from PIL import Image
+from playwright.sync_api import sync_playwright
 
 
 def latex_to_pil(latex_code, target_width, target_height, fontsize=18):

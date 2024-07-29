@@ -1,14 +1,18 @@
 import copy
-from typing import Optional, List, Union, Tuple
-
-from transformers import MBartForCausalLM, MBartConfig
-from torch import nn
-from transformers.activations import ACT2FN
-from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions, BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.mbart.modeling_mbart import MBartPreTrainedModel, MBartDecoder
-from surya.model.recognition.config import MBartMoEConfig
-import torch
 import math
+from typing import List, Optional, Tuple, Union
+
+import torch
+from torch import nn
+from transformers import MBartConfig, MBartForCausalLM
+from transformers.activations import ACT2FN
+from transformers.modeling_outputs import (
+    BaseModelOutputWithPastAndCrossAttentions,
+    CausalLMOutputWithCrossAttentions,
+)
+from transformers.models.mbart.modeling_mbart import MBartDecoder, MBartPreTrainedModel
+
+from surya.model.recognition.config import MBartMoEConfig
 
 
 class MBartLearnedPositionalEmbedding(nn.Embedding):

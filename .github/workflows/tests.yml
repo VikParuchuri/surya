@@ -13,7 +13,7 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: "3.11"
       - name: Install apt dependencies
         run: |
           sudo apt-get update
@@ -24,6 +24,9 @@ jobs:
           poetry install
           poetry remove torch
           poetry run pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run ruff lint for checking code style
+        run: |
+          poetry run ruff check --select I .
       - name: Run detection benchmark test
         run: |
           poetry run python benchmark/detection.py --max 2
@@ -40,6 +43,3 @@ jobs:
         run: |
           poetry run python benchmark/ordering.py --max 5
           poetry run python scripts/verify_benchmark_scores.py results/benchmark/order_bench/results.json --bench_type ordering
-        
-          
-

@@ -1,14 +1,19 @@
-from torch import nn
-import torch
-from typing import Optional, Tuple, Union
 import collections
 import math
+from typing import Optional, Tuple, Union
 
+import torch
+from torch import nn
 from transformers import DonutSwinPreTrainedModel
-from transformers.models.donut.modeling_donut_swin import DonutSwinPatchEmbeddings, DonutSwinEmbeddings, DonutSwinModel, \
-    DonutSwinEncoder
+from transformers.models.donut.modeling_donut_swin import (
+    DonutSwinEmbeddings,
+    DonutSwinEncoder,
+    DonutSwinModel,
+    DonutSwinPatchEmbeddings,
+)
 
 from surya.model.ordering.config import VariableDonutSwinConfig
+
 
 class VariableDonutSwinEmbeddings(DonutSwinEmbeddings):
     """

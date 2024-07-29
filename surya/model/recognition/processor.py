@@ -1,14 +1,21 @@
-from typing import Dict, Union, Optional, List, Iterable
+from typing import Dict, Iterable, List, Optional, Union
 
 import cv2
+import numpy as np
+import PIL
+from PIL import Image
 from torch import TensorType
 from transformers import DonutImageProcessor, DonutProcessor
 from transformers.image_processing_utils import BatchFeature
-from transformers.image_transforms import pad, normalize
-from transformers.image_utils import PILImageResampling, ImageInput, ChannelDimension, make_list_of_images, get_image_size
-import numpy as np
-from PIL import Image
-import PIL
+from transformers.image_transforms import normalize, pad
+from transformers.image_utils import (
+    ChannelDimension,
+    ImageInput,
+    PILImageResampling,
+    get_image_size,
+    make_list_of_images,
+)
+
 from surya.model.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
 

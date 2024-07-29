@@ -7,13 +7,12 @@ Code adapted from timm, https://github.com/huggingface/pytorch-image-models/blob
 Original code (that timm adapted from) at https://github.com/mit-han-lab/efficientvit
 """
 
-from typing import Optional, Union, Tuple
 from functools import partial
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
 

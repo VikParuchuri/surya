@@ -1,3 +1,5 @@
+import os
+from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
 
 import numpy as np
@@ -5,13 +7,11 @@ import pytesseract
 from pytesseract import Output
 from tqdm import tqdm
 
-from surya.input.processing import slice_bboxes_from_image
-from surya.settings import settings
-import os
-from concurrent.futures import ProcessPoolExecutor
 from surya.detection import get_batch_size as get_det_batch_size
-from surya.recognition import get_batch_size as get_rec_batch_size
+from surya.input.processing import slice_bboxes_from_image
 from surya.languages import CODE_TO_LANGUAGE
+from surya.recognition import get_batch_size as get_rec_batch_size
+from surya.settings import settings
 
 
 def surya_lang_to_tesseract(code: str) -> Optional[str]:

@@ -1,14 +1,15 @@
 from typing import List
+
+import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
+from tqdm import tqdm
 
 from surya.input.processing import convert_if_not_rgb
-from surya.postprocessing.math.latex import fix_math, contains_math
+from surya.postprocessing.math.latex import contains_math, fix_math
 from surya.postprocessing.text import truncate_repetitions
 from surya.settings import settings
-from tqdm import tqdm
-import numpy as np
-import torch.nn.functional as F
 
 
 def get_batch_size():

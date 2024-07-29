@@ -1,8 +1,8 @@
-from typing import Optional, Union, Tuple, List
+from typing import List, Optional, Tuple, Union
 
 import torch
 from transformers import VisionEncoderDecoderModel
-from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
+from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 
 class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel):

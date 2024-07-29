@@ -1,13 +1,14 @@
-import os
 import argparse
 import copy
 import json
+import os
 from collections import defaultdict
 
 from surya.detection import batch_text_detection
-from surya.input.load import load_from_folder, load_from_file
+from surya.input.load import load_from_file, load_from_folder
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.detection.model import load_model as load_det_model
+from surya.model.detection.model import load_processor as load_det_processor
 from surya.model.ordering.model import load_model
 from surya.model.ordering.processor import load_processor
 from surya.ordering import batch_ordering

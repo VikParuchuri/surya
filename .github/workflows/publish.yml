@@ -11,10 +11,10 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: "3.11"
       - name: Install python dependencies
         run: |
-          pip install poetry
+          pip install poetry==1.8.3
           poetry install
       - name: Build package
         run: |

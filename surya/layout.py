@@ -1,12 +1,17 @@
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
-from PIL import Image
+
 import numpy as np
+from PIL import Image
 
 from surya.detection import batch_detection
-from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
-from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
+from surya.postprocessing.heatmap import (
+    get_and_clean_boxes,
+    get_detected_boxes,
+    keep_largest_boxes,
+)
+from surya.schema import LayoutBox, LayoutResult, TextDetectionResult
 from surya.settings import settings
 
 

@@ -1,10 +1,21 @@
-from torch import nn
-import torch
 from typing import Optional, Tuple, Union
 
-from transformers.models.donut.modeling_donut_swin import DonutSwinPatchEmbeddings, DonutSwinEmbeddings, DonutSwinModel, \
-    DonutSwinEncoder, DonutSwinModelOutput, DonutSwinEncoderOutput, DonutSwinAttention, DonutSwinDropPath, \
-    DonutSwinIntermediate, DonutSwinOutput, window_partition, window_reverse
+import torch
+from torch import nn
+from transformers.models.donut.modeling_donut_swin import (
+    DonutSwinAttention,
+    DonutSwinDropPath,
+    DonutSwinEmbeddings,
+    DonutSwinEncoder,
+    DonutSwinEncoderOutput,
+    DonutSwinIntermediate,
+    DonutSwinModel,
+    DonutSwinModelOutput,
+    DonutSwinOutput,
+    DonutSwinPatchEmbeddings,
+    window_partition,
+    window_reverse,
+)
 
 from surya.model.recognition.config import VariableDonutSwinConfig
 

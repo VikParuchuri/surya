@@ -1,8 +1,9 @@
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from itertools import repeat
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+
 
 def intersection_area(box1, box2):
     x_left = max(box1[0], box2[0])

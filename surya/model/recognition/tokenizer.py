@@ -1,9 +1,11 @@
 from itertools import chain
 from typing import List, Union
-from transformers import ByT5Tokenizer
+
 import numpy as np
 import torch
-from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
+from transformers import ByT5Tokenizer
+
+from surya.model.recognition.config import LANGUAGE_MAP, TOKEN_OFFSET, TOTAL_TOKENS
 
 
 def text_to_utf16_numbers(text):

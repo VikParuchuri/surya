@@ -1,10 +1,11 @@
-import PIL
-
-from surya.input.processing import open_pdf, get_page_images
-import os
-import filetype
-from PIL import Image
 import json
+import os
+
+import filetype
+import PIL
+from PIL import Image
+
+from surya.input.processing import get_page_images, open_pdf
 
 
 def get_name_from_path(path):

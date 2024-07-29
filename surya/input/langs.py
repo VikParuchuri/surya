@@ -1,5 +1,6 @@
 from typing import List
-from surya.languages import LANGUAGE_TO_CODE, CODE_TO_LANGUAGE
+
+from surya.languages import CODE_TO_LANGUAGE, LANGUAGE_TO_CODE
 
 
 def replace_lang_with_code(langs: List[str]):
