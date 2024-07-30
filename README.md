@@ -115,13 +115,13 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 ```python
 from PIL import Image
 from surya.ocr import run_ocr
-from surya.model.detection import segformer
+from surya.model.detection import model
 from surya.model.recognition.model import load_model
 from surya.model.recognition.processor import load_processor
 
 image = Image.open(IMAGE_PATH)
 langs = ["en"] # Replace with your languages
-det_processor, det_model = segformer.load_processor(), segformer.load_model()
+det_processor, det_model = model.load_processor(), model.load_model()
 rec_model, rec_processor = load_model(), load_processor()
 
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
