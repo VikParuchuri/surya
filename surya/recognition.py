@@ -22,6 +22,20 @@ def get_batch_size():
     return batch_size
 
 
+def get_encoder_batch_size():
+    batch_size = settings.RECOGNITION_BATCH_SIZE
+    if batch_size is not None:
+        batch_size = int(batch_size/4)
+        batch_size = max(1, batch_size)
+    else:
+        batch_size = 8
+        if settings.TORCH_DEVICE_MODEL == "mps":
+            batch_size = get_batch_size()
+        if settings.TORCH_DEVICE_MODEL == "cuda":
+            batch_size = get_batch_size()
+    return batch_size
+
+
 def batch_recognition(images: List, languages: List[List[str]], model, processor, batch_size=None):
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
@@ -59,7 +73,12 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
 
         with torch.no_grad(): # inference_mode doesn't work with torch.compile
             # Run post-prefill tokens
-            encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
+            encoder_hidden_states = []
+            encoder_batch_size = get_encoder_batch_size()
+            for i in range(0, len(batch_pixel_values), encoder_batch_size):
+                pixel_batch = batch_pixel_values[i:i+encoder_batch_size]
+                encoder_hidden_states.append(model.encoder(pixel_values=pixel_batch).last_hidden_state)
+            encoder_hidden_states = torch.cat(encoder_hidden_states, dim=0)
             #encoder_hidden_states = torch.rand((current_batch_size, 196, 1536), device=model.device, dtype=model.dtype)
             while token_count < settings.RECOGNITION_MAX_TOKENS:
                 is_prefill = token_count == 0

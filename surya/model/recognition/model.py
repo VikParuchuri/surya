@@ -24,7 +24,7 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
     encoder = EfficientViTConfig(**encoder_config)
     config.encoder = encoder
 
-    model = OCREncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
+    model = OCREncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype, ignore_mismatched_sizes=True)
 
     assert isinstance(model.decoder, SuryaOCRDecoder)
     assert isinstance(model.encoder, EfficientViTEncoder)
