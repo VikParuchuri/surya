@@ -1,467 +1,691 @@
-from torch import nn
+""" EfficientViT (by MIT Song Han's Lab)
+
+Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computation visual recognition`
+    - https://arxiv.org/abs/2205.14756
+
+Code adapted from timm, https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
+Original code (that timm adapted from) at https://github.com/mit-han-lab/efficientvit
+"""
+
+from typing import Optional, Union, Tuple
+from functools import partial
+
 import torch
-from typing import Optional, Tuple, Union
+import torch.nn as nn
+import torch.nn.functional as F
 
-from transformers.models.donut.modeling_donut_swin import DonutSwinPatchEmbeddings, DonutSwinEmbeddings, DonutSwinModel, \
-    DonutSwinEncoder, DonutSwinModelOutput, DonutSwinEncoderOutput, DonutSwinAttention, DonutSwinDropPath, \
-    DonutSwinIntermediate, DonutSwinOutput, window_partition, window_reverse
-
-from surya.model.recognition.config import VariableDonutSwinConfig
-
-
-class VariableDonutSwinEmbeddings(DonutSwinEmbeddings):
-    """
-    Construct the patch and position embeddings. Optionally, also the mask token.
-    """
-
-    def __init__(self, config, use_mask_token=False):
-        super().__init__(config, use_mask_token)
-
-        self.patch_embeddings = DonutSwinPatchEmbeddings(config)
-        num_patches = self.patch_embeddings.num_patches
-        self.patch_grid = self.patch_embeddings.grid_size
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.embed_dim)) if use_mask_token else None
-        self.position_embeddings = None
-
-        if config.use_absolute_embeddings:
-            self.position_embeddings = nn.Parameter(torch.zeros(1, num_patches + 1, config.embed_dim))
-
-        self.norm = nn.LayerNorm(config.embed_dim)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(
-        self, pixel_values: Optional[torch.FloatTensor], bool_masked_pos: Optional[torch.BoolTensor] = None
-    ) -> Tuple[torch.Tensor]:
-
-        embeddings, output_dimensions = self.patch_embeddings(pixel_values)
-        # Layernorm across the last dimension (each patch is a single row)
-        embeddings = self.norm(embeddings)
-        batch_size, seq_len, embed_dim = embeddings.size()
-
-        if bool_masked_pos is not None:
-            mask_tokens = self.mask_token.expand(batch_size, seq_len, -1)
-            # replace the masked visual tokens by mask_tokens
-            mask = bool_masked_pos.unsqueeze(-1).type_as(mask_tokens)
-            embeddings = embeddings * (1.0 - mask) + mask_tokens * mask
-
-        if self.position_embeddings is not None:
-            embeddings = embeddings + self.position_embeddings[:, :seq_len, :]
-
-        embeddings = self.dropout(embeddings)
-
-        return embeddings, output_dimensions
+from torch.nn import BCEWithLogitsLoss
+from transformers import PreTrainedModel
+from transformers.modeling_outputs import SemanticSegmenterOutput
+from surya.model.recognition.config import EfficientViTConfig, EfficientViTModelOutput
+from transformers import SegformerImageProcessor
 
 
-class VariableDonutSwinPatchMerging(nn.Module):
-    """
-    Patch Merging Layer.
+def val2list(x: list or tuple or any, repeat_time=1):
+    if isinstance(x, (list, tuple)):
+        return list(x)
+    return [x for _ in range(repeat_time)]
 
-    Args:
-        input_resolution (`Tuple[int]`):
-            Resolution of input feature.
-        dim (`int`):
-            Number of input channels.
-        norm_layer (`nn.Module`, *optional*, defaults to `nn.LayerNorm`):
-            Normalization layer class.
-    """
 
-    def __init__(self, input_resolution: Tuple[int], dim: int, norm_layer: nn.Module = nn.LayerNorm) -> None:
-        super().__init__()
-        self.input_resolution = input_resolution
+def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
+    # repeat elements if necessary
+    x = val2list(x)
+    if len(x) > 0:
+        x[idx_repeat:idx_repeat] = [x[idx_repeat] for _ in range(min_len - len(x))]
+
+    return tuple(x)
+
+
+def get_same_padding(kernel_size: int or tuple[int, ...]) -> int or tuple[int, ...]:
+    if isinstance(kernel_size, tuple):
+        return tuple([get_same_padding(ks) for ks in kernel_size])
+    else:
+        assert kernel_size % 2 > 0, "kernel size should be odd number"
+        return kernel_size // 2
+
+
+def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1) -> int:
+    padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
+    return padding
+
+class ConvNormAct(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size=3,
+        stride=1,
+        dilation=1,
+        groups=1,
+        bias=False,
+        dropout=0.,
+        norm_layer=nn.BatchNorm2d,
+        act_layer=nn.ReLU,
+    ):
+        super(ConvNormAct, self).__init__()
+        self.dropout = nn.Dropout(dropout, inplace=False)
+        padding = get_padding(kernel_size, stride, dilation)
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            padding=padding,
+        )
+        self.norm = norm_layer(num_features=out_channels) if norm_layer else nn.Identity()
+        self.act = act_layer(inplace=True) if act_layer is not None else nn.Identity()
+
+    def forward(self, x):
+        x = self.dropout(x)
+        x = self.conv(x)
+        x = self.norm(x)
+        x = self.act(x)
+        return x
+
+
+class DSConv(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size=3,
+        stride=1,
+        use_bias=False,
+        norm_layer=(nn.BatchNorm2d, nn.BatchNorm2d),
+        act_layer=(nn.ReLU6, None),
+    ):
+        super(DSConv, self).__init__()
+        use_bias = val2tuple(use_bias, 2)
+        norm_layer = val2tuple(norm_layer, 2)
+        act_layer = val2tuple(act_layer, 2)
+
+        self.depth_conv = ConvNormAct(
+            in_channels,
+            in_channels,
+            kernel_size,
+            stride,
+            groups=in_channels,
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
+            bias=use_bias[0],
+        )
+        self.point_conv = ConvNormAct(
+            in_channels,
+            out_channels,
+            1,
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
+            bias=use_bias[1],
+        )
+
+    def forward(self, x):
+        x = self.depth_conv(x)
+        x = self.point_conv(x)
+        return x
+
+
+class ConvBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size=3,
+        stride=1,
+        mid_channels=None,
+        expand_ratio=1,
+        use_bias=False,
+        norm_layer=(nn.BatchNorm2d, nn.BatchNorm2d),
+        act_layer=(nn.ReLU6, None),
+    ):
+        super(ConvBlock, self).__init__()
+        use_bias = val2tuple(use_bias, 2)
+        norm_layer = val2tuple(norm_layer, 2)
+        act_layer = val2tuple(act_layer, 2)
+        mid_channels = mid_channels or round(in_channels * expand_ratio)
+
+        self.conv1 = ConvNormAct(
+            in_channels,
+            mid_channels,
+            kernel_size,
+            stride,
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
+            bias=use_bias[0],
+        )
+        self.conv2 = ConvNormAct(
+            mid_channels,
+            out_channels,
+            kernel_size,
+            1,
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
+            bias=use_bias[1],
+        )
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        return x
+
+
+class MBConv(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size=3,
+        stride=1,
+        mid_channels=None,
+        expand_ratio=6,
+        use_bias=False,
+        norm_layer=(nn.BatchNorm2d, nn.BatchNorm2d, nn.BatchNorm2d),
+        act_layer=(nn.ReLU6, nn.ReLU6, None),
+    ):
+        super(MBConv, self).__init__()
+        use_bias = val2tuple(use_bias, 3)
+        norm_layer = val2tuple(norm_layer, 3)
+        act_layer = val2tuple(act_layer, 3)
+        mid_channels = mid_channels or round(in_channels * expand_ratio)
+
+        self.inverted_conv = ConvNormAct(
+            in_channels,
+            mid_channels,
+            1,
+            stride=1,
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
+            bias=use_bias[0],
+        )
+        self.depth_conv = ConvNormAct(
+            mid_channels,
+            mid_channels,
+            kernel_size,
+            stride=stride,
+            groups=mid_channels,
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
+            bias=use_bias[1],
+        )
+        self.point_conv = ConvNormAct(
+            mid_channels,
+            out_channels,
+            1,
+            norm_layer=norm_layer[2],
+            act_layer=act_layer[2],
+            bias=use_bias[2],
+        )
+
+    def forward(self, x):
+        x = self.inverted_conv(x)
+        x = self.depth_conv(x)
+        x = self.point_conv(x)
+        return x
+
+
+class FusedMBConv(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size=3,
+        stride=1,
+        mid_channels=None,
+        expand_ratio=6,
+        groups=1,
+        use_bias=False,
+        norm_layer=(nn.BatchNorm2d, nn.BatchNorm2d),
+        act_layer=(nn.ReLU6, None),
+    ):
+        super(FusedMBConv, self).__init__()
+        use_bias = val2tuple(use_bias, 2)
+        norm_layer = val2tuple(norm_layer, 2)
+        act_layer = val2tuple(act_layer, 2)
+        mid_channels = mid_channels or round(in_channels * expand_ratio)
+
+        self.spatial_conv = ConvNormAct(
+            in_channels,
+            mid_channels,
+            kernel_size,
+            stride=stride,
+            groups=groups,
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
+            bias=use_bias[0],
+        )
+        self.point_conv = ConvNormAct(
+            mid_channels,
+            out_channels,
+            1,
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
+            bias=use_bias[1],
+        )
+
+    def forward(self, x):
+        x = self.spatial_conv(x)
+        x = self.point_conv(x)
+        return x
+
+
+class LiteMLA(nn.Module):
+    """Lightweight multi-scale linear attention"""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        heads: int or None = None,
+        heads_ratio: float = 1.0,
+        dim=8,
+        use_bias=False,
+        norm_layer=(None, nn.BatchNorm2d),
+        act_layer=(None, None),
+        kernel_func=nn.ReLU,
+        scales=(5,),
+        eps=1e-5,
+    ):
+        super(LiteMLA, self).__init__()
+        self.eps = eps
+        heads = heads or int(in_channels // dim * heads_ratio)
+        total_dim = heads * dim
+        use_bias = val2tuple(use_bias, 2)
+        norm_layer = val2tuple(norm_layer, 2)
+        act_layer = val2tuple(act_layer, 2)
+
         self.dim = dim
-        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
-        self.norm = norm_layer(4 * dim)
-
-    def maybe_pad(self, input_feature, height, width):
-        should_pad = (height % 2 == 1) or (width % 2 == 1)
-        if should_pad:
-            pad_values = (0, 0, 0, width % 2, 0, height % 2)
-            input_feature = nn.functional.pad(input_feature, pad_values)
-
-        return input_feature
-
-    def forward(self, input_feature: torch.Tensor, input_dimensions: Tuple[int, int]) -> torch.Tensor:
-        height, width = input_dimensions
-        # `dim` is height * width
-        batch_size, dim, num_channels = input_feature.shape
-
-        input_feature = input_feature.view(batch_size, height, width, num_channels)
-        # pad input to be disible by width and height, if needed
-        input_feature = self.maybe_pad(input_feature, height, width)
-        # [batch_size, height/2, width/2, num_channels]
-        input_feature_0 = input_feature[:, 0::2, 0::2, :]
-        # [batch_size, height/2, width/2, num_channels]
-        input_feature_1 = input_feature[:, 1::2, 0::2, :]
-        # [batch_size, height/2, width/2, num_channels]
-        input_feature_2 = input_feature[:, 0::2, 1::2, :]
-        # [batch_size, height/2, width/2, num_channels]
-        input_feature_3 = input_feature[:, 1::2, 1::2, :]
-        # batch_size height/2 width/2 4*num_channels
-        input_feature = torch.cat([input_feature_0, input_feature_1, input_feature_2, input_feature_3], -1)
-        input_feature = input_feature.view(batch_size, -1, 4 * num_channels)  # batch_size height/2*width/2 4*C
-
-        input_feature = self.norm(input_feature)
-        input_feature = self.reduction(input_feature)
-
-        return input_feature
-
-
-class VariableDonutSwinLayer(nn.Module):
-    def __init__(self, config, dim, input_resolution, num_heads, shift_size=0):
-        super().__init__()
-        self.chunk_size_feed_forward = config.chunk_size_feed_forward
-        self.shift_size = shift_size
-        self.window_size = config.window_size
-        self.input_resolution = input_resolution
-        self.layernorm_before = nn.LayerNorm(dim, eps=config.layer_norm_eps)
-        self.attention = DonutSwinAttention(config, dim, num_heads, window_size=self.window_size)
-        self.drop_path = DonutSwinDropPath(config.drop_path_rate) if config.drop_path_rate > 0.0 else nn.Identity()
-        self.layernorm_after = nn.LayerNorm(dim, eps=config.layer_norm_eps)
-        self.intermediate = DonutSwinIntermediate(config, dim)
-        self.output = DonutSwinOutput(config, dim)
-
-    def set_shift_and_window_size(self, input_resolution):
-        if min(input_resolution) <= self.window_size:
-            # if window size is larger than input resolution, we don't partition windows
-            self.shift_size = 0
-            self.window_size = min(input_resolution)
-
-    def get_attn_mask(self, height, width, dtype):
-        if self.shift_size > 0:
-            # calculate attention mask for SW-MSA
-            img_mask = torch.zeros((1, height, width, 1), dtype=dtype)
-            height_slices = (
-                slice(0, -self.window_size),
-                slice(-self.window_size, -self.shift_size),
-                slice(-self.shift_size, None),
+        self.qkv = ConvNormAct(
+            in_channels,
+            3 * total_dim,
+            1,
+            bias=use_bias[0],
+            norm_layer=norm_layer[0],
+            act_layer=act_layer[0],
+        )
+        self.aggreg = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(
+                    3 * total_dim,
+                    3 * total_dim,
+                    scale,
+                    padding=get_same_padding(scale),
+                    groups=3 * total_dim,
+                    bias=use_bias[0],
+                ),
+                nn.Conv2d(3 * total_dim, 3 * total_dim, 1, groups=3 * heads, bias=use_bias[0]),
             )
-            width_slices = (
-                slice(0, -self.window_size),
-                slice(-self.window_size, -self.shift_size),
-                slice(-self.shift_size, None),
+            for scale in scales
+        ])
+        self.kernel_func = kernel_func(inplace=False)
+
+        self.proj = ConvNormAct(
+            total_dim * (1 + len(scales)),
+            out_channels,
+            1,
+            bias=use_bias[1],
+            norm_layer=norm_layer[1],
+            act_layer=act_layer[1],
+        )
+
+    def _attn(self, q, k, v):
+        dtype = v.dtype
+        q, k, v = q.float(), k.float(), v.float()
+        kv = k.transpose(-1, -2) @ v
+        out = q @ kv
+        out = out[..., :-1] / (out[..., -1:] + self.eps)
+        return out.to(dtype)
+
+    def forward(self, x):
+        B, _, H, W = x.shape
+
+        # generate multi-scale q, k, v
+        qkv = self.qkv(x)
+        multi_scale_qkv = [qkv]
+        for op in self.aggreg:
+            multi_scale_qkv.append(op(qkv))
+        multi_scale_qkv = torch.cat(multi_scale_qkv, dim=1)
+        multi_scale_qkv = multi_scale_qkv.reshape(B, -1, 3 * self.dim, H * W).transpose(-1, -2)
+        q, k, v = multi_scale_qkv.chunk(3, dim=-1)
+
+        # lightweight global attention
+        q = self.kernel_func(q)
+        k = self.kernel_func(k)
+        v = F.pad(v, (0, 1), mode="constant", value=1.)
+
+        device_type = v.device.type
+        if not torch.jit.is_scripting() and device_type != "mps":
+            with torch.autocast(device_type=device_type, enabled=False):
+                out = self._attn(q, k, v)
+        else:
+            out = self._attn(q, k, v)
+
+        # final projection
+        out = out.transpose(-1, -2).reshape(B, -1, H, W)
+        out = self.proj(out)
+        return out
+
+
+class EfficientVitBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        heads_ratio=1.0,
+        head_dim=32,
+        expand_ratio=4,
+        norm_layer=nn.BatchNorm2d,
+        act_layer=nn.Hardswish,
+    ):
+        super(EfficientVitBlock, self).__init__()
+        self.context_module = ResidualBlock(
+            LiteMLA(
+                in_channels=in_channels,
+                out_channels=in_channels,
+                heads_ratio=heads_ratio,
+                dim=head_dim,
+                norm_layer=(None, norm_layer),
+            ),
+            nn.Identity(),
+        )
+        self.local_module = ResidualBlock(
+            MBConv(
+                in_channels=in_channels,
+                out_channels=in_channels,
+                expand_ratio=expand_ratio,
+                use_bias=(True, True, False),
+                norm_layer=(None, None, norm_layer),
+                act_layer=(act_layer, act_layer, None),
+            ),
+            nn.Identity(),
+        )
+
+    def forward(self, x):
+        x = self.context_module(x)
+        x = self.local_module(x)
+        return x
+
+
+class ResidualBlock(nn.Module):
+    def __init__(
+        self,
+        main: Optional[nn.Module],
+        shortcut: Optional[nn.Module] = None,
+        pre_norm: Optional[nn.Module] = None,
+    ):
+        super(ResidualBlock, self).__init__()
+        self.pre_norm = pre_norm if pre_norm is not None else nn.Identity()
+        self.main = main
+        self.shortcut = shortcut
+
+    def forward(self, x):
+        res = self.main(self.pre_norm(x))
+        if self.shortcut is not None:
+            res = res + self.shortcut(x)
+        return res
+
+
+def build_local_block(
+        in_channels: int,
+        out_channels: int,
+        stride: int,
+        kernel_size: int,
+        expand_ratio: float,
+        norm_layer: str,
+        act_layer: str,
+        fewer_norm: bool = False,
+        block_type: str = "default",
+):
+    assert block_type in ["default", "large", "fused"]
+    if expand_ratio == 1:
+        if block_type == "default":
+            block = DSConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                kernel_size=kernel_size,
+                use_bias=(True, False) if fewer_norm else False,
+                norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
+                act_layer=(act_layer, None),
             )
-            count = 0
-            for height_slice in height_slices:
-                for width_slice in width_slices:
-                    img_mask[:, height_slice, width_slice, :] = count
-                    count += 1
-
-            mask_windows = window_partition(img_mask, self.window_size)
-            mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
-            attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-            attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
         else:
-            attn_mask = None
-        return attn_mask
-
-    def maybe_pad(self, hidden_states, height, width):
-        pad_right = (self.window_size - width % self.window_size) % self.window_size
-        pad_bottom = (self.window_size - height % self.window_size) % self.window_size
-        pad_values = (0, 0, 0, pad_right, 0, pad_bottom)
-        hidden_states = nn.functional.pad(hidden_states, pad_values)
-        return hidden_states, pad_values
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        input_dimensions: Tuple[int, int],
-        head_mask: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = False,
-        always_partition: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if not always_partition:
-            self.set_shift_and_window_size(input_dimensions)
-        else:
-            pass
-        height, width = input_dimensions
-        batch_size, _, channels = hidden_states.size()
-        shortcut = hidden_states
-
-        hidden_states = self.layernorm_before(hidden_states)
-
-        hidden_states = hidden_states.view(batch_size, height, width, channels)
-
-        # pad hidden_states to multiples of window size
-        hidden_states, pad_values = self.maybe_pad(hidden_states, height, width)
-
-        _, height_pad, width_pad, _ = hidden_states.shape
-        # cyclic shift
-        if self.shift_size > 0:
-            shifted_hidden_states = torch.roll(hidden_states, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
-        else:
-            shifted_hidden_states = hidden_states
-
-        # partition windows
-        hidden_states_windows = window_partition(shifted_hidden_states, self.window_size)
-        hidden_states_windows = hidden_states_windows.view(-1, self.window_size * self.window_size, channels)
-        attn_mask = self.get_attn_mask(height_pad, width_pad, dtype=hidden_states.dtype)
-        if attn_mask is not None:
-            attn_mask = attn_mask.to(hidden_states_windows.device)
-
-        attention_outputs = self.attention(
-            hidden_states_windows, attn_mask, head_mask, output_attentions=output_attentions
-        )
-
-        attention_output = attention_outputs[0]
-
-        attention_windows = attention_output.view(-1, self.window_size, self.window_size, channels)
-        shifted_windows = window_reverse(attention_windows, self.window_size, height_pad, width_pad)
-
-        # reverse cyclic shift
-        if self.shift_size > 0:
-            attention_windows = torch.roll(shifted_windows, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
-        else:
-            attention_windows = shifted_windows
-
-        was_padded = pad_values[3] > 0 or pad_values[5] > 0
-        if was_padded:
-            attention_windows = attention_windows[:, :height, :width, :].contiguous()
-
-        attention_windows = attention_windows.view(batch_size, height * width, channels)
-
-        hidden_states = shortcut + self.drop_path(attention_windows)
-
-        layer_output = self.layernorm_after(hidden_states)
-        layer_output = self.intermediate(layer_output)
-        layer_output = hidden_states + self.output(layer_output)
-
-        layer_outputs = (layer_output, attention_outputs[1]) if output_attentions else (layer_output,)
-        return layer_outputs
-
-
-class VariableDonutSwinStage(nn.Module):
-    def __init__(self, config, dim, input_resolution, depth, num_heads, drop_path, downsample):
-        super().__init__()
-        self.config = config
-        self.dim = dim
-        self.blocks = nn.ModuleList(
-            [
-                VariableDonutSwinLayer(
-                    config=config,
-                    dim=dim,
-                    input_resolution=input_resolution,
-                    num_heads=num_heads,
-                    shift_size=0 if (i % 2 == 0) else int(config.window_size // 2),
-                )
-                for i in range(depth)
-            ]
-        )
-
-        # patch merging layer
-        if downsample is not None:
-            self.downsample = downsample(input_resolution, dim=dim, norm_layer=nn.LayerNorm)
-        else:
-            self.downsample = None
-
-        self.pointing = False
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        input_dimensions: Tuple[int, int],
-        head_mask: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = False,
-        always_partition: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor]:
-        height, width = input_dimensions
-        for i, layer_module in enumerate(self.blocks):
-            layer_head_mask = head_mask[i] if head_mask is not None else None
-
-            layer_outputs = layer_module(
-                hidden_states, input_dimensions, layer_head_mask, output_attentions, always_partition
+            block = ConvBlock(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                kernel_size=kernel_size,
+                use_bias=(True, False) if fewer_norm else False,
+                norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
+                act_layer=(act_layer, None),
             )
-
-            hidden_states = layer_outputs[0]
-
-        hidden_states_before_downsampling = hidden_states
-        if self.downsample is not None:
-            height_downsampled, width_downsampled = (height + 1) // 2, (width + 1) // 2
-            output_dimensions = (height, width, height_downsampled, width_downsampled)
-            hidden_states = self.downsample(hidden_states_before_downsampling, input_dimensions)
+    else:
+        if block_type == "default":
+            block = MBConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                kernel_size=kernel_size,
+                expand_ratio=expand_ratio,
+                use_bias=(True, True, False) if fewer_norm else False,
+                norm_layer=(None, None, norm_layer) if fewer_norm else norm_layer,
+                act_layer=(act_layer, act_layer, None),
+            )
         else:
-            output_dimensions = (height, width, height, width)
+            block = FusedMBConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                stride=stride,
+                kernel_size=kernel_size,
+                expand_ratio=expand_ratio,
+                use_bias=(True, False) if fewer_norm else False,
+                norm_layer=(None, norm_layer) if fewer_norm else norm_layer,
+                act_layer=(act_layer, None),
+            )
+    return block
 
-        stage_outputs = (hidden_states, hidden_states_before_downsampling, output_dimensions)
 
-        if output_attentions:
-            stage_outputs += layer_outputs[1:]
-        return stage_outputs
-
-
-class VariableDonutSwinEncoder(nn.Module):
-    def __init__(self, config, grid_size):
+class Stem(nn.Sequential):
+    def __init__(self, in_chs, out_chs, depth, stride, norm_layer, act_layer, block_type='default'):
         super().__init__()
-        self.num_layers = len(config.depths)
-        self.config = config
-        dpr = [x.item() for x in torch.linspace(0, config.drop_path_rate, sum(config.depths))]
-        self.layers = nn.ModuleList(
-            [
-                VariableDonutSwinStage(
-                    config=config,
-                    dim=int(config.embed_dim * 2**i_layer),
-                    input_resolution=(grid_size[0] // (2**i_layer), grid_size[1] // (2**i_layer)),
-                    depth=config.depths[i_layer],
-                    num_heads=config.num_heads[i_layer],
-                    drop_path=dpr[sum(config.depths[:i_layer]) : sum(config.depths[: i_layer + 1])],
-                    downsample=VariableDonutSwinPatchMerging if (i_layer < self.num_layers - 1) else None,
-                )
-                for i_layer in range(self.num_layers)
-            ]
+        self.stride = stride
+
+        self.add_module(
+            'in_conv',
+            ConvNormAct(
+                in_chs, out_chs,
+                kernel_size=stride + 1, stride=stride, norm_layer=norm_layer, act_layer=act_layer,
+            )
         )
+        stem_block = 0
+        for _ in range(depth):
+            self.add_module(f'res{stem_block}', ResidualBlock(
+                build_local_block(
+                    in_channels=out_chs,
+                    out_channels=out_chs,
+                    stride=1,
+                    kernel_size=3,
+                    expand_ratio=1,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    block_type=block_type,
+                ),
+                nn.Identity(),
+            ))
+            stem_block += 1
 
-        self.gradient_checkpointing = False
 
-    def forward(
+class EfficientVitLargeStage(nn.Module):
+    def __init__(
+            self,
+            in_chs,
+            out_chs,
+            depth,
+            stride,
+            norm_layer,
+            act_layer,
+            head_dim,
+            vit_stage=False,
+            fewer_norm=False,
+    ):
+        super(EfficientVitLargeStage, self).__init__()
+        blocks = [ResidualBlock(
+            build_local_block(
+                in_channels=in_chs,
+                out_channels=out_chs,
+                stride=stride,
+                kernel_size=stride + 1,
+                expand_ratio=24 if vit_stage else 16,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                fewer_norm=vit_stage or fewer_norm,
+                block_type='default' if fewer_norm else 'fused',
+            ),
+            None,
+        )]
+        in_chs = out_chs
+
+        if vit_stage:
+            # for stage 4
+            for _ in range(depth):
+                blocks.append(
+                    EfficientVitBlock(
+                        in_channels=in_chs,
+                        head_dim=head_dim,
+                        expand_ratio=6,
+                        norm_layer=norm_layer,
+                        act_layer=act_layer,
+                    )
+                )
+        else:
+            # for stage 1, 2, 3
+            for i in range(depth):
+                blocks.append(ResidualBlock(
+                    build_local_block(
+                        in_channels=in_chs,
+                        out_channels=out_chs,
+                        stride=1,
+                        kernel_size=3,
+                        expand_ratio=4,
+                        norm_layer=norm_layer,
+                        act_layer=act_layer,
+                        fewer_norm=fewer_norm,
+                        block_type='default' if fewer_norm else 'fused',
+                    ),
+                    nn.Identity(),
+                ))
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+class EfficientVitLarge(nn.Module):
+    def __init__(
         self,
-        hidden_states: torch.Tensor,
-        input_dimensions: Tuple[int, int],
-        head_mask: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = False,
-        output_hidden_states: Optional[bool] = False,
-        output_hidden_states_before_downsampling: Optional[bool] = False,
-        always_partition: Optional[bool] = False,
-        return_dict: Optional[bool] = True,
-    ) -> Union[Tuple, DonutSwinEncoderOutput]:
-        all_hidden_states = () if output_hidden_states else None
-        all_reshaped_hidden_states = () if output_hidden_states else None
-        all_self_attentions = () if output_attentions else None
+        config: EfficientViTConfig,
+        norm_layer=nn.BatchNorm2d,
+        act_layer=nn.Hardswish,
+    ):
+        super(EfficientVitLarge, self).__init__()
+        self.grad_checkpointing = False
+        self.norm_eps = config.layer_norm_eps
+        norm_layer = partial(norm_layer, eps=self.norm_eps)
 
-        if output_hidden_states:
-            batch_size, _, hidden_size = hidden_states.shape
-            # rearrange b (h w) c -> b c h w
-            reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
-            reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-            all_hidden_states += (hidden_states,)
-            all_reshaped_hidden_states += (reshaped_hidden_state,)
+        # input stem
+        self.stem = Stem(config.num_channels, config.widths[0], config.depths[0], config.strides[0], norm_layer, act_layer, block_type='large')
+        stride = config.strides[0]
 
-        for i, layer_module in enumerate(self.layers):
-            layer_head_mask = head_mask[i] if head_mask is not None else None
+        # stages
+        self.feature_info = []
+        self.stages = nn.Sequential()
+        in_channels = config.widths[0]
+        for i, (w, d, s) in enumerate(zip(config.widths[1:], config.depths[1:], config.strides[1:])):
+            self.stages.append(EfficientVitLargeStage(
+                in_channels,
+                w,
+                depth=d,
+                stride=s,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                head_dim=config.head_dim,
+                vit_stage=i >= 3,
+                fewer_norm=i >= 2,
+            ))
+            stride *= s
+            in_channels = w
+            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
 
-            if self.gradient_checkpointing and self.training:
-                layer_outputs = self._gradient_checkpointing_func(
-                    layer_module.__call__,
-                    hidden_states,
-                    input_dimensions,
-                    layer_head_mask,
-                    output_attentions,
-                    always_partition,
-                )
-            else:
-                layer_outputs = layer_module(
-                    hidden_states, input_dimensions, layer_head_mask, output_attentions, always_partition
-                )
+        self.num_features = in_channels
 
-            hidden_states = layer_outputs[0]
-            hidden_states_before_downsampling = layer_outputs[1]
-            output_dimensions = layer_outputs[2]
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
 
-            input_dimensions = (output_dimensions[-2], output_dimensions[-1])
+    def forward(self, x):
+        x = self.stem(x)
+        last_hidden_state = None
+        for i, module in enumerate(self.stages):
+            x = module(x)
+            if i == len(self.stages) - 1:
+                last_hidden_state = x
 
-            if output_hidden_states and output_hidden_states_before_downsampling:
-                batch_size, _, hidden_size = hidden_states_before_downsampling.shape
-                # rearrange b (h w) c -> b c h w
-                # here we use the original (not downsampled) height and width
-                reshaped_hidden_state = hidden_states_before_downsampling.view(
-                    batch_size, *(output_dimensions[0], output_dimensions[1]), hidden_size
-                )
-                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-                all_hidden_states += (hidden_states_before_downsampling,)
-                all_reshaped_hidden_states += (reshaped_hidden_state,)
-            elif output_hidden_states and not output_hidden_states_before_downsampling:
-                batch_size, _, hidden_size = hidden_states.shape
-                # rearrange b (h w) c -> b c h w
-                reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
-                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-                all_hidden_states += (hidden_states,)
-                all_reshaped_hidden_states += (reshaped_hidden_state,)
-
-            if output_attentions:
-                all_self_attentions += layer_outputs[3:]
-
-        if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
-
-        return DonutSwinEncoderOutput(
-            last_hidden_state=hidden_states,
-            hidden_states=all_hidden_states,
-            attentions=all_self_attentions,
-            reshaped_hidden_states=all_reshaped_hidden_states,
-        )
+        return last_hidden_state
 
 
-class VariableDonutSwinModel(DonutSwinModel):
-    config_class = VariableDonutSwinConfig
-    def __init__(self, config, add_pooling_layer=True, use_mask_token=False, **kwargs):
+class EfficientViTPreTrainedModel(PreTrainedModel):
+    """
+    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
+    models.
+    """
+
+    config_class = EfficientViTConfig
+    base_model_prefix = "efficientvit"
+    main_input_name = "pixel_values"
+
+    def _init_weights(self, module):
+        """Initialize the weights"""
+        if isinstance(module, (nn.Linear, nn.Conv2d)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+class EfficientViTEncoder(EfficientViTPreTrainedModel):
+    def __init__(self, config, **kwargs):
         super().__init__(config)
-        self.config = config
-        self.num_layers = len(config.depths)
-        self.num_features = int(config.embed_dim * 2 ** (self.num_layers - 1))
-
-        self.embeddings = VariableDonutSwinEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = VariableDonutSwinEncoder(config, self.embeddings.patch_grid)
-
-        self.pooler = nn.AdaptiveAvgPool1d(1) if add_pooling_layer else None
+        self.vit = EfficientVitLarge(config)
+        self.position_embeddings = nn.Parameter(torch.zeros(1, config.encoder_length, config.hidden_size))
 
         # Initialize weights and apply final processing
         self.post_init()
 
     def forward(
         self,
-        pixel_values: Optional[torch.FloatTensor] = None,
-        bool_masked_pos: Optional[torch.BoolTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        **kwargs
-    ) -> Union[Tuple, DonutSwinModelOutput]:
-        r"""
-        bool_masked_pos (`torch.BoolTensor` of shape `(batch_size, num_patches)`):
-            Boolean masked positions. Indicates which patches are masked (1) and which aren't (0).
-        """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        pixel_values: torch.FloatTensor,
+        **kwargs,
+    ) -> Union[Tuple, EfficientViTModelOutput]:
 
-        if pixel_values is None:
-            raise ValueError("You have to specify pixel_values")
-
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        # attention_probs has shape bsz x n_heads x N x N
-        # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
-        # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
-        head_mask = self.get_head_mask(head_mask, len(self.config.depths))
-
-        embedding_output, input_dimensions = self.embeddings(pixel_values, bool_masked_pos=bool_masked_pos)
-
-        encoder_outputs = self.encoder(
-            embedding_output,
-            input_dimensions,
-            head_mask=head_mask,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
+        # Pixel values should be B,C,H,W
+        last_hidden_state = self.vit(
+            pixel_values,
         )
 
-        sequence_output = encoder_outputs[0]
+        # Swap channel dim to end
+        # (B, C, H, W) -> (B, H*W, C)
+        last_hidden_state = last_hidden_state.permute(0, 2, 3, 1).flatten(1, 2)
+        # Add positional encoding to the last hidden state
+        last_hidden_state = last_hidden_state + self.position_embeddings[:, :last_hidden_state.size(1), :]
 
-        pooled_output = None
-        if self.pooler is not None:
-            pooled_output = self.pooler(sequence_output.transpose(1, 2))
-            pooled_output = torch.flatten(pooled_output, 1)
-
-        if not return_dict:
-            output = (sequence_output, pooled_output) + encoder_outputs[1:]
-
-            return output
-
-        return DonutSwinModelOutput(
-            last_hidden_state=sequence_output,
-            pooler_output=pooled_output,
-            hidden_states=encoder_outputs.hidden_states,
-            attentions=encoder_outputs.attentions,
-            reshaped_hidden_states=encoder_outputs.reshaped_hidden_states,
+        return EfficientViTModelOutput(
+            last_hidden_state=last_hidden_state
         )

@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+import time
 from collections import defaultdict
 
 import torch
@@ -25,6 +26,7 @@ def main():
     parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
     parser.add_argument("--langs", type=str, help="Language(s) to use for OCR. Comma separate for multiple. Can be a capitalized language name, or a 2-letter ISO 639 code.", default=None)
     parser.add_argument("--lang_file", type=str, help="Path to file with languages to use for OCR. Should be a JSON dict with file names as keys, and the value being a list of language codes/names.", default=None)
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging.", default=False)
     args = parser.parse_args()
 
     assert args.langs or args.lang_file, "Must provide either --langs or --lang_file"
@@ -51,14 +53,18 @@ def main():
     det_processor = load_detection_processor()
     det_model = load_detection_model()
 
-    _, lang_tokens = _tokenize("", get_unique_langs(image_langs))
-    rec_model = load_recognition_model(langs=lang_tokens) # Prune model moe layer to only include languages we need
+    rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
 
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
+    start = time.time()
     predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
+    if args.debug:
+        print(f"OCR took {time.time() - start:.2f} seconds")
+        max_chars = max([len(l.text) for p in predictions_by_image for l in p.text_lines])
+        print(f"Max chars: {max_chars}")
 
     if args.images:
         for idx, (name, image, pred, langs) in enumerate(zip(names, images, predictions_by_image, image_langs)):

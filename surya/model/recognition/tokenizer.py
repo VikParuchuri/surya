@@ -1,9 +1,36 @@
 from itertools import chain
-from typing import List, Union
+import random
+from typing import List, Optional, Tuple, Union
+from tokenizers import AddedToken
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
-from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
+
+TOTAL_TOKENS = 65536
+TOKEN_OFFSET = 3 # Pad, eos, bos
+SPECIAL_TOKENS = 253
+TOTAL_VOCAB_SIZE = TOTAL_TOKENS + TOKEN_OFFSET + SPECIAL_TOKENS
+
+
+def replace_random_chars(text, thresh=.01, shift_range=100):
+    if random.random() < thresh and len(text) >= 3:
+        try:
+            pos = random.randint(1, len(text) - 2)
+            char = text[pos]
+            shift_amt = random.randint(-shift_range, shift_range)
+            new_char_code = ord(char) + shift_amt
+            if new_char_code < 0:
+                new_char_code = 0
+            elif new_char_code > 65535:
+                new_char_code = 65535
+            new_char = chr(new_char_code)
+            char_choices = [random.choice(text), new_char]
+            char_choice = random.choice(char_choices)
+            text = text[:pos] + char_choice + text[pos + 1:]
+        except ValueError:
+            print(f"Failed to replace char in {text}")
+            pass
+    return text
 
 
 def text_to_utf16_numbers(text):
@@ -31,23 +58,16 @@ def utf16_numbers_to_text(numbers):
     return text
 
 
-def _tokenize(text: str, langs: List[str], eos_token_id: int = 1, add_eos: bool = True, add_bos: bool = True):
+def _tokenize(text: str, eos_token_id: int = 1, add_eos: bool = False, add_bos: bool = False):
     tokens = text_to_utf16_numbers(text)
     tokens = [t + TOKEN_OFFSET for t in tokens] # Account for special pad, etc, tokens
-
-    lang_list = []
-    for lang in langs:
-        code = LANGUAGE_MAP[lang]
-        lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
-
-    tokens = lang_list + tokens
 
     if add_eos:
         tokens.append(eos_token_id)
     if add_bos:
         tokens.insert(0, eos_token_id)
 
-    return tokens, lang_list
+    return tokens
 
 
 class Byt5LangTokenizer(ByT5Tokenizer):
@@ -73,9 +93,8 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         super().__init__()
 
-    def __call__(self, texts: Union[List[str], str], langs: Union[List[List[str]], List[str]], pad_token_id: int = 0, **kwargs):
+    def __call__(self, texts: List[str] | str, pad_token_id: int = 0, **kwargs):
         tokenized = []
-        all_langs = []
 
         is_list = True
         # Convert to list of lists format
@@ -83,23 +102,15 @@ class Byt5LangTokenizer(ByT5Tokenizer):
             texts = [texts]
             is_list = False
 
-        if isinstance(langs[0], str):
-            langs = [langs]
-
-        # One language input per text input
-        assert len(langs) == len(texts)
-
-        for text, lang in zip(texts, langs):
-            tokens, lang_list = _tokenize(text, lang)
+        for text in texts:
+            tokens = _tokenize(text)
             tokenized.append(tokens)
-            all_langs.append(lang_list)
 
         # Convert back to flat format
         if not is_list:
             tokenized = tokenized[0]
-            all_langs = all_langs[0]
 
-        return {"input_ids": tokenized, "langs": all_langs}
+        return {"input_ids": tokenized}
 
     def decode(
         self,
