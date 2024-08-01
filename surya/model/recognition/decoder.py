@@ -202,6 +202,7 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         use_cache: bool = False,
+        window_attn: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _ = hidden_states.size()
 
@@ -217,7 +218,7 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         if use_cache and hasattr(self, "key_states"):
-            cache_kwargs = {"cache_position": cache_position}
+            cache_kwargs = {"cache_position": cache_position, "window_attn": window_attn}
             key_states, value_states = self._update_cache(key_states, value_states, **cache_kwargs)
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -231,7 +232,7 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
             query_states.contiguous(),
             key_states.contiguous(),
             value_states.contiguous(),
-            attn_mask=causal_mask,  # pretty much a must for sliding window backend!
+            attn_mask=causal_mask,
             dropout_p=self.attention_dropout if self.training else 0.0,
             scale=self.head_dim**-0.5,
         )
@@ -252,6 +253,7 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
 
     @torch.no_grad()
     def _update_cache(self, key_states, value_states, **cache_kwargs):
+        window_attn = cache_kwargs.get("window_attn", False)
         window_size = self.config.attention_window_size
         curr_token_count = key_states.shape[2]
 
@@ -260,16 +262,16 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
         else:
             k_out = torch.cat([self.key_states, key_states], dim=2)
 
-            #if curr_token_count == 1 and k_out.shape[2] > window_size:
-            #    k_out = k_out[:, :, -window_size:]
+            if curr_token_count == 1 and k_out.shape[2] > window_size and window_attn:
+                k_out = k_out[:, :, -window_size:]
 
         if self.value_states is None:
             v_out = value_states
         else:
             v_out = torch.cat([self.value_states, value_states], dim=2)
 
-            #if curr_token_count == 1 and v_out.shape[2] > window_size:
-            #    v_out = v_out[:, :, -window_size:]
+            if curr_token_count == 1 and v_out.shape[2] > window_size and window_attn:
+                v_out = v_out[:, :, -window_size:]
 
         self.key_states, self.value_states = k_out, v_out
         return k_out, v_out
@@ -301,6 +303,8 @@ class SuryaOCRDecoderLayer(nn.Module):
         if layer_idx % config.cross_attn_every == 0:
             self.cross_attn_block = SuryaOCRDecoderSdpaCrossAttention(config)
 
+        self.window_attn = layer_idx % config.global_attn_every != 0
+
         self.channel_pre_norm = SuryaOCRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.mlp_block = SuryaOCRDecoderMlp(config)
 
@@ -328,7 +332,7 @@ class SuryaOCRDecoderLayer(nn.Module):
 
         inputs_normalized = self.temporal_pre_norm(cross_attn_output)  # RMSNorm introduces slight slight differences
         hidden_states = self.temporal_block(
-            inputs_normalized, position_ids, attention_mask, cache_position=cache_position, use_cache=use_cache
+            inputs_normalized, position_ids, attention_mask, cache_position=cache_position, use_cache=use_cache, window_attn=self.window_attn
         )
 
         residual = hidden_states + raw_activations

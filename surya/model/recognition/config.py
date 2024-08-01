@@ -44,11 +44,11 @@ class EfficientViTConfig(PretrainedConfig):
     def __init__(
         self,
         num_channels=3,
-        widths=(32, 64, 128, 512, 1536),
+        widths=(32, 64, 128, 512, 1024),
         head_dim=32,
         num_stages=4,
         depths=(1, 1, 1, 6, 6),
-        strides=(2, 2, 2, 2, 2),
+        strides=(4, 2, 1, 2, 2),
         hidden_sizes=(32, 64, 160, 512),
         patch_size=(7, 7),
         hidden_dropout_prob=0.0,
@@ -85,8 +85,8 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         self,
         num_hidden_layers=8,
         vocab_size=65792,
-        hidden_size=1536,
-        intermediate_size=3 * 1536,
+        hidden_size=1024,
+        intermediate_size=4 * 1024,
         num_attention_heads=16,
         lru_width=None,
         attention_window_size=16,
@@ -102,6 +102,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         rope_theta=10000.0,
         block_types=("attention",),
         cross_attn_every=2,
+        global_attn_every=2,
         attention_dropout=0.0,
         num_key_value_heads=2,
         attention_bias=False,
@@ -129,6 +130,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         if self.num_key_value_heads > self.num_attention_heads:
             raise ValueError("The number of `num_key_value_heads` must be smaller than `num_attention_heads`")
         self.cross_attn_every = cross_attn_every
+        self.global_attn_every = global_attn_every
         self.attention_dropout = attention_dropout
         self.attention_bias = attention_bias
         self.w_init_variance_scale = w_init_variance_scale

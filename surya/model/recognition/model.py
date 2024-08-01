@@ -21,6 +21,7 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
     config.decoder = decoder
 
     encoder_config = config.encoder
+    #encoder_config["strides"] = (2, 4, 2, 2, 2)
     encoder = EfficientViTConfig(**encoder_config)
     config.encoder = encoder
 

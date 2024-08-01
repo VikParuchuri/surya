@@ -44,6 +44,12 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     if batch_size is None:
         batch_size = get_batch_size()
 
+    # Sort images by width, so similar length ones go together
+    sorted_pairs = sorted(enumerate(images), key=lambda x: x[1].width, reverse=False)
+    indices, images = zip(*sorted_pairs)
+    indices = list(indices)
+    images = list(images)
+
     output_text = []
     confidences = []
 
@@ -79,7 +85,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
                 pixel_batch = batch_pixel_values[i:i+encoder_batch_size]
                 encoder_hidden_states.append(model.encoder(pixel_values=pixel_batch).last_hidden_state)
             encoder_hidden_states = torch.cat(encoder_hidden_states, dim=0)
-            #encoder_hidden_states = torch.rand((current_batch_size, 196, 1536), device=model.device, dtype=model.dtype)
+
             while token_count < settings.RECOGNITION_MAX_TOKENS:
                 is_prefill = token_count == 0
                 return_dict = model.decoder(
@@ -125,6 +131,10 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         output_text.extend(detected_text)
         confidences.extend(sequence_scores.tolist())
 
+    output_text = sorted(zip(indices, output_text), key=lambda x: x[0])
+    confidences = sorted(zip(indices, confidences), key=lambda x: x[0])
+    output_text = [text for _, text in output_text]
+    confidences = [conf for _, conf in confidences]
     return output_text, confidences
 
 
