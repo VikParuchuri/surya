@@ -191,6 +191,7 @@ class SuryaProcessor(DonutProcessor):
     def __call__(self, *args, **kwargs):
         images = kwargs.pop("images", None)
         text = kwargs.pop("text", None)
+        langs = kwargs.pop("langs", None)
 
         if len(args) > 0:
             images = args[0]
@@ -203,7 +204,7 @@ class SuryaProcessor(DonutProcessor):
             inputs = self.image_processor(images, *args, **kwargs)
 
         if text is not None:
-            encodings = self.tokenizer(text, **kwargs)
+            encodings = self.tokenizer(text, langs, **kwargs)
 
         if text is None:
             return inputs

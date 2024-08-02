@@ -5,32 +5,7 @@ from tokenizers import AddedToken
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
-
-TOTAL_TOKENS = 65536
-TOKEN_OFFSET = 3 # Pad, eos, bos
-SPECIAL_TOKENS = 253
-TOTAL_VOCAB_SIZE = TOTAL_TOKENS + TOKEN_OFFSET + SPECIAL_TOKENS
-
-
-def replace_random_chars(text, thresh=.01, shift_range=100):
-    if random.random() < thresh and len(text) >= 3:
-        try:
-            pos = random.randint(1, len(text) - 2)
-            char = text[pos]
-            shift_amt = random.randint(-shift_range, shift_range)
-            new_char_code = ord(char) + shift_amt
-            if new_char_code < 0:
-                new_char_code = 0
-            elif new_char_code > 65535:
-                new_char_code = 65535
-            new_char = chr(new_char_code)
-            char_choices = [random.choice(text), new_char]
-            char_choice = random.choice(char_choices)
-            text = text[:pos] + char_choice + text[pos + 1:]
-        except ValueError:
-            print(f"Failed to replace char in {text}")
-            pass
-    return text
+from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
 
 
 def text_to_utf16_numbers(text):
@@ -58,16 +33,22 @@ def utf16_numbers_to_text(numbers):
     return text
 
 
-def _tokenize(text: str, eos_token_id: int = 1, add_eos: bool = False, add_bos: bool = False):
+def _tokenize(text: str, langs: List[str] | None, eos_token_id: int = 1, add_eos: bool = False, add_bos: bool = True):
     tokens = text_to_utf16_numbers(text)
     tokens = [t + TOKEN_OFFSET for t in tokens] # Account for special pad, etc, tokens
 
-    if add_eos:
-        tokens.append(eos_token_id)
+    lang_list = []
+    if langs:
+        for lang in langs:
+            code = LANGUAGE_MAP[lang]
+            lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
+
+    tokens = lang_list + tokens
+
     if add_bos:
         tokens.insert(0, eos_token_id)
 
-    return tokens
+    return tokens, lang_list
 
 
 class Byt5LangTokenizer(ByT5Tokenizer):
@@ -93,7 +74,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         super().__init__()
 
-    def __call__(self, texts: List[str] | str, pad_token_id: int = 0, **kwargs):
+    def __call__(self, texts: List[str] | str, langs: List[List[str]] | List[str] | None = None, pad_token_id: int = 0, **kwargs):
         tokenized = []
 
         is_list = True
@@ -102,8 +83,16 @@ class Byt5LangTokenizer(ByT5Tokenizer):
             texts = [texts]
             is_list = False
 
-        for text in texts:
-            tokens = _tokenize(text)
+        if langs is None:
+            langs = [None] * len(texts)
+
+        if isinstance(langs[0], str):
+            langs = [langs]
+
+        assert len(langs) == len(texts)
+
+        for text, lang in zip(texts, langs):
+            tokens, lang_list = _tokenize(text, lang)
             tokenized.append(tokens)
 
         # Convert back to flat format

@@ -282,29 +282,35 @@ class SuryaOCRDecoderMlp(nn.Module):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
-        self.intermediate_size = config.intermediate_size // 2
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=True)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=True)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=True)
-        self.act_fn = ACT2FN[config.hidden_activation]
+        self.intermediate_size = config.intermediate_size
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+        if config.hidden_activation is None:
+            config.hidden_activation = "gelu_pytorch_tanh"
+        hidden_activation = config.hidden_activation
+        self.act_fn = ACT2FN[hidden_activation]
 
-    def forward(self, hidden_states):
-        gate = self.act_fn(self.gate_proj(hidden_states))
-        return self.down_proj(gate * self.up_proj(hidden_states))
+    def forward(self, x):
+        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
 
 class SuryaOCRDecoderLayer(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
+        super().__init__()
         self.cross_pre_norm = SuryaOCRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.temporal_pre_norm = SuryaOCRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.temporal_block = SuryaOCRDecoderSdpaAttention(config)
+
+        self.temporal_block = None
+        if layer_idx in config.self_attn_layers:
+            self.temporal_block = SuryaOCRDecoderSdpaAttention(config)
+
         self.cross_attn_block = None
-        if layer_idx % config.cross_attn_every == 0:
+        if layer_idx in config.cross_attn_layers:
             self.cross_attn_block = SuryaOCRDecoderSdpaCrossAttention(config)
 
-        self.window_attn = layer_idx % config.global_attn_every != 0
-
+        self.window_attn = layer_idx not in config.global_attn_layers
         self.channel_pre_norm = SuryaOCRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.mlp_block = SuryaOCRDecoderMlp(config)
 
@@ -330,12 +336,15 @@ class SuryaOCRDecoderLayer(nn.Module):
         else:
             cross_attn_output = raw_activations
 
-        inputs_normalized = self.temporal_pre_norm(cross_attn_output)  # RMSNorm introduces slight slight differences
-        hidden_states = self.temporal_block(
-            inputs_normalized, position_ids, attention_mask, cache_position=cache_position, use_cache=use_cache, window_attn=self.window_attn
-        )
+        if self.temporal_block is not None:
+            inputs_normalized = self.temporal_pre_norm(cross_attn_output)  # RMSNorm introduces slight slight differences
+            hidden_states = self.temporal_block(
+                inputs_normalized, position_ids, attention_mask, cache_position=cache_position, use_cache=use_cache, window_attn=self.window_attn
+            )
 
-        residual = hidden_states + raw_activations
+            residual = hidden_states + raw_activations
+        else:
+            residual = cross_attn_output
 
         hidden_states = self.channel_pre_norm(residual)
         hidden_states = self.mlp_block(hidden_states)
@@ -374,7 +383,8 @@ class SuryaOCRDecoderPreTrainedModel(PreTrainedModel):
     def _setup_cache(self, config, batch, device, dtype):
         layers = getattr(self, "model", self).layers
         for layer in layers:
-            layer.temporal_block._setup_cache(batch, device, dtype)
+            if layer.temporal_block:
+                layer.temporal_block._setup_cache(batch, device, dtype)
 
     def reset_cache(self, batch, device, dtype):
         pass
@@ -493,11 +503,6 @@ class SuryaOCRDecoderModel(SuryaOCRDecoderPreTrainedModel):
             # Select the upper triangular part of the matrix, but unmask current token (the diagonal)
             # triu will be the min_dtype, everything else is 0 (attended to)
             causal_mask = torch.triu(diagonal, diagonal=1)
-
-            # Sliding window attention mask
-            window_mask = torch.ones(sequence_length, target_length, dtype=torch.bool, device=device)
-            window_mask = ~torch.triu(window_mask, diagonal=-(self.config.attention_window_size - 1))
-            causal_mask = causal_mask.masked_fill(window_mask, min_dtype)
 
         causal_mask *= torch.arange(target_length, device=device) > cache_position.reshape(-1, 1)
         causal_mask = causal_mask[None, None, :, :].expand(input_tensor.shape[0], 1, -1, -1)

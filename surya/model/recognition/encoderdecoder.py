@@ -1,11 +1,10 @@
 from typing import Optional, Union, Tuple
 
 import torch
-from torch.nn import CrossEntropyLoss
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 from transformers.models.vision_encoder_decoder.modeling_vision_encoder_decoder import shift_tokens_right
-from surya.model.recognition.encoder import EfficientViTEncoder
+from surya.model.recognition.encoder import DonutSwinModel
 from surya.model.recognition.decoder import SuryaOCRDecoder
 
 
@@ -29,7 +28,7 @@ class OCREncoderDecoderModel(PreTrainedModel):
         super().__init__(config)
 
         if encoder is None:
-            encoder = EfficientViTEncoder(config.encoder, attn_implementation=config._attn_implementation)
+            encoder = DonutSwinModel(config.encoder)
 
         if decoder is None:
             decoder = SuryaOCRDecoder(config.decoder, attn_implementation=config._attn_implementation)

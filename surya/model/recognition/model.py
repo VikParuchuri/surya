@@ -7,13 +7,13 @@ logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
 from typing import List, Optional, Tuple
 from surya.model.recognition.encoderdecoder import OCREncoderDecoderModel
-from surya.model.recognition.config import EfficientViTConfig, SuryaOCRConfig, SuryaOCRDecoderConfig
-from surya.model.recognition.encoder import EfficientViTEncoder
+from surya.model.recognition.config import DonutSwinConfig, SuryaOCRConfig, SuryaOCRDecoderConfig
+from surya.model.recognition.encoder import DonutSwinModel
 from surya.model.recognition.decoder import SuryaOCRDecoder
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE, langs: Optional[List[int]] = None):
+def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
 
     config = SuryaOCRConfig.from_pretrained(checkpoint)
     decoder_config = config.decoder
@@ -21,14 +21,13 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
     config.decoder = decoder
 
     encoder_config = config.encoder
-    #encoder_config["strides"] = (2, 4, 2, 2, 2)
-    encoder = EfficientViTConfig(**encoder_config)
+    encoder = DonutSwinConfig(**encoder_config)
     config.encoder = encoder
 
-    model = OCREncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype, ignore_mismatched_sizes=True)
+    model = OCREncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
 
     assert isinstance(model.decoder, SuryaOCRDecoder)
-    assert isinstance(model.encoder, EfficientViTEncoder)
+    assert isinstance(model.encoder, DonutSwinModel)
 
     model = model.to(device)
     model = model.eval()

@@ -2,7 +2,6 @@ from typing import List
 import torch
 from PIL import Image
 
-from surya.input.processing import convert_if_not_rgb
 from surya.postprocessing.math.latex import fix_math, contains_math
 from surya.postprocessing.text import truncate_repetitions
 from surya.settings import settings
@@ -22,21 +21,7 @@ def get_batch_size():
     return batch_size
 
 
-def get_encoder_batch_size():
-    batch_size = settings.RECOGNITION_BATCH_SIZE
-    if batch_size is not None:
-        batch_size = int(batch_size/4)
-        batch_size = max(1, batch_size)
-    else:
-        batch_size = 8
-        if settings.TORCH_DEVICE_MODEL == "mps":
-            batch_size = get_batch_size()
-        if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = get_batch_size()
-    return batch_size
-
-
-def batch_recognition(images: List, languages: List[List[str]], model, processor, batch_size=None):
+def batch_recognition(images: List, languages: List[List[str] | None], model, processor, batch_size=None):
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
 
@@ -53,15 +38,15 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
     output_text = []
     confidences = []
 
-    processed_batches = processor(text=[""] * len(images), images=images)
+    processed_batches = processor(text=[""] * len(images), images=images, langs=languages)
 
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
         batch_langs = languages[i:i+batch_size]
-        has_math = ["_math" in lang for lang in batch_langs]
+        has_math = [lang and "_math" in lang for lang in batch_langs]
 
         batch_pixel_values = processed_batches["pixel_values"][i:i+batch_size]
 
-        batch_decoder_input = [[model.config.decoder_start_token_id] for lang in batch_langs]
+        batch_decoder_input = [[model.config.decoder_start_token_id] for _ in batch_langs]
         current_batch_size = len(batch_pixel_values)
 
         batch_pixel_values = torch.tensor(np.stack(batch_pixel_values, axis=0), dtype=model.dtype, device=model.device)
@@ -78,13 +63,7 @@ def batch_recognition(images: List, languages: List[List[str]], model, processor
         all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
 
         with torch.no_grad(): # inference_mode doesn't work with torch.compile
-            # Run post-prefill tokens
-            encoder_hidden_states = []
-            encoder_batch_size = get_encoder_batch_size()
-            for i in range(0, len(batch_pixel_values), encoder_batch_size):
-                pixel_batch = batch_pixel_values[i:i+encoder_batch_size]
-                encoder_hidden_states.append(model.encoder(pixel_values=pixel_batch).last_hidden_state)
-            encoder_hidden_states = torch.cat(encoder_hidden_states, dim=0)
+            encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
             while token_count < settings.RECOGNITION_MAX_TOKENS:
                 is_prefill = token_count == 0

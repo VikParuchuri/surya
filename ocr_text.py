@@ -29,8 +29,6 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug logging.", default=False)
     args = parser.parse_args()
 
-    assert args.langs or args.lang_file, "Must provide either --langs or --lang_file"
-
     if os.path.isdir(args.input_path):
         images, names = load_from_folder(args.input_path, args.max, args.start_page)
         folder_name = os.path.basename(args.input_path)
@@ -44,11 +42,13 @@ def main():
         for lang in langs:
             replace_lang_with_code(lang)
         image_langs = langs
-    else:
+    elif args.langs:
         # We got our language settings from the input
         langs = args.langs.split(",")
         replace_lang_with_code(langs)
         image_langs = [langs] * len(images)
+    else:
+        image_langs = [None] * len(images)
 
     det_processor = load_detection_processor()
     det_model = load_detection_model()

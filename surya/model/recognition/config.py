@@ -29,53 +29,60 @@ class SuryaOCRConfig(PretrainedConfig):
             self.eos_token_id = decoder_config.eos_token_id
 
 
-@dataclass
-class EfficientViTModelOutput(ModelOutput):
+class DonutSwinConfig(PretrainedConfig):
+    model_type = "donut-swin"
 
-    last_hidden_state: torch.FloatTensor = None
-
-
-class EfficientViTConfig(PretrainedConfig):
-    r"""
-    ```"""
-
-    model_type = "efficientvit"
+    attribute_map = {
+        "num_attention_heads": "num_heads",
+        "num_hidden_layers": "num_layers",
+    }
 
     def __init__(
         self,
+        image_size=(196, 896),
+        patch_size=4,
         num_channels=3,
-        widths=(32, 64, 128, 512, 1024),
-        head_dim=32,
-        num_stages=4,
-        depths=(1, 1, 1, 6, 6),
-        strides=(4, 2, 1, 2, 2),
-        hidden_sizes=(32, 64, 160, 512),
-        patch_size=(7, 7),
+        embed_dim=128,
+        depths=[2, 2, 14, 2],
+        num_heads=[4, 8, 16, 32],
+        num_kv_heads=[1, 2, 4, 8],
+        window_size=7,
+        mlp_ratio=4.0,
+        qkv_bias=True,
         hidden_dropout_prob=0.0,
         attention_probs_dropout_prob=0.0,
-        layer_norm_eps=1e-6,
+        drop_path_rate=0.1,
+        hidden_act="gelu",
+        use_absolute_embeddings=True,
         initializer_range=0.02,
+        layer_norm_eps=1e-5,
         encoder_length=256,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.widths = widths
-        self.head_dim = head_dim
-        self.hidden_size = widths[-1]
-
-        self.num_channels = num_channels
-        self.num_stages = num_stages
-        self.depths = depths
-        self.strides = strides
-        self.hidden_sizes = hidden_sizes
+        self.image_size = image_size
         self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.embed_dim = embed_dim
+        self.depths = depths
+        self.num_layers = len(depths)
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.window_size = window_size
+        self.mlp_ratio = mlp_ratio
+        self.qkv_bias = qkv_bias
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.drop_path_rate = drop_path_rate
+        self.hidden_act = hidden_act
+        self.use_absolute_embeddings = use_absolute_embeddings
         self.layer_norm_eps = layer_norm_eps
-        self.encoder_length = encoder_length
-
         self.initializer_range = initializer_range
+        # we set the hidden_size attribute in order to make Swin work with VisionEncoderDecoderModel
+        # this indicates the channel dimension after the last stage of the model
+        self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
+        self.encoder_length = encoder_length
 
 
 class SuryaOCRDecoderConfig(PretrainedConfig):
@@ -83,7 +90,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
 
     def __init__(
         self,
-        num_hidden_layers=8,
+        num_hidden_layers=10,
         vocab_size=65792,
         hidden_size=1024,
         intermediate_size=4 * 1024,
@@ -101,8 +108,9 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
-        cross_attn_every=2,
-        global_attn_every=2,
+        cross_attn_layers=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        self_attn_layers=(0, 1, 3, 5, 7, 9),
+        global_attn_layers=(0, 1, 3, 5, 7, 9),
         attention_dropout=0.0,
         num_key_value_heads=2,
         attention_bias=False,
@@ -129,8 +137,9 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         self.num_key_value_heads = num_key_value_heads if num_key_value_heads is not None else num_attention_heads
         if self.num_key_value_heads > self.num_attention_heads:
             raise ValueError("The number of `num_key_value_heads` must be smaller than `num_attention_heads`")
-        self.cross_attn_every = cross_attn_every
-        self.global_attn_every = global_attn_every
+        self.cross_attn_layers = cross_attn_layers
+        self.self_attn_layers = self_attn_layers
+        self.global_attn_layers = global_attn_layers
         self.attention_dropout = attention_dropout
         self.attention_bias = attention_bias
         self.w_init_variance_scale = w_init_variance_scale
@@ -148,3 +157,105 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
     @property
     def layers_block_type(self):
         return (self.block_types * 100)[: self.num_hidden_layers]
+
+
+
+TOTAL_TOKENS = 65536
+TOKEN_OFFSET = 3 # Pad, eos, bos
+SPECIAL_TOKENS = 253
+TOTAL_VOCAB_SIZE = TOTAL_TOKENS + TOKEN_OFFSET + SPECIAL_TOKENS
+LANGUAGE_MAP = {
+    'af': 0,
+    'am': 1,
+    'ar': 2,
+    'as': 3,
+    'az': 4,
+    'be': 5,
+    'bg': 6,
+    'bn': 7,
+    'br': 8,
+    'bs': 9,
+    'ca': 10,
+    'cs': 11,
+    'cy': 12,
+    'da': 13,
+    'de': 14,
+    'el': 15,
+    'en': 16,
+    'eo': 17,
+    'es': 18,
+    'et': 19,
+    'eu': 20,
+    'fa': 21,
+    'fi': 22,
+    'fr': 23,
+    'fy': 24,
+    'ga': 25,
+    'gd': 26,
+    'gl': 27,
+    'gu': 28,
+    'ha': 29,
+    'he': 30,
+    'hi': 31,
+    'hr': 32,
+    'hu': 33,
+    'hy': 34,
+    'id': 35,
+    'is': 36,
+    'it': 37,
+    'ja': 38,
+    'jv': 39,
+    'ka': 40,
+    'kk': 41,
+    'km': 42,
+    'kn': 43,
+    'ko': 44,
+    'ku': 45,
+    'ky': 46,
+    'la': 47,
+    'lo': 48,
+    'lt': 49,
+    'lv': 50,
+    'mg': 51,
+    'mk': 52,
+    'ml': 53,
+    'mn': 54,
+    'mr': 55,
+    'ms': 56,
+    'my': 57,
+    'ne': 58,
+    'nl': 59,
+    'no': 60,
+    'om': 61,
+    'or': 62,
+    'pa': 63,
+    'pl': 64,
+    'ps': 65,
+    'pt': 66,
+    'ro': 67,
+    'ru': 68,
+    'sa': 69,
+    'sd': 70,
+    'si': 71,
+    'sk': 72,
+    'sl': 73,
+    'so': 74,
+    'sq': 75,
+    'sr': 76,
+    'su': 77,
+    'sv': 78,
+    'sw': 79,
+    'ta': 80,
+    'te': 81,
+    'th': 82,
+    'tl': 83,
+    'tr': 84,
+    'ug': 85,
+    'uk': 86,
+    'ur': 87,
+    'uz': 88,
+    'vi': 89,
+    'xh': 90,
+    'yi': 91,
+    'zh': 92
+}
