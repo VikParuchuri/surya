@@ -212,4 +212,5 @@ class SuryaProcessor(DonutProcessor):
             return encodings
         else:
             inputs["labels"] = encodings["input_ids"]
+            inputs["langs"] = encodings["langs"]
             return inputs

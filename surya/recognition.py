@@ -46,7 +46,16 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
         batch_pixel_values = processed_batches["pixel_values"][i:i+batch_size]
 
-        batch_decoder_input = [[model.config.decoder_start_token_id] for _ in batch_langs]
+        batch_langs = processed_batches["langs"][i:i+batch_size]
+        batch_decoder_input = [[model.config.decoder_start_token_id] + lang for lang in batch_langs]
+        max_input_length = max([len(tokens) for tokens in batch_decoder_input])
+
+        # Pad decoder input to max length if needed, to ensure we can convert to a tensor
+        for token_idx in range(len(batch_decoder_input)):
+            lang_len = len(batch_decoder_input[token_idx])
+            if lang_len < max_input_length:
+                batch_decoder_input[token_idx] = [processor.tokenizer.pad_id] * (max_input_length - lang_len) + batch_decoder_input[token_idx]
+
         current_batch_size = len(batch_pixel_values)
 
         batch_pixel_values = torch.tensor(np.stack(batch_pixel_values, axis=0), dtype=model.dtype, device=model.device)
@@ -67,6 +76,7 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
             while token_count < settings.RECOGNITION_MAX_TOKENS:
                 is_prefill = token_count == 0
+                #TODO: add attention mask
                 return_dict = model.decoder(
                     input_ids=batch_decoder_input,
                     encoder_hidden_states=encoder_hidden_states,
@@ -82,11 +92,10 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
                 done = done
                 all_done = all_done | done
 
-                scores[all_done == 1] = 0
-
                 if is_prefill:
                     sequence_scores = scores
                 else:
+                    scores = scores.masked_fill(all_done, 0)
                     sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
                 if all_done.all():

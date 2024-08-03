@@ -140,7 +140,7 @@ class TextLine(PolygonBox):
 
 class OCRResult(BaseModel):
     text_lines: List[TextLine]
-    languages: List[str]
+    languages: List[str] | None = None
     image_bbox: List[float]
 
 

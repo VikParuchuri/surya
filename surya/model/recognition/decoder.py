@@ -15,7 +15,6 @@ from surya.settings import settings
 _MAX_SQRT_GRADIENT = 1000.0
 
 
-# Copied from transformers.models.gemma.modeling_gemma.GemmaRMSNorm with Gemma->SuryaOCRDecoder
 class SuryaOCRDecoderRMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -114,7 +113,9 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
-    """Multi-headed attention from 'Attention Is All You Need' paper"""
+    """Multi-headed attention from 'Attention Is All You Need' paper
+    Modified for GQA
+    """
 
     def __init__(self, config: SuryaOCRDecoderConfig):
         super().__init__()
