@@ -21,6 +21,17 @@ def get_batch_size():
     return batch_size
 
 
+def pad_to_batch_size(tensor, batch_size):
+    current_batch_size = tensor.shape[0]
+    if current_batch_size >= batch_size:
+        return tensor
+
+    pad_size = batch_size - current_batch_size
+    padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
+
+    return F.pad(tensor, padding, mode='constant', value=0)
+
+
 def batch_recognition(images: List, languages: List[List[str] | None], model, processor, batch_size=None):
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
@@ -66,10 +77,15 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
         batch_predictions = [[] for _ in range(current_batch_size)]
 
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64, device=model.device).cumsum(0) - 1
-        model.decoder.model._setup_cache(model.config, 1, model.device, model.dtype)
+        model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         sequence_scores = None
         all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
+
+        if settings.RECOGNITION_STATIC_CACHE:
+            # Pad inputs to max batch size for static cache
+            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
+            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         with torch.no_grad(): # inference_mode doesn't work with torch.compile
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
@@ -109,6 +125,9 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[-1]
+
+                if settings.RECOGNITION_STATIC_CACHE:
+                    batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
         detected_text = processor.tokenizer.batch_decode(batch_predictions)

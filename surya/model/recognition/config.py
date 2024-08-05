@@ -97,7 +97,6 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         num_attention_heads=16,
         lru_width=None,
         attention_window_size=16,
-        max_tokens=256,
         conv1d_width=4,
         logits_soft_cap=30.0,
         rms_norm_eps=1e-6,

@@ -1,5 +1,7 @@
 import warnings
 
+import torch
+
 warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
 
 import logging
@@ -31,5 +33,6 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
 
     model = model.to(device)
     model = model.eval()
+
     print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

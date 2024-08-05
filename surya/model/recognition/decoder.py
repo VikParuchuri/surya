@@ -227,7 +227,14 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
 
         causal_mask = attention_mask
         if attention_mask is not None:
-            causal_mask = causal_mask[:, :, :, : key_states.shape[-2]]
+            # Mask is batch, head, seq_len, kv_len
+            causal_mask = causal_mask[:, :, :, :key_states.shape[-2]]
+            current_cache_position = cache_position[-1].item() if cache_position is not None else None
+            if current_cache_position and settings.RECOGNITION_STATIC_CACHE:
+                # Mask out future cache positions
+                position_mask = torch.ones_like(causal_mask, dtype=torch.bool, device=causal_mask.device)
+                position_mask[:, :, :, :current_cache_position + 1] = False
+                causal_mask = torch.where(position_mask, torch.finfo(causal_mask.dtype).min, causal_mask)
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query_states.contiguous(),
@@ -252,30 +259,39 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
         self.value_states = None
         self.key_states = None
 
-    @torch.no_grad()
-    def _update_cache(self, key_states, value_states, **cache_kwargs):
-        window_attn = cache_kwargs.get("window_attn", False)
-        window_size = self.config.attention_window_size
-        curr_token_count = key_states.shape[2]
+        if settings.RECOGNITION_STATIC_CACHE:
+            cache_shape = (batch_size, self.num_key_value_heads, settings.RECOGNITION_MAX_TOKENS, self.head_dim)
+            self.value_states = torch.zeros(cache_shape, dtype=dtype, device=device)
+            self.key_states = torch.zeros(cache_shape, dtype=dtype, device=device)
 
-        if self.key_states is None:
-            k_out = key_states
-        else:
-            k_out = torch.cat([self.key_states, key_states], dim=2)
+    def _update_static_cache(self, key_states, value_states, **cache_kwargs):
+        cache_position = cache_kwargs.get("cache_position")
+        k_out, v_out = self.key_states.to(key_states.device), self.value_states.to(value_states.device)
 
-            if curr_token_count == 1 and k_out.shape[2] > window_size and window_attn:
-                k_out = k_out[:, :, -window_size:]
-
-        if self.value_states is None:
-            v_out = value_states
-        else:
-            v_out = torch.cat([self.value_states, value_states], dim=2)
-
-            if curr_token_count == 1 and v_out.shape[2] > window_size and window_attn:
-                v_out = v_out[:, :, -window_size:]
+        k_out[:, :, cache_position] = key_states.to(k_out.dtype)
+        v_out[:, :, cache_position] = value_states.to(v_out.dtype)
 
         self.key_states, self.value_states = k_out, v_out
         return k_out, v_out
+
+    def _update_dynamic_cache(self, key_states, value_states, **cache_kwargs):
+        k_out = key_states
+        if self.key_states is not None:
+            k_out = torch.cat([self.key_states, key_states], dim=2)
+
+        v_out = value_states
+        if self.value_states is not None:
+            v_out = torch.cat([self.value_states, value_states], dim=2)
+
+        self.key_states, self.value_states = k_out, v_out
+        return k_out, v_out
+
+    @torch.no_grad()
+    def _update_cache(self, key_states, value_states, **cache_kwargs):
+        if settings.RECOGNITION_STATIC_CACHE:
+            return self._update_static_cache(key_states, value_states, **cache_kwargs)
+
+        return self._update_dynamic_cache(key_states, value_states, **cache_kwargs)
 
 
 class SuryaOCRDecoderMlp(nn.Module):
