@@ -19,14 +19,7 @@ from torch import nn
 from transformers.activations import ACT2FN
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, meshgrid, prune_linear_layer
-from transformers.utils import (
-    ModelOutput,
-    add_code_sample_docstrings,
-    add_start_docstrings,
-    add_start_docstrings_to_model_forward,
-    logging,
-    torch_int,
-)
+from transformers.utils import ModelOutput
 from surya.model.recognition.config import DonutSwinConfig
 
 _EXPECTED_OUTPUT_SHAPE = [1, 49, 1024]
@@ -498,7 +491,7 @@ class DonutSwinLayer(nn.Module):
     def set_shift_and_window_size(self, input_resolution):
         if min(input_resolution) <= self.window_size:
             # if window size is larger than input resolution, we don't partition windows
-            self.shift_size = torch_int(0)
+            self.shift_size = int(0)
             self.window_size = (
                 torch.min(torch.tensor(input_resolution)) if torch.jit.is_tracing() else min(input_resolution)
             )

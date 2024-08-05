@@ -25,7 +25,6 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
 
-    images = [image.convert("RGB") for image in images] # also copies the images
     if batch_size is None:
         batch_size = get_batch_size()
 
@@ -37,16 +36,17 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
     output_text = []
     confidences = []
-
-    processed_batches = processor(text=[""] * len(images), images=images, langs=languages)
-
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
+        batch_images = images[i:i+batch_size]
+        batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
+
         batch_langs = languages[i:i+batch_size]
         has_math = [lang and "_math" in lang for lang in batch_langs]
 
-        batch_pixel_values = processed_batches["pixel_values"][i:i+batch_size]
+        processed_batch = processor(text=[""] * len(batch_images), images=batch_images, langs=batch_langs)
 
-        batch_langs = processed_batches["langs"][i:i+batch_size]
+        batch_pixel_values = processed_batch["pixel_values"]
+        batch_langs = processed_batch["langs"]
         batch_decoder_input = [[model.config.decoder_start_token_id] + lang for lang in batch_langs]
         max_input_length = max([len(tokens) for tokens in batch_decoder_input])
 
