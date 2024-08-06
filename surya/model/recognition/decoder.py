@@ -63,15 +63,11 @@ class SuryaOCRDecoderRotaryEmbedding(nn.Module):
         self.inv_freq.to(x.device)
         inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1)
         position_ids_expanded = position_ids[:, None, :].float()
-        # Force float32 since bfloat16 loses precision on long contexts
-        # See https://github.com/huggingface/transformers/pull/29285
-        device_type = x.device.type
-        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
-        with torch.autocast(device_type=device_type, enabled=False):
-            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
-            emb = torch.cat((freqs, freqs), dim=-1)
-            cos = emb.cos()
-            sin = emb.sin()
+
+        freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
+        emb = torch.cat((freqs, freqs), dim=-1)
+        cos = emb.cos()
+        sin = emb.sin()
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
 
@@ -159,12 +155,17 @@ class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
         _, v_len, _ = encoder_hidden_states.size()
 
         query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(encoder_hidden_states)
-        value_states = self.v_proj(encoder_hidden_states)
-
         query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+
+        if self.key_states is None:
+            key_states = self.k_proj(encoder_hidden_states)
+            value_states = self.v_proj(encoder_hidden_states)
+            key_states = key_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+            value_states = value_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+            self._update_cache(key_states, value_states)
+        else:
+            key_states = self.key_states
+            value_states = self.value_states
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
@@ -182,6 +183,16 @@ class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
         attn_output = attn_output.view(bsz, q_len, self.hidden_size)
         attn_output = self.o_proj(attn_output)
         return attn_output
+
+    def _setup_cache(self, batch_size, device, dtype=None):
+        # Setup initial caches
+        self.value_states = None
+        self.key_states = None
+
+    @torch.no_grad()
+    def _update_cache(self, key_states, value_states, **cache_kwargs):
+        self.value_states = value_states
+        self.key_states = key_states
 
 
 class SuryaOCRDecoderSdpaAttention(nn.Module):
@@ -412,6 +423,8 @@ class SuryaOCRDecoderPreTrainedModel(PreTrainedModel):
         for layer in layers:
             if layer.temporal_block:
                 layer.temporal_block._setup_cache(batch, device, dtype)
+            if layer.cross_attn_block:
+                layer.cross_attn_block._setup_cache(batch, device, dtype)
 
     def reset_cache(self, batch, device, dtype):
         pass
@@ -468,6 +481,7 @@ class SuryaOCRDecoderModel(SuryaOCRDecoderPreTrainedModel):
         use_cache: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        prefill: bool = False
     ) -> Union[Tuple, BaseModelOutputWithNoAttention]:
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
@@ -478,7 +492,7 @@ class SuryaOCRDecoderModel(SuryaOCRDecoderPreTrainedModel):
         inputs_embeds = self.embed_tokens(input_ids)
         hidden_states = inputs_embeds
 
-        if use_cache and inputs_embeds.shape[1] != 1:  # TODO let's maybe only call in the `generate`?
+        if use_cache and prefill:
             self._setup_cache(self.config, hidden_states.shape[0], hidden_states.device, hidden_states.dtype)
 
         if cache_position is None:
@@ -591,6 +605,7 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = None,
+        prefill: bool = False,
         **kwargs
     ) -> Union[Tuple, OCRModelOutput]:
         outputs = self.model(
@@ -602,6 +617,7 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
             use_cache=use_cache,
             output_hidden_states=True,
             return_dict=True,
+            prefill=prefill,
         )
 
         hidden_states = outputs[0]
@@ -615,48 +631,3 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
             aux_logits=aux_logits,
             hidden_states=outputs.hidden_states,
         )
-
-    # Ignore copy
-    def prepare_inputs_for_generation(
-        self, input_ids, attention_mask=None, inputs_embeds=None, cache_position=None, use_cache=None, **kwargs
-    ):
-        position_ids = kwargs.get("position_ids", None)
-        if attention_mask is not None and position_ids is None:
-            position_ids = attention_mask.long().cumsum(-1) - 1
-            position_ids.masked_fill_(attention_mask == 0, 1)
-
-        attention_mask = attention_mask[:, -self.config.attention_window_size :]
-
-        past_length = cache_position[0]
-        if past_length > 0:
-            position_ids = position_ids[:, past_length:]
-
-        if inputs_embeds is not None:
-            model_inputs = {"inputs_embeds": inputs_embeds[:, past_length:]}
-        else:
-            model_inputs = {"input_ids": input_ids[:, past_length:].contiguous()}
-
-        if cache_position is not None:
-            cache_position = cache_position[-position_ids.shape[1] :]
-
-        model_inputs.update(
-            {
-                "position_ids": position_ids,
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "use_cache": use_cache,
-            }
-        )
-        return model_inputs
-
-    # Ignore copy
-    def _reorder_cache(self, past_key_values, beam_idx):
-        for layer in self.layers:
-            if hasattr(layer.temporal_block, "key_states"):
-                k_state = layer.temporal_block.key_states
-                v_state = layer.temporal_block.value_states
-                if k_state:
-                    k_state = k_state.index_select(0, beam_idx.to(k_state.device))
-                if v_state:
-                    v_state = v_state.index_select(0, beam_idx.to(v_state.device))
-        return None

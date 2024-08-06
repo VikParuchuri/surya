@@ -97,7 +97,8 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
                     input_ids=batch_decoder_input,
                     encoder_hidden_states=encoder_hidden_states,
                     cache_position=decoder_position_ids,
-                    use_cache=True
+                    use_cache=True,
+                    prefill=is_prefill
                 )
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
@@ -135,6 +136,8 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[-1]
+                max_position_id = torch.max(decoder_position_ids).item()
+                decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64, device=model.device).cumsum(0) - 1 + max_position_id
 
                 if settings.RECOGNITION_STATIC_CACHE:
                     batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
