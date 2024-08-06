@@ -82,15 +82,15 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
         sequence_scores = None
         all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
 
-        if settings.RECOGNITION_STATIC_CACHE:
-            # Pad inputs to max batch size for static cache
-            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
-            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
-
         with torch.no_grad(): # inference_mode doesn't work with torch.compile
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
-            while token_count < settings.RECOGNITION_MAX_TOKENS:
+            if settings.RECOGNITION_STATIC_CACHE:
+                # Pad inputs to max batch size for static cache
+                encoder_hidden_states = pad_to_batch_size(encoder_hidden_states, batch_size)
+                batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
+
+            while token_count < settings.RECOGNITION_MAX_TOKENS - 1:
                 is_prefill = token_count == 0
                 #TODO: add attention mask
                 return_dict = model.decoder(
@@ -102,8 +102,10 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
                 logits = return_dict["logits"][:current_batch_size] # Ignore batch padding
+                aux_logits = return_dict.get("aux_logits", None)
+
                 preds = torch.argmax(logits[:, -1], dim=-1)
-                scores = torch.max(F.softmax(logits, dim=-1), dim=-1).values
+                scores = torch.max(F.softmax(logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
                 done = (preds == processor.tokenizer.eos_id) | (preds == processor.tokenizer.pad_id)
                 done = done
                 all_done = all_done | done
@@ -122,6 +124,14 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
                 for j, (pred, status) in enumerate(zip(preds, all_done)):
                     if not status:
                         batch_predictions[j].append(int(pred))
+
+                if aux_logits and settings.RECOGNITION_TURBO_MODE:
+                    aux_preds = [torch.argmax(aux_logit[:current_batch_size, -1], dim=-1) for aux_logit in aux_logits]
+                    for k, aux_pred in enumerate(aux_preds):
+                        batch_decoder_input = torch.cat([batch_decoder_input, aux_pred.unsqueeze(1)], dim=1)
+                        for j, aux_token in enumerate(aux_pred):
+                            if not all_done[j]:
+                                batch_predictions[j].append(int(aux_token))
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[-1]

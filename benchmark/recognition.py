@@ -64,7 +64,9 @@ def main():
             lang_list.append(l)
 
     if args.compile:
-        rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
+        torch.set_float32_matmul_precision('high')
+        torch._dynamo.config.cache_size_limit = 64
+        rec_model.decoder.model = torch.compile(rec_model.decoder.model)
         # Run through one batch to compile the model
         run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 

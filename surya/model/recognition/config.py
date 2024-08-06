@@ -116,6 +116,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         w_init_variance_scale=0.01,
         init_std=0.02,
         tie_word_embeddings=False,
+        aux_heads=0,  # How many n-token-ahead heads to add
         **kwargs,
     ):
         self.num_hidden_layers = num_hidden_layers
@@ -145,6 +146,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         self.final_w_init_variance_scale = 2.0 / self.num_hidden_layers
         self.init_std = init_std
         self.tie_word_embeddings = tie_word_embeddings
+        self.aux_heads = aux_heads
 
         super().__init__(
             pad_token_id=pad_token_id,

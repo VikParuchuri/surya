@@ -1,8 +1,11 @@
+from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
 from torch import nn
+from transformers.utils import ModelOutput
+
 from surya.model.recognition.config import SuryaOCRDecoderConfig
 from transformers import PreTrainedModel
 from transformers.activations import ACT2FN
@@ -13,6 +16,13 @@ from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from surya.settings import settings
 
 _MAX_SQRT_GRADIENT = 1000.0
+
+
+@dataclass
+class OCRModelOutput(ModelOutput):
+    logits: torch.Tensor
+    aux_logits: torch.Tensor | None = None
+    hidden_states: torch.Tensor | None = None
 
 
 class SuryaOCRDecoderRMSNorm(nn.Module):
@@ -547,7 +557,9 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
         super().__init__(config)
         self.model = SuryaOCRDecoderModel(config)
         self.vocab_size = config.vocab_size
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        aux_heads = config.aux_heads if config.aux_heads is not None else 0
+        lm_heads = aux_heads + 1
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size * lm_heads, bias=False)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -580,7 +592,7 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = None,
         **kwargs
-    ) -> Union[Tuple, CausalLMOutput]:
+    ) -> Union[Tuple, OCRModelOutput]:
         outputs = self.model(
             input_ids=input_ids,
             cache_position=cache_position,
@@ -593,10 +605,14 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
         )
 
         hidden_states = outputs[0]
-        logits = self.lm_head(hidden_states)
+        all_logits = self.lm_head(hidden_states)
+        all_logits = torch.split(all_logits, self.vocab_size, dim=-1)
+        logits = all_logits[0]
+        aux_logits = all_logits[1:] if len(all_logits) > 1 else None
 
-        return CausalLMOutput(
+        return OCRModelOutput(
             logits=logits,
+            aux_logits=aux_logits,
             hidden_states=outputs.hidden_states,
         )
 
