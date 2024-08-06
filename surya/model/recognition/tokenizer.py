@@ -1,5 +1,7 @@
 from itertools import chain
-from typing import List, Union
+import random
+from typing import List, Optional, Tuple, Union
+from tokenizers import AddedToken
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
@@ -31,19 +33,18 @@ def utf16_numbers_to_text(numbers):
     return text
 
 
-def _tokenize(text: str, langs: List[str], eos_token_id: int = 1, add_eos: bool = True, add_bos: bool = True):
+def _tokenize(text: str, langs: List[str] | None, eos_token_id: int = 1, add_eos: bool = False, add_bos: bool = True):
     tokens = text_to_utf16_numbers(text)
     tokens = [t + TOKEN_OFFSET for t in tokens] # Account for special pad, etc, tokens
 
     lang_list = []
-    for lang in langs:
-        code = LANGUAGE_MAP[lang]
-        lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
+    if langs:
+        for lang in langs:
+            code = LANGUAGE_MAP[lang]
+            lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
 
     tokens = lang_list + tokens
 
-    if add_eos:
-        tokens.append(eos_token_id)
     if add_bos:
         tokens.insert(0, eos_token_id)
 
@@ -73,7 +74,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         super().__init__()
 
-    def __call__(self, texts: Union[List[str], str], langs: Union[List[List[str]], List[str]], pad_token_id: int = 0, **kwargs):
+    def __call__(self, texts: List[str] | str, langs: List[List[str]] | List[str] | None = None, pad_token_id: int = 0, **kwargs):
         tokenized = []
         all_langs = []
 
@@ -83,10 +84,12 @@ class Byt5LangTokenizer(ByT5Tokenizer):
             texts = [texts]
             is_list = False
 
+        if langs is None:
+            langs = [None] * len(texts)
+
         if isinstance(langs[0], str):
             langs = [langs]
 
-        # One language input per text input
         assert len(langs) == len(texts)
 
         for text, lang in zip(texts, langs):

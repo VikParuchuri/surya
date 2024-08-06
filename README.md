@@ -88,7 +88,7 @@ surya_ocr DATA_PATH --images --langs hi,en
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
-- `--langs` specifies the language(s) to use for OCR.  You can comma separate multiple languages (I don't recommend using more than `4`). Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
+- `--langs` is an optional (but highly recommended) argument that specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
 - `--lang_file` if you want to use a different language for different PDFs/images, you can specify languages here.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
 - `--images` will save images of the pages and detected text lines (optional)
 - `--results_dir` specifies the directory to save results to instead of the default
@@ -120,7 +120,7 @@ from surya.model.recognition.model import load_model
 from surya.model.recognition.processor import load_processor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages
+langs = ["en"] # Replace with your languages - optional but recommended
 det_processor, det_model = segformer.load_processor(), segformer.load_model()
 rec_model, rec_processor = load_model(), load_processor()
 
@@ -134,7 +134,7 @@ The OCR model can be compiled to get an ~15% speedup in total inference time.  T
 ```python
 import torch
 
-rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
+rec_model.decoder.model = torch.compile(rec_model.decoder.model)
 ```
 
 ## Text line detection
