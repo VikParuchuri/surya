@@ -1,22 +1,28 @@
 import argparse
+import json
+import os
+import time
 from collections import defaultdict
 
+import datasets
 import torch
+from tabulate import tabulate
 
 from benchmark.scoring import overlap_score
+from surya.benchmark.tesseract import (
+    TESS_CODE_TO_LANGUAGE,
+    surya_lang_to_tesseract,
+    tesseract_ocr_parallel,
+)
 from surya.input.processing import convert_if_not_rgb
+from surya.languages import CODE_TO_LANGUAGE
 from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import load_processor as load_recognition_processor
+from surya.model.recognition.processor import (
+    load_processor as load_recognition_processor,
+)
 from surya.ocr import run_recognition
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
-from surya.languages import CODE_TO_LANGUAGE
-from surya.benchmark.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
-import os
-import datasets
-import json
-import time
-from tabulate import tabulate
 
 KEY_LANGUAGES = ["Chinese", "Spanish", "English", "Arabic", "Hindi", "Bengali", "Russian", "Japanese"]
 

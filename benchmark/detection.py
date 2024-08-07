@@ -2,20 +2,21 @@ import argparse
 import collections
 import copy
 import json
+import os
+import time
+
+import datasets
+from tabulate import tabulate
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
-from surya.model.detection.model import load_model, load_processor
-from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.detection import batch_text_detection
+from surya.input.processing import convert_if_not_rgb, get_page_images, open_pdf
+from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
-import os
-import time
-from tabulate import tabulate
-import datasets
 
 
 def main():

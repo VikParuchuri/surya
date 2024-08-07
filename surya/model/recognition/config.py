@@ -1,4 +1,4 @@
-from transformers import T5Config, MBartConfig, DonutSwinConfig
+from transformers import DonutSwinConfig, MBartConfig, T5Config
 
 
 class MBartMoEConfig(MBartConfig):

@@ -1,15 +1,18 @@
-import os
 import argparse
 import json
+import os
 from collections import defaultdict
 
 import torch
 
-from surya.input.langs import replace_lang_with_code, get_unique_langs
-from surya.input.load import load_from_folder, load_from_file, load_lang_file
-from surya.model.detection.model import load_model as load_detection_model, load_processor as load_detection_processor
+from surya.input.langs import get_unique_langs, replace_lang_with_code
+from surya.input.load import load_from_file, load_from_folder, load_lang_file
+from surya.model.detection.model import load_model as load_detection_model
+from surya.model.detection.model import load_processor as load_detection_processor
 from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import load_processor as load_recognition_processor
+from surya.model.recognition.processor import (
+    load_processor as load_recognition_processor,
+)
 from surya.model.recognition.tokenizer import _tokenize
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image

@@ -1,17 +1,18 @@
 import argparse
 import copy
 import json
+import os
 import time
 from collections import defaultdict
 
-from surya.input.load import load_from_folder, load_from_file
-from surya.model.detection.model import load_model, load_processor
+from tqdm import tqdm
+
 from surya.detection import batch_text_detection
+from surya.input.load import load_from_file, load_from_folder
+from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.affinity import draw_lines_on_image
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
-import os
-from tqdm import tqdm
 
 
 def main():

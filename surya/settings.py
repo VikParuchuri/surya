@@ -1,10 +1,10 @@
+import os
 from typing import Dict, Optional
 
+import torch
 from dotenv import find_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
-import torch
-import os
 
 
 class Settings(BaseSettings):

@@ -1,5 +1,12 @@
-from transformers import DetrConfig, BeitConfig, DetrImageProcessor, VisionEncoderDecoderConfig, AutoModelForCausalLM, \
-    AutoModel
+from transformers import (
+    AutoModel,
+    AutoModelForCausalLM,
+    BeitConfig,
+    DetrConfig,
+    DetrImageProcessor,
+    VisionEncoderDecoderConfig,
+)
+
 from surya.model.ordering.config import MBartOrderConfig, VariableDonutSwinConfig
 from surya.model.ordering.decoder import MBartOrder
 from surya.model.ordering.encoder import VariableDonutSwinModel

@@ -2,16 +2,17 @@ import argparse
 import collections
 import copy
 import json
+import os
+import time
 
+import datasets
+
+from surya.benchmark.metrics import rank_accuracy
 from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.model import load_model
 from surya.model.ordering.processor import load_processor
 from surya.ordering import batch_ordering
 from surya.settings import settings
-from surya.benchmark.metrics import rank_accuracy
-import os
-import time
-import datasets
 
 
 def main():

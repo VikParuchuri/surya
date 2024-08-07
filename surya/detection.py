@@ -1,18 +1,23 @@
+from concurrent.futures import ProcessPoolExecutor
 from typing import List, Tuple
 
-import torch
 import numpy as np
+import torch
+import torch.nn.functional as F
 from PIL import Image
+from tqdm import tqdm
 
+from surya.input.processing import (
+    convert_if_not_rgb,
+    get_total_splits,
+    prepare_image_detection,
+    split_image,
+)
 from surya.model.detection.model import EfficientViTForSemanticSegmentation
-from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
+from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.schema import TextDetectionResult
 from surya.settings import settings
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
-import torch.nn.functional as F
 
 
 def get_batch_size():

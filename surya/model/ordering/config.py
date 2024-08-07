@@ -1,4 +1,4 @@
-from transformers import MBartConfig, DonutSwinConfig
+from transformers import DonutSwinConfig, MBartConfig
 
 
 class MBartOrderConfig(MBartConfig):

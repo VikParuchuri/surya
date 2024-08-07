@@ -1,5 +1,6 @@
-from typing import List, Optional
 import os
+from typing import List, Optional
+
 import requests
 
 from surya.settings import settings

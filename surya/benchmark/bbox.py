@@ -1,4 +1,5 @@
 import fitz as pymupdf
+
 from surya.postprocessing.util import rescale_bbox
 
 

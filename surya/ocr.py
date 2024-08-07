@@ -1,11 +1,16 @@
 from typing import List
+
 from PIL import Image
 
 from surya.detection import batch_text_detection
-from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image, convert_if_not_rgb
+from surya.input.processing import (
+    convert_if_not_rgb,
+    slice_bboxes_from_image,
+    slice_polys_from_image,
+)
 from surya.postprocessing.text import sort_text_lines
 from surya.recognition import batch_recognition
-from surya.schema import TextLine, OCRResult
+from surya.schema import OCRResult, TextLine
 
 
 def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None, batch_size=None) -> List[OCRResult]:

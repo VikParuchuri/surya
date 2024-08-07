@@ -2,8 +2,13 @@ import warnings
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-
-from transformers.image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
+import PIL.Image
+import torch
+from transformers.image_processing_utils import (
+    BaseImageProcessor,
+    BatchFeature,
+    get_size_dict,
+)
 from transformers.image_transforms import to_channel_dimension_format
 from transformers.image_utils import (
     IMAGENET_DEFAULT_MEAN,
@@ -15,10 +20,6 @@ from transformers.image_utils import (
     make_list_of_images,
 )
 from transformers.utils import TensorType
-
-
-import PIL.Image
-import torch
 
 
 class SegformerImageProcessor(BaseImageProcessor):

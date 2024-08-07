@@ -3,22 +3,24 @@ from typing import List
 
 import pypdfium2
 import streamlit as st
+from PIL import Image
+
 from surya.detection import batch_text_detection
+from surya.input.langs import replace_lang_with_code
+from surya.languages import CODE_TO_LANGUAGE
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
+from surya.model.ordering.model import load_model as load_order_model
+from surya.model.ordering.processor import load_processor as load_order_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
-from surya.model.ordering.processor import load_processor as load_order_processor
-from surya.model.ordering.model import load_model as load_order_model
+from surya.ocr import run_ocr
 from surya.ordering import batch_ordering
 from surya.postprocessing.heatmap import draw_polys_on_image
-from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
-from PIL import Image
-from surya.languages import CODE_TO_LANGUAGE
-from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult
+from surya.schema import LayoutResult, OCRResult, OrderResult, TextDetectionResult
 from surya.settings import settings
+
 
 @st.cache_resource()
 def load_det_cached():

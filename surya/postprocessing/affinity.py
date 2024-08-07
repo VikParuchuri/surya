@@ -2,7 +2,6 @@ from typing import List
 
 import cv2
 import numpy as np
-
 from PIL import Image, ImageDraw
 
 from surya.postprocessing.util import get_line_angle, rescale_bbox

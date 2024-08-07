@@ -1,14 +1,15 @@
 import argparse
+import hashlib
+import io
 import json
+import os
 from collections import defaultdict
 
 import datasets
-from surya.settings import settings
 from google.cloud import vision
-import hashlib
-import os
 from tqdm import tqdm
-import io
+
+from surya.settings import settings
 
 DATA_DIR = os.path.join(settings.BASE_DIR, settings.DATA_DIR)
 RESULT_DIR = os.path.join(settings.BASE_DIR, settings.RESULT_DIR)

@@ -1,5 +1,5 @@
-import json
 import argparse
+import json
 
 
 def verify_layout(data):

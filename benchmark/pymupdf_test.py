@@ -2,9 +2,8 @@ import argparse
 import os
 
 from surya.benchmark.bbox import get_pdf_lines
+from surya.input.processing import get_page_images, open_pdf
 from surya.postprocessing.heatmap import draw_bboxes_on_image
-
-from surya.input.processing import open_pdf, get_page_images
 from surya.settings import settings
 
 

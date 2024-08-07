@@ -1,7 +1,7 @@
 import copy
-from typing import List, Tuple, Any, Optional
+from typing import Any, List, Optional, Tuple
 
-from pydantic import BaseModel, field_validator, computed_field
+from pydantic import BaseModel, computed_field, field_validator
 
 from surya.postprocessing.util import rescale_bbox
 

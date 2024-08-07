@@ -5,9 +5,9 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 from surya.postprocessing.fonts import get_font_path
+from surya.postprocessing.math.latex import is_latex
 from surya.schema import TextLine
 from surya.settings import settings
-from surya.postprocessing.math.latex import is_latex
 
 
 def sort_text_lines(lines: List[TextLine], tolerance=1.25):

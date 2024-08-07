@@ -1,15 +1,22 @@
 from copy import deepcopy
-from typing import Dict, Union, Optional, List, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
+import PIL
 import torch
+from PIL import Image
 from torch import TensorType
 from transformers import DonutImageProcessor, DonutProcessor
 from transformers.image_processing_utils import BatchFeature
-from transformers.image_utils import PILImageResampling, ImageInput, ChannelDimension, make_list_of_images, \
-    valid_images, to_numpy_array
-import numpy as np
-from PIL import Image
-import PIL
+from transformers.image_utils import (
+    ChannelDimension,
+    ImageInput,
+    PILImageResampling,
+    make_list_of_images,
+    to_numpy_array,
+    valid_images,
+)
+
 from surya.settings import settings
 
 
