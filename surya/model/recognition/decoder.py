@@ -6,7 +6,7 @@ import torch.utils.checkpoint
 from torch import nn
 from transformers.utils import ModelOutput
 
-from surya.model.recognition.config import SuryaOCRDecoderConfig
+from surya.model.recognition.config import SuryaOCRDecoderConfig, SuryaOCRTextEncoderConfig
 from transformers import PreTrainedModel
 from transformers.activations import ACT2FN
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
@@ -134,8 +134,8 @@ class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
         self.num_key_value_groups = self.num_attention_heads // self.num_key_value_heads
 
         self.q_proj = nn.Linear(self.hidden_size, self.num_attention_heads * self.head_dim, bias=config.attention_bias)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
+        self.k_proj = nn.Linear(self.config.encoder_hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
+        self.v_proj = nn.Linear(self.config.encoder_hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.o_proj = nn.Linear(self.num_attention_heads * self.head_dim, self.hidden_size, bias=True)
         self.rotary_emb = SuryaOCRDecoderRotaryEmbedding(
             self.head_dim,
@@ -148,6 +148,7 @@ class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
         encoder_hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
+        use_cache: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         # Encoder attention mask currently ignored
 
@@ -162,7 +163,8 @@ class SuryaOCRDecoderSdpaCrossAttention(nn.Module):
             value_states = self.v_proj(encoder_hidden_states)
             key_states = key_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
             value_states = value_states.view(bsz, v_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-            self._update_cache(key_states, value_states)
+            if use_cache:
+                self._update_cache(key_states, value_states)
         else:
             key_states = self.key_states
             value_states = self.value_states
@@ -232,6 +234,7 @@ class SuryaOCRDecoderSdpaAttention(nn.Module):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
+        # Final is bsz, num_attention_heads, seq_len, head_dim
         query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -368,7 +371,7 @@ class SuryaOCRDecoderLayer(nn.Module):
             # Do cross-attention on encoder outputs
             cross_attn_inputs = self.cross_pre_norm(activations)
             cross_attn_path = self.cross_attn_block(
-                cross_attn_inputs, encoder_hidden_states, attention_mask, encoder_attention_mask
+                cross_attn_inputs, encoder_hidden_states, attention_mask, encoder_attention_mask, use_cache=use_cache
             )
             cross_attn_output = cross_attn_path + raw_activations
         else:
@@ -448,6 +451,7 @@ class SuryaOCRDecoderModel(SuryaOCRDecoderPreTrainedModel):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
+        self.causal = config.causal
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.ModuleList(
@@ -533,6 +537,9 @@ class SuryaOCRDecoderModel(SuryaOCRDecoderPreTrainedModel):
     # `fullgraph=True`. See more context in https://github.com/huggingface/transformers/pull/29114
     # Ignore copy
     def _update_causal_mask(self, attention_mask, input_tensor, cache_position):
+        if not self.causal:
+            return None
+
         dtype, device = input_tensor.dtype, input_tensor.device
         min_dtype = torch.finfo(dtype).min
         sequence_length = input_tensor.shape[1]
@@ -630,4 +637,59 @@ class SuryaOCRDecoder(SuryaOCRDecoderPreTrainedModel):
             logits=logits,
             aux_logits=aux_logits,
             hidden_states=outputs.hidden_states,
+        )
+
+@dataclass
+class TextEncoderOutput(CausalLMOutput):
+    hidden_states: torch.FloatTensor = None
+
+
+class SuryaOCRTextEncoder(SuryaOCRDecoderPreTrainedModel):
+    _tied_weights_keys = None
+    config_class = SuryaOCRTextEncoderConfig
+
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        self.model = SuryaOCRDecoderModel(config)
+        self.vocab_size = config.vocab_size
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def get_input_embeddings(self):
+        return self.model.embed_tokens
+
+    def set_input_embeddings(self, value):
+        self.model.embed_tokens = value
+
+    def set_decoder(self, decoder):
+        self.model = decoder
+
+    def get_decoder(self):
+        return self.model
+
+    # Ignore copy
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> Union[Tuple, CausalLMOutput]:
+        outputs = self.model(
+            input_ids=input_ids,
+            cache_position=cache_position,
+            attention_mask=attention_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            use_cache=use_cache,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+
+        return TextEncoderOutput(
+            hidden_states=outputs.last_hidden_state,
         )
