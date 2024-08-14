@@ -84,6 +84,8 @@ def slice_bboxes_from_image(image: Image.Image, bboxes):
     lines = []
     for bbox in bboxes:
         line = image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        if line.size[0] == 0:
+            print(f"Warning: found an empty line with bbox {bbox}")
         lines.append(line)
     return lines
 

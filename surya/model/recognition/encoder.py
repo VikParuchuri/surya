@@ -321,7 +321,7 @@ class DonutSwinSelfAttention(nn.Module):
         self.key = nn.Linear(self.all_head_size, self.kv_head_size, bias=config.qkv_bias)
         self.value = nn.Linear(self.all_head_size, self.kv_head_size, bias=config.qkv_bias)
 
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.dropout_p = config.attention_probs_dropout_prob
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -344,52 +344,38 @@ class DonutSwinSelfAttention(nn.Module):
         batch_size, dim, num_channels = hidden_states.shape
         mixed_query_layer = self.query(hidden_states)
 
+        # Final is (batch_size, num_attention_heads, seq_len, attention_head_size)
         key_layer = self.transpose_kv_for_scores(self.key(hidden_states), self.kv_repeats)
         value_layer = self.transpose_kv_for_scores(self.value(hidden_states), self.kv_repeats)
         query_layer = self.transpose_for_scores(mixed_query_layer)
-
-        # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
         relative_position_bias = relative_position_bias.view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1
         )
-
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
-        attention_scores = attention_scores + relative_position_bias.unsqueeze(0)
-
-        if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in DonutSwinModel forward() function)
+        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous().unsqueeze(0)
+        if attention_mask is None:
+            attention_mask = relative_position_bias
+        else:
             mask_shape = attention_mask.shape[0]
-            attention_scores = attention_scores.view(
-                batch_size // mask_shape, mask_shape, self.num_attention_heads, dim, dim
-            )
-            attention_scores = attention_scores + attention_mask.unsqueeze(1).unsqueeze(0)
-            attention_scores = attention_scores.view(-1, self.num_attention_heads, dim, dim)
+            repeat_count = (batch_size // mask_shape)
+            attention_mask = attention_mask.repeat(repeat_count, 1, 1).unsqueeze(1)
+            attention_mask = attention_mask + relative_position_bias
 
-        # Normalize the attention scores to probabilities.
-        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query_layer.contiguous(),
+            key_layer.contiguous(),
+            value_layer.contiguous(),
+            attn_mask=attention_mask,
+            dropout_p=self.dropout_p if self.training else 0.0,
+            scale=self.attention_head_size**-0.5,
+        )
 
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs = self.dropout(attention_probs)
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.view(batch_size, dim, num_channels)
 
-        # Mask heads if we want to
-        if head_mask is not None:
-            attention_probs = attention_probs * head_mask
-
-        context_layer = torch.matmul(attention_probs, value_layer)
-        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        context_layer = context_layer.view(new_context_layer_shape)
-
-        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
-
+        outputs = (attn_output,)
         return outputs
-
 
 # Copied from transformers.models.swin.modeling_swin.SwinSelfOutput
 class DonutSwinSelfOutput(nn.Module):

@@ -5,7 +5,7 @@ from transformers import PreTrainedModel, VisionEncoderDecoderConfig, Pretrained
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 from transformers.models.vision_encoder_decoder.modeling_vision_encoder_decoder import shift_tokens_right
 from surya.model.recognition.encoder import DonutSwinModel
-from surya.model.recognition.decoder import SuryaOCRDecoder
+from surya.model.recognition.decoder import SuryaOCRDecoder, SuryaOCRTextEncoder
 
 
 class OCREncoderDecoderModel(PreTrainedModel):
@@ -20,6 +20,7 @@ class OCREncoderDecoderModel(PreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
+        text_encoder: Optional[PreTrainedModel] = None,
     ):
         # initialize with config
         # make sure input & output embeddings is not tied
@@ -33,13 +34,18 @@ class OCREncoderDecoderModel(PreTrainedModel):
         if decoder is None:
             decoder = SuryaOCRDecoder(config.decoder, attn_implementation=config._attn_implementation)
 
+        if text_encoder is None:
+            text_encoder = SuryaOCRTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)
+
         self.encoder = encoder
         self.decoder = decoder
+        self.text_encoder = text_encoder
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
+        self.text_encoder.config = self.config.text_encoder
 
     def get_encoder(self):
         return self.encoder
