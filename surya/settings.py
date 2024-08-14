@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/text_recognizer_sar3"
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/text_recognizer_sar4_tok"
     RECOGNITION_MAX_TOKENS: int = 175
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
