@@ -84,7 +84,7 @@ surya_gui
 This command will write out a json file with the detected text and bboxes:
 
 ```shell
-surya_ocr DATA_PATH --images --langs hi,en
+surya_ocr DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -115,14 +115,14 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 ```python
 from PIL import Image
 from surya.ocr import run_ocr
-from surya.model.detection import segformer
-from surya.model.recognition.model import load_model
-from surya.model.recognition.processor import load_processor
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.recognition.model import load_model as load_rec_model
+from surya.model.recognition.processor import load_processor as load_rec_processor
 
 image = Image.open(IMAGE_PATH)
 langs = ["en"] # Replace with your languages - optional but recommended
-det_processor, det_model = segformer.load_processor(), segformer.load_model()
-rec_model, rec_processor = load_model(), load_processor()
+det_processor, det_model = load_det_processor(), load_det_model()
+rec_model, rec_processor = load_rec_model(), load_rec_processor()
 
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
 ```
@@ -142,7 +142,7 @@ rec_model.decoder.model = torch.compile(rec_model.decoder.model)
 This command will write out a json file with the detected bboxes.
 
 ```shell
-surya_detect DATA_PATH --images
+surya_detect DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -184,7 +184,7 @@ predictions = batch_text_detection([image], model, processor)
 This command will write out a json file with the detected layout.
 
 ```shell
-surya_layout DATA_PATH --images
+surya_layout DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -231,7 +231,7 @@ layout_predictions = batch_layout_detection([image], model, processor, line_pred
 This command will write out a json file with the detected reading order and layout.
 
 ```shell
-surya_order DATA_PATH --images
+surya_order DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -417,7 +417,9 @@ python benchmark/recognition.py --tesseract
 - `--debug 2` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
+
 - Set `RECOGNITION_BATCH_SIZE=864` to use the same batch size as the benchmark.
+- Set `RECOGNITION_BENCH_DATASET_NAME=vikp/rec_bench_hist` to use the historical document data for benchmarking.  This data comes from the [tapuscorpus](https://github.com/HTR-United/tapuscorpus).
 
 **Layout analysis**
 

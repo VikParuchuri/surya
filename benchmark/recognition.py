@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
+    parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
     if args.compile:
@@ -46,7 +47,7 @@ def main():
 
     if args.langs:
         langs = args.langs.split(",")
-        dataset = dataset.filter(lambda x: x["language"] in langs)
+        dataset = dataset.filter(lambda x: x["language"] in langs, num_proc=4)
 
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
@@ -62,6 +63,7 @@ def main():
             lang_list.append([l])
         else:
             lang_list.append(l)
+    n_list = [None] * len(images)
 
     if args.compile:
         torch.set_float32_matmul_precision('high')
@@ -71,7 +73,7 @@ def main():
         run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 
     start = time.time()
-    predictions_by_image = run_recognition(images, lang_list, rec_model, rec_processor, bboxes=bboxes)
+    predictions_by_image = run_recognition(images, lang_list if args.specify_language else n_list, rec_model, rec_processor, bboxes=bboxes)
     surya_time = time.time() - start
 
     surya_scores = defaultdict(list)
@@ -86,9 +88,9 @@ def main():
     flat_surya_scores = [s for l in surya_scores for s in surya_scores[l]]
     benchmark_stats = {
         "surya": {
-            "avg_score": sum(flat_surya_scores) / len(flat_surya_scores),
-            "lang_scores": {l: sum(scores) / len(scores) for l, scores in surya_scores.items()},
-            "time_per_img": surya_time / len(images)
+            "avg_score": sum(flat_surya_scores) / max(1, len(flat_surya_scores)),
+            "lang_scores": {l: sum(scores) / max(1, len(scores)) for l, scores in surya_scores.items()},
+            "time_per_img": surya_time / max(1, len(images))
         }
     }
 
