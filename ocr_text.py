@@ -24,8 +24,8 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--start_page", type=int, help="Page to start processing at.", default=0)
     parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
-    parser.add_argument("--langs", type=str, help="Language(s) to use for OCR. Comma separate for multiple. Can be a capitalized language name, or a 2-letter ISO 639 code.", default=None)
-    parser.add_argument("--lang_file", type=str, help="Path to file with languages to use for OCR. Should be a JSON dict with file names as keys, and the value being a list of language codes/names.", default=None)
+    parser.add_argument("--langs", type=str, help="Optional language(s) to use for OCR. Comma separate for multiple. Can be a capitalized language name, or a 2-letter ISO 639 code.", default=None)
+    parser.add_argument("--lang_file", type=str, help="Optional path to file with languages to use for OCR. Should be a JSON dict with file names as keys, and the value being a list of language codes/names.", default=None)
     parser.add_argument("--debug", action="store_true", help="Enable debug logging.", default=False)
     args = parser.parse_args()
 

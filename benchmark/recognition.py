@@ -136,7 +136,7 @@ def main():
         json.dump(benchmark_stats, f)
 
     key_languages = [k for k in KEY_LANGUAGES if k in surya_scores]
-    table_headers = ["Model", "Time per page (s)", "Avg Score"] + KEY_LANGUAGES
+    table_headers = ["Model", "Time per page (s)", "Avg Score"] + key_languages
     table_data = [
         ["surya", benchmark_stats["surya"]["time_per_img"], benchmark_stats["surya"]["avg_score"]] + [benchmark_stats["surya"]["lang_scores"][l] for l in key_languages],
     ]
