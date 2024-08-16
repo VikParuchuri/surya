@@ -36,6 +36,9 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(languages)
 
+    if len(images) == 0:
+        return [], []
+
     if batch_size is None:
         batch_size = get_batch_size()
 
