@@ -1,4 +1,5 @@
 CODE_TO_LANGUAGE = {
+    "_math": "Math",
     'af': 'Afrikaans',
     'am': 'Amharic',
     'ar': 'Arabic',

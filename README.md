@@ -51,7 +51,7 @@ There is a hosted API for all surya models available [here](https://www.datalab.
 
 I want surya to be as widely accessible as possible, while still funding my development/training costs. Research and personal usage is always okay, but there are some restrictions on commercial usage.
 
-The weights for the models are licensed `cc-by-nc-sa-4.0`, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period AND under $5M in lifetime VC/angel funding raised. If you want to remove the GPL license requirements (dual-license) and/or use the weights commercially over the revenue limit, check out the options [here](https://www.datalab.to).
+The weights for the models are licensed `cc-by-nc-sa-4.0`, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period AND under $5M in lifetime VC/angel funding raised. You also must not be competitive with the [Datalab API](https://www.datalab.to/).  If you want to remove the GPL license requirements (dual-license) and/or use the weights commercially over the revenue limit, check out the options [here](https://www.datalab.to).
 
 # Installation
 
@@ -84,12 +84,12 @@ surya_gui
 This command will write out a json file with the detected text and bboxes:
 
 ```shell
-surya_ocr DATA_PATH --images --langs hi,en
+surya_ocr DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
-- `--langs` specifies the language(s) to use for OCR.  You can comma separate multiple languages (I don't recommend using more than `4`). Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
-- `--lang_file` if you want to use a different language for different PDFs/images, you can specify languages here.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
+- `--langs` is an optional (but recommended) argument that specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
+- `--lang_file` if you want to use a different language for different PDFs/images, you can optionally specify languages in a file.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
 - `--images` will save images of the pages and detected text lines (optional)
 - `--results_dir` specifies the directory to save results to instead of the default
 - `--max` specifies the maximum number of pages to process if you don't want to process everything
@@ -108,21 +108,21 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `50MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `256`, which will use about 12.8GB of VRAM.  Depending on your CPU core count, it may help, too - the default CPU batch size is `32`.
+Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `40MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `512`, which will use about 20GB of VRAM.  Depending on your CPU core count, it may help, too - the default CPU batch size is `32`.
 
 ### From python
 
 ```python
 from PIL import Image
 from surya.ocr import run_ocr
-from surya.model.detection.model import load_model as load_detection_model, load_processor as load_detection_processor
-from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import load_processor as load_recognition_processor
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.recognition.model import load_model as load_rec_model
+from surya.model.recognition.processor import load_processor as load_rec_processor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages
-det_processor, det_model = load_detection_processor(), load_detection_model()
-rec_model, rec_processor = load_recognition_model(), load_recognition_processor()
+langs = ["en"] # Replace with your languages - optional but recommended
+det_processor, det_model = load_det_processor(), load_det_model()
+rec_model, rec_processor = load_rec_model(), load_rec_processor()
 
 predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
 ```
@@ -134,7 +134,7 @@ The OCR model can be compiled to get an ~15% speedup in total inference time.  T
 ```python
 import torch
 
-rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
+rec_model.decoder.model = torch.compile(rec_model.decoder.model)
 ```
 
 ## Text line detection
@@ -142,7 +142,7 @@ rec_model.decoder.model.decoder = torch.compile(rec_model.decoder.model.decoder)
 This command will write out a json file with the detected bboxes.
 
 ```shell
-surya_detect DATA_PATH --images
+surya_detect DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -184,7 +184,7 @@ predictions = batch_text_detection([image], model, processor)
 This command will write out a json file with the detected layout.
 
 ```shell
-surya_layout DATA_PATH --images
+surya_layout DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -231,7 +231,7 @@ layout_predictions = batch_layout_detection([image], model, processor, line_pred
 This command will write out a json file with the detected reading order and layout.
 
 ```shell
-surya_order DATA_PATH --images
+surya_order DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
@@ -417,7 +417,9 @@ python benchmark/recognition.py --tesseract
 - `--debug 2` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
+
 - Set `RECOGNITION_BATCH_SIZE=864` to use the same batch size as the benchmark.
+- Set `RECOGNITION_BENCH_DATASET_NAME=vikp/rec_bench_hist` to use the historical document data for benchmarking.  This data comes from the [tapuscorpus](https://github.com/HTR-United/tapuscorpus).
 
 **Layout analysis**
 

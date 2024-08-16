@@ -10,8 +10,9 @@ import os
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
-    IMAGE_DPI: int = 96
+    IMAGE_DPI: int = 192
     IN_STREAMLIT: bool = False # Whether we're running in streamlit
+    ENABLE_EFFICIENT_ATTENTION: bool = True # Usually keep True, but if you get CUDA errors, setting to False can help
 
     # Paths
     DATA_DIR: str = "data"
@@ -43,10 +44,10 @@ class Settings(BaseSettings):
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec"
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2"
     RECOGNITION_MAX_TOKENS: int = 175
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
-    RECOGNITION_IMAGE_SIZE: Dict = {"height": 196, "width": 896}
+    RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
     RECOGNITION_RENDER_FONTS: Dict[str, str] = {
         "all": os.path.join(FONT_DIR, "GoNotoCurrent-Regular.ttf"),
         "zh": os.path.join(FONT_DIR, "GoNotoCJKCore.ttf"),
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
     RECOGNITION_STATIC_CACHE: bool = False # Static cache for torch compile
-    RECOGNITION_MAX_LANGS: int = 4
+    RECOGNITION_ENCODER_BATCH_DIVISOR: int = 2 # Divisor for batch size in decoder
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"

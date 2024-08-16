@@ -69,13 +69,6 @@ def get_dynamic_thresholds(linemap, text_threshold, low_text, typical_top10_avg=
     return text_threshold, low_text
 
 
-def fast_contours_cumsum(segmap):
-    # Nonzero is slow, so use this, then mod and div to get x, y
-    # x and y are flipped in the output because openCV uses (y, x) instead of (x, y)
-    flat_indices = np.flatnonzero(segmap)
-    return np.column_stack((flat_indices % segmap.shape[1], flat_indices // segmap.shape[1]))
-
-
 def detect_boxes(linemap, text_threshold, low_text):
     # From CRAFT - https://github.com/clovaai/CRAFT-pytorch
     # Modified to return boxes and for speed, accuracy
@@ -108,22 +101,28 @@ def detect_boxes(linemap, text_threshold, low_text):
         x, y, w, h = stats[k, [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT]]
 
         try:
-            niter = int(np.sqrt(size * min(w, h) / (w * h)) * 2)
+            niter = int(np.sqrt(min(w, h)) * 2)
         except ValueError:
-            # Overflow when size is too large
+            # Overflow in sqrt term
             niter = 0
 
+        buffer = 1
         sx, sy = max(0, x - niter), max(0, y - niter)
-        ex, ey = min(img_w, x + w + niter + 1), min(img_h, y + h + niter + 1)
+        ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
         segmap.fill(0)
-        segmap[mask] = 255
+        segmap[mask] = 1
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1 + niter, 1 + niter))
-        segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
+        ksize = buffer + niter
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(ksize, ksize))
+
+        # Doesn't work well without the zero start (ie, you can't trim the map tightly around the detected region)
+        selected_segmap = segmap[0:ey, 0:ex]
+        selected_segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
 
         # make box
-        np_contours = fast_contours_cumsum(segmap)
+        indices = np.nonzero(selected_segmap)
+        np_contours = np.column_stack((indices[1], indices[0]))
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
 
@@ -148,7 +147,7 @@ def detect_boxes(linemap, text_threshold, low_text):
 
     if max_confidence > 0:
         confidences = [c / max_confidence for c in confidences]
-    return det, labels, confidences
+    return det, confidences
 
 
 def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[PolygonBox]:
@@ -160,7 +159,7 @@ def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[Pol
 
     textmap = textmap.copy()
     textmap = textmap.astype(np.float32)
-    boxes, labels, confidences = detect_boxes(textmap, text_threshold, low_text)
+    boxes, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
     boxes = [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
     return boxes

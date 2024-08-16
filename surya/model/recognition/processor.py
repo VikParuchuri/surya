@@ -31,19 +31,9 @@ class SuryaImageProcessor(DonutImageProcessor):
 
     @classmethod
     def numpy_resize(cls, image: np.ndarray, size, interpolation=cv2.INTER_LANCZOS4):
-        height, width = image.shape[:2]
         max_width, max_height = size["width"], size["height"]
 
-        if (height == max_height and width <= max_width) or (width == max_width and height <= max_height):
-            image = image.transpose(2, 0, 1)
-            return image
-
-        scale = min(max_width / width, max_height / height)
-
-        new_width = int(width * scale)
-        new_height = int(height * scale)
-
-        resized_image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
+        resized_image = cv2.resize(image, (max_width, max_height), interpolation=interpolation)
         resized_image = resized_image.transpose(2, 0, 1)
 
         return resized_image
@@ -191,7 +181,7 @@ class SuryaProcessor(DonutProcessor):
     def __call__(self, *args, **kwargs):
         images = kwargs.pop("images", None)
         text = kwargs.pop("text", None)
-        lang = kwargs.pop("lang", None)
+        langs = kwargs.pop("langs", None)
 
         if len(args) > 0:
             images = args[0]
@@ -204,7 +194,7 @@ class SuryaProcessor(DonutProcessor):
             inputs = self.image_processor(images, *args, **kwargs)
 
         if text is not None:
-            encodings = self.tokenizer(text, lang, **kwargs)
+            encodings = self.tokenizer(text, langs, **kwargs)
 
         if text is None:
             return inputs
