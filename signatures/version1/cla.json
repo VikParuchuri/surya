@@ -39,6 +39,14 @@
       "created_at": "2024-08-06T11:58:00Z",
       "repoId": 741297064,
       "pullRequestNo": 167
+    },
+    {
+      "name": "hidenori-endo",
+      "id": 15546605,
+      "comment_id": 2307217499,
+      "created_at": "2024-08-23T14:31:17Z",
+      "repoId": 741297064,
+      "pullRequestNo": 182
     }
   ]
 }
