@@ -1,3 +1,5 @@
+import json
+import os
 from itertools import chain
 import random
 from typing import List, Optional, Tuple, Union
@@ -7,48 +9,7 @@ import numpy as np
 import torch
 from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
 
-
-def text_to_utf16_numbers(text):
-    utf16_bytes = text.encode('utf-16le')  # Little-endian to simplify byte order handling
-
-    numbers = []
-
-    # Iterate through each pair of bytes and combine them into a single number
-    for i in range(0, len(utf16_bytes), 2):
-        # Combine two adjacent bytes into a single number
-        number = utf16_bytes[i] + (utf16_bytes[i + 1] << 8)
-        numbers.append(number)
-
-    return numbers
-
-
-def utf16_numbers_to_text(numbers):
-    byte_array = bytearray()
-    for number in numbers:
-        # Extract the two bytes from the number and add them to the byte array
-        byte_array.append(number & 0xFF)         # Lower byte
-        byte_array.append((number >> 8) & 0xFF)  # Upper byte
-
-    text = byte_array.decode('utf-16le', errors="ignore")
-    return text
-
-
-def _tokenize(text: str, langs: List[str] | None, eos_token_id: int = 1, add_eos: bool = False, add_bos: bool = True):
-    tokens = text_to_utf16_numbers(text)
-    tokens = [t + TOKEN_OFFSET for t in tokens] # Account for special pad, etc, tokens
-
-    lang_list = []
-    if langs:
-        for lang in langs:
-            code = LANGUAGE_MAP[lang]
-            lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
-
-    tokens = lang_list + tokens
-
-    if add_bos:
-        tokens.insert(0, eos_token_id)
-
-    return tokens, lang_list
+TOKENS_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "tokens.json")
 
 
 class Byt5LangTokenizer(ByT5Tokenizer):
@@ -57,6 +18,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
         unk_token="<unk>",
         pad_token="<pad>",
         model_max_length=None,
+        token_path=TOKENS_FILE,
         **kwargs,
     ):
         self.pad_token = pad_token
@@ -71,6 +33,10 @@ class Byt5LangTokenizer(ByT5Tokenizer):
 
         self.model_max_length = model_max_length
         self.special_token_start = TOKEN_OFFSET + TOTAL_TOKENS
+        with open(token_path, "r", encoding="utf-8") as f:
+            token_map = json.load(f)
+            self.token_map = {token_map[v]: v + TOKEN_OFFSET for v in range(len(token_map))}
+            self.reverse_token_map = {v: k for k, v in self.token_map.items()}
 
         super().__init__()
 
@@ -93,7 +59,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
         assert len(langs) == len(texts)
 
         for text, lang in zip(texts, langs):
-            tokens, lang_list = _tokenize(text, lang)
+            tokens, lang_list = self._inner_tokenize(text, lang)
             tokenized.append(tokens)
             all_langs.append(lang_list)
 
@@ -115,6 +81,34 @@ class Byt5LangTokenizer(ByT5Tokenizer):
             token_ids = token_ids.tolist()
 
         token_ids = [t for t in token_ids if TOKEN_OFFSET <= t < self.special_token_start]
-        token_ids = [t - TOKEN_OFFSET for t in token_ids]
-        text = utf16_numbers_to_text(token_ids)
+        text = "".join([self.reverse_token_map[t] for t in token_ids])
         return text
+
+    def _inner_tokenize(self, text: str, langs: List[str] | None, add_eos: bool = False, add_bos: bool = True):
+        tokens = []
+        i = 0
+        while i < len(text):
+            # Try to match a two-character token first
+            if i + 1 < len(text) and text[i:i + 2] in self.token_map:
+                tokens.append(self.token_map[text[i:i + 2]])
+                i += 2
+            # Fallback to one-character token
+            elif text[i:i + 1] in self.token_map:
+                tokens.append(self.token_map[text[i:i + 1]])
+                i += 1
+            else:
+                tokens.append(self.unk_id)
+                i += 1
+
+        lang_list = []
+        if langs:
+            for lang in langs:
+                code = LANGUAGE_MAP[lang]
+                lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
+
+        tokens = lang_list + tokens
+
+        if add_bos:
+            tokens.insert(0, self.eos_id)
+
+        return tokens, lang_list

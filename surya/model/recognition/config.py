@@ -246,9 +246,9 @@ class SuryaOCRTextEncoderConfig(PretrainedConfig):
     def layers_block_type(self):
         return (self.block_types * 100)[: self.num_hidden_layers]
 
-TOTAL_TOKENS = 65536
+TOTAL_TOKENS = 81920
 TOKEN_OFFSET = 3 # Pad, eos, bos
-SPECIAL_TOKENS = 253
+SPECIAL_TOKENS = 250
 TOTAL_VOCAB_SIZE = TOTAL_TOKENS + TOKEN_OFFSET + SPECIAL_TOKENS
 LANGUAGE_MAP = {
     'af': 0,
