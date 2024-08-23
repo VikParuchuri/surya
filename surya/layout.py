@@ -1,5 +1,5 @@
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -193,12 +193,21 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     else:
         futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for i in range(len(images)):
-                future = executor.submit(parallel_get_regions, preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
-                futures.append(future)
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                for i in range(len(images)):
+                    future = executor.submit(parallel_get_regions, preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
+                    futures.append(future)
 
-            for future in futures:
-                results.append(future.result())
+                for future in futures:
+                    results.append(future.result())
+        except Exception:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for i in range(len(images)):
+                    future = executor.submit(parallel_get_regions, preds[i], orig_sizes[i], id2label, detection_results[i] if detection_results else None)
+                    futures.append(future)
+
+                for future in futures:
+                    results.append(future.result())
 
     return results
