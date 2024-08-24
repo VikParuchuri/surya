@@ -7,7 +7,7 @@ from tokenizers import AddedToken
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
-from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
+from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET, SPECIAL_TOKENS
 
 TOKENS_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "tokens.json")
 
@@ -32,10 +32,10 @@ class Byt5LangTokenizer(ByT5Tokenizer):
         self.unk_id = 2
 
         self.model_max_length = model_max_length
-        self.special_token_start = TOKEN_OFFSET + TOTAL_TOKENS
+        self.special_token_start = TOKEN_OFFSET
         with open(token_path, "r", encoding="utf-8") as f:
             token_map = json.load(f)
-            self.token_map = {token_map[v]: v + TOKEN_OFFSET for v in range(len(token_map))}
+            self.token_map = {token_map[v]: v + TOKEN_OFFSET + SPECIAL_TOKENS for v in range(len(token_map))}
             self.reverse_token_map = {v: k for k, v in self.token_map.items()}
 
         super().__init__()
@@ -80,7 +80,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
         if isinstance(token_ids, (np.ndarray, torch.Tensor)):
             token_ids = token_ids.tolist()
 
-        token_ids = [t for t in token_ids if TOKEN_OFFSET <= t < self.special_token_start]
+        token_ids = [t for t in token_ids if TOKEN_OFFSET + SPECIAL_TOKENS <= t]
         text = "".join([self.reverse_token_map[t] for t in token_ids])
         return text
 
@@ -104,7 +104,7 @@ class Byt5LangTokenizer(ByT5Tokenizer):
         if langs:
             for lang in langs:
                 code = LANGUAGE_MAP[lang]
-                lang_list.append(code + TOKEN_OFFSET + TOTAL_TOKENS)
+                lang_list.append(code + TOKEN_OFFSET)
 
         tokens = lang_list + tokens
 
