@@ -1,9 +1,10 @@
 import re
 from ftfy import fix_text
+from surya.settings import settings
 
 
 def contains_math(text):
-    return text.startswith("$") or text.endswith("$")
+    return text.startswith(settings.MATH_FENCE_CHAR) or text.endswith(settings.MATH_FENCE_CHAR)
 
 
 def fix_math(text):
@@ -43,9 +44,9 @@ def remove_inner_dollars(text):
     def replace_dollar(match):
         # Replace single $ with nothing, keep $$ intact
         math_block = match.group(1)
-        return '$$' + math_block.replace('$', '') + '$$'
+        return settings.MATH_FENCE_CHAR + math_block.replace("$", '') + settings.MATH_FENCE_CHAR
 
-    pattern = r'\$\$(.*?)\$\$'
+    pattern = rf'{settings.MATH_FENCE_CHAR}(.*?){settings.MATH_FENCE_CHAR}'
     return re.sub(pattern, replace_dollar, text, flags=re.DOTALL)
 
 
@@ -57,30 +58,10 @@ def extract_latex_with_positions(text):
     return matches
 
 
-def slice_latex(text):
-    # Extract LaTeX blocks along with their positions
-    latex_blocks_with_positions = extract_latex_with_positions(text)
-
-    chunks = []
-    last_position = 0
-    for block, start, end in latex_blocks_with_positions:
-        # Add text before the current LaTeX block, if any
-        if start > last_position:
-            chunks.append({"text": text[last_position:start], "type": "text"})
-        # Add the LaTeX block
-        chunks.append({"text": block, "type": "latex"})
-        last_position = end
-    # Add remaining text after the last LaTeX block, if any
-    if last_position < len(text):
-        chunks.append({"text": text[last_position:], "type": "text"})
-
-    return chunks
-
-
 def is_latex(text):
     latex_patterns = [
         r'\\(?:begin|end)\{[a-zA-Z]*\}',
-        r'\$.*?\$',
+        rf'{settings.MATH_FENCE_CHAR}.*?{settings.MATH_FENCE_CHAR}',
         r'\$\$.*?\$\$',
         r'\\[a-zA-Z]+',
         r'\\[^a-zA-Z]',
@@ -94,23 +75,11 @@ def is_latex(text):
 
 
 def fix_fences(text):
-    if text.startswith("$$") and not text.endswith("$$"):
-        if text[-1] == "$":
-            text += "$"
-        else:
-            text += "$$"
+    if text.startswith(settings.MATH_FENCE_CHAR) and not text.endswith(settings.MATH_FENCE_CHAR):
+        text += settings.MATH_FENCE_CHAR
 
-    if text.endswith("$$") and not text.startswith("$$"):
-        if text[0] == "$":
-            text = "$" + text
-        else:
-            text = "$$" + text
-
-    if text.startswith("$") and not text.endswith("$"):
-        text = "$" + text + "$$"
-
-    if text.endswith("$") and not text.startswith("$"):
-        text = "$$" + text + "$"
+    if not text.startswith(settings.MATH_FENCE_CHAR) and text.endswith(settings.MATH_FENCE_CHAR):
+        text = settings.MATH_FENCE_CHAR + text
 
     return text
 

@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
     RECOGNITION_STATIC_CACHE: bool = False # Static cache for torch compile
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 2 # Divisor for batch size in decoder
+    MATH_FENCE_CHAR: str = "\u220E" # Model will output this as a fence for math
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
