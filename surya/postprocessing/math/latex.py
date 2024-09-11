@@ -84,11 +84,3 @@ def fix_fences(text):
     return text
 
 
-def strip_fences(text):
-    while text.startswith("$"):
-        text = text[1:]
-    while text.endswith("$"):
-        text = text[:-1]
-    return text
-
-

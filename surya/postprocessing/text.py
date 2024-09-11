@@ -84,16 +84,17 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
 
 
 def render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path):
-        try:
-            from surya.postprocessing.math.render import latex_to_pil
-            box_font_size = max(10, min(int(.2 * bbox_height), 24))
-            img = latex_to_pil(text, bbox_width, bbox_height, fontsize=box_font_size)
-            img.thumbnail((bbox_width, bbox_height))
-            image.paste(img, (s_bbox[0], s_bbox[1]))
-        except Exception as e:
-            print(f"Failed to render math: {e}")
-            box_font_size = max(10, min(int(.75 * bbox_height), 24))
-            render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size)
+    text = text.replace(settings.MATH_FENCE_CHAR, "")
+    try:
+        from surya.postprocessing.math.render import latex_to_pil
+        box_font_size = max(10, min(int(.2 * bbox_height), 24))
+        img = latex_to_pil(text, bbox_width, bbox_height, fontsize=box_font_size)
+        img.thumbnail((bbox_width, bbox_height))
+        image.paste(img, (s_bbox[0], s_bbox[1]))
+    except Exception as e:
+        print(f"Failed to render math: {e}")
+        box_font_size = max(10, min(int(.75 * bbox_height), 24))
+        render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font_size)
 
 
 def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], langs: List[str], font_path=None, max_font_size=60, res_upscale=2, has_math=False):
@@ -109,7 +110,7 @@ def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], langs: List[s
         bbox_height = s_bbox[3] - s_bbox[1]
 
         # Shrink the text to fit in the bbox if needed
-        if has_math and is_latex(text):
+        if False and has_math and is_latex(text):
             render_math(image, draw, text, s_bbox, bbox_width, bbox_height, font_path)
         else:
             box_font_size = max(6, min(int(.75 * bbox_height), max_font_size))

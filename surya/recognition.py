@@ -167,7 +167,7 @@ def batch_recognition(images: List, languages: List[List[str] | None], model, pr
         detected_text = [truncate_repetitions(dt) for dt in detected_text]
 
         # Postprocess to fix LaTeX output (add $$ signs, etc)
-        detected_text = [fix_math(text) if math and contains_math(text) else text for text, math in zip(detected_text, has_math)]
+        detected_text = [text if math and contains_math(text) else text for text, math in zip(detected_text, has_math)]
         output_text.extend(detected_text)
         confidences.extend(sequence_scores.tolist())
 

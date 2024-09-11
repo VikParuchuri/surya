@@ -83,7 +83,7 @@ def open_pdf(pdf_file):
 
 
 @st.cache_data()
-def get_page_image(pdf_file, page_num, dpi=96):
+def get_page_image(pdf_file, page_num, dpi=settings.IMAGE_DPI):
     doc = open_pdf(pdf_file)
     renderer = doc.render(
         pypdfium2.PdfBitmap.to_pil,
