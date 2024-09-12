@@ -41,15 +41,10 @@ def main():
 
     line_predictions = batch_text_detection(images, det_model, det_processor)
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
-    bboxes = []
+    table_boxes = []
     for layout_pred in layout_predictions:
         bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
-        bboxes.append(bbox)
-
-    table_imgs = []
-    for page_img, image_tables in zip(images, bboxes):
-        table_imgs.append([page_img.crop(bb) for bb in image_tables])
-
+        table_boxes.append(bbox)
 
     order_predictions = batch_ordering(images, bboxes, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)

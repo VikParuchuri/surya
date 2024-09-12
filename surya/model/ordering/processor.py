@@ -13,14 +13,17 @@ import PIL
 from surya.settings import settings
 
 
-def load_processor(checkpoint=settings.ORDER_MODEL_CHECKPOINT):
+def load_processor(checkpoint=settings.ORDER_MODEL_CHECKPOINT, max_boxes=settings.ORDER_MAX_BOXES):
     processor = OrderImageProcessor.from_pretrained(checkpoint)
     processor.size = settings.ORDER_IMAGE_SIZE
     box_size = 1024
-    max_tokens = 256
+    max_tokens = max_boxes
     processor.token_sep_id = max_tokens + box_size + 1
     processor.token_pad_id = max_tokens + box_size + 2
-    processor.max_boxes = settings.ORDER_MAX_BOXES - 1
+    processor.token_cell_id = max_tokens + 4
+    processor.token_row_id = max_tokens + 3
+    processor.token_eos_id = max_tokens + 5 # don't add box size, since these are decoded (you would need to add box size to embed them)
+    processor.max_boxes = max_boxes - 1
     processor.box_size = {"height": box_size, "width": box_size}
     return processor
 

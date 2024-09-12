@@ -11,13 +11,14 @@ from surya.model.recognition.processor import load_processor as load_rec_process
 from surya.model.ordering.processor import load_processor as load_order_processor
 from surya.model.ordering.model import load_model as load_order_model
 from surya.ordering import batch_ordering
-from surya.postprocessing.heatmap import draw_polys_on_image
+from surya.tables import batch_table_recognition
+from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult
+from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult, TableResult
 from surya.settings import settings
 
 @st.cache_resource()
@@ -38,6 +39,11 @@ def load_layout_cached():
 @st.cache_resource()
 def load_order_cached():
     return load_order_model(), load_order_processor()
+
+
+@st.cache_resource()
+def load_table_cached():
+    return load_order_model(settings.TABLE_REC_MODEL_CHECKPOINT), load_order_processor(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, max_boxes=settings.TABLE_REC_MAX_BOXES)
 
 
 def text_detection(img) -> (Image.Image, TextDetectionResult):
@@ -64,6 +70,32 @@ def order_detection(img) -> (Image.Image, OrderResult):
     positions = [str(l.position) for l in pred.bboxes]
     order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=20)
     return order_img, pred
+
+
+def table_recognition(img) -> (Image.Image, List[TableResult]):
+    _, layout_pred = layout_detection(img)
+    layout_bboxes = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+    table_imgs = []
+    for table_bbox in layout_bboxes:
+        table_imgs.append(img.crop(table_bbox))
+    table_boxes = batch_text_detection(table_imgs, det_model, det_processor)
+    table_bboxes = [[t.bbox for t in table_box.bboxes] for table_box in table_boxes]
+    table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
+    table_img = img.copy()
+    for results, table_bbox in zip(table_preds, layout_bboxes):
+        adjusted_bboxes = []
+        labels = []
+        for item in results.bboxes:
+            adjusted_bboxes.append([
+                item.bbox[0] + table_bbox[0],
+                item.bbox[1] + table_bbox[1],
+                item.bbox[2] + table_bbox[0],
+                item.bbox[3] + table_bbox[1]
+            ])
+            labels.append(f"{item.row_id} / {item.col_id}")
+        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels)
+    return table_img, table_preds
+
 
 
 # Function for OCR
@@ -108,6 +140,7 @@ det_model, det_processor = load_det_cached()
 rec_model, rec_processor = load_rec_cached()
 layout_model, layout_processor = load_layout_cached()
 order_model, order_processor = load_order_cached()
+table_model, table_processor = load_table_cached()
 
 
 st.markdown("""
@@ -144,6 +177,7 @@ text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
 layout_det = st.sidebar.button("Run Layout Analysis")
 order_det = st.sidebar.button("Run Reading Order")
+table_det = st.sidebar.button("Run Table Rec")
 
 if pil_image is None:
     st.stop()
@@ -179,6 +213,12 @@ if order_det:
     with col1:
         st.image(order_img, caption="Reading Order", use_column_width=True)
         st.json(pred.model_dump(), expanded=True)
+
+if table_det:
+    table_img, pred = table_recognition(pil_image)
+    with col1:
+        st.image(table_img, caption="Table Recognition", use_column_width=True)
+        st.json([p.model_dump() for p in pred], expanded=True)
 
 with col2:
     st.image(pil_image, caption="Uploaded Image", use_column_width=True)

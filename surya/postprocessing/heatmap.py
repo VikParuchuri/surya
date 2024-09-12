@@ -176,12 +176,18 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
 
 
 def draw_bboxes_on_image(bboxes, image, labels=None):
-    draw = ImageDraw.Draw(image)
+    polys = []
+    for bb in bboxes:
+        # Clockwise polygon
+        poly = [
+            [bb[0], bb[1]],
+            [bb[2], bb[1]],
+            [bb[2], bb[3]],
+            [bb[0], bb[3]]
+        ]
+        polys.append(poly)
 
-    for bbox in bboxes:
-        draw.rectangle(bbox, outline="red", width=1)
-
-    return image
+    return draw_polys_on_image(polys, image, labels)
 
 
 def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10):

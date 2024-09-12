@@ -161,3 +161,13 @@ class LayoutResult(BaseModel):
 class OrderResult(BaseModel):
     bboxes: List[OrderBox]
     image_bbox: List[float]
+
+
+class TableBox(Bbox):
+    row_id: int
+    col_id: int
+
+class TableResult(BaseModel):
+    bboxes: List[TableBox]
+    image_bbox: List[float]
+

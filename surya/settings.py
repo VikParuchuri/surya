@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
+    # Table recognition
+    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/table_rec"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
+    TABLE_REC_MAX_BOXES: int = 384
+
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None
 
