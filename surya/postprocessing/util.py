@@ -42,3 +42,7 @@ def rescale_point(point, processor_size, image_size):
 
 def rescale_points(points, processor_size, image_size):
     return [rescale_point(point, processor_size, image_size) for point in points]
+
+
+def bbox_to_polygon(bbox):
+    return [[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]]]

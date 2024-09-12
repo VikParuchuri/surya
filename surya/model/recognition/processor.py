@@ -44,10 +44,6 @@ class SuryaImageProcessor(DonutImageProcessor):
         # Rotate if the bbox is wider than it is tall
         images = [SuryaImageProcessor.align_long_axis(image, size=self.max_size, input_data_format=ChannelDimension.LAST) for image in images]
 
-        # Verify that the image is wider than it is tall
-        for img in images:
-            assert img.shape[1] >= img.shape[0]
-
         # This also applies the right channel dim format, to channel x height x width
         images = [SuryaImageProcessor.numpy_resize(img, self.max_size, self.resample) for img in images]
         assert images[0].shape[0] == 3 # RGB input images, channel dim first
@@ -166,8 +162,8 @@ class SuryaImageProcessor(DonutImageProcessor):
 
 
 class SuryaProcessor(DonutProcessor):
-    def __init__(self, image_processor=None, tokenizer=None, train=False, **kwargs):
-        image_processor = SuryaImageProcessor.from_pretrained(settings.RECOGNITION_MODEL_CHECKPOINT)
+    def __init__(self, image_processor=None, tokenizer=None, train=False, checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, **kwargs):
+        image_processor = SuryaImageProcessor.from_pretrained(checkpoint)
         tokenizer = Byt5LangTokenizer()
         if image_processor is None:
             raise ValueError("You need to specify an `image_processor`.")

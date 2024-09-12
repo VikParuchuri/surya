@@ -26,8 +26,6 @@ def main():
 
     model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model()
-    det_processor = load_processor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
@@ -36,8 +34,7 @@ def main():
     images = convert_if_not_rgb(images)
 
     start = time.time()
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-    layout_predictions = batch_layout_detection(images, model, processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, model, processor)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]

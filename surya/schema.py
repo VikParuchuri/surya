@@ -154,8 +154,8 @@ class TextDetectionResult(BaseModel):
 
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
-    segmentation_map: Any
     image_bbox: List[float]
+    confidence: Optional[float] = None
 
 
 class OrderResult(BaseModel):

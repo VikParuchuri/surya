@@ -9,6 +9,7 @@ from transformers.utils import ModelOutput
 
 from surya.model.layout.config import SuryaLayoutConfig
 from surya.model.recognition.decoder import SuryaOCRDecoderPreTrainedModel, SuryaOCRDecoderLayer, SuryaOCRDecoderRMSNorm
+from surya.settings import settings
 
 
 class BboxEmbedding(nn.Module):
@@ -146,7 +147,7 @@ class SuryaLayoutModel(SuryaOCRDecoderPreTrainedModel):
         dtype, device = input_tensor.dtype, input_tensor.device
         min_dtype = torch.finfo(dtype).min
         sequence_length = input_tensor.shape[1]
-        target_length = max(self.config.attention_window_size, sequence_length)
+        target_length = max(settings.LAYOUT_MAX_TOKENS, sequence_length)
 
         diagonal = torch.full((sequence_length, target_length), fill_value=min_dtype, dtype=dtype, device=device)
         causal_mask = diagonal
@@ -155,9 +156,7 @@ class SuryaLayoutModel(SuryaOCRDecoderPreTrainedModel):
             # triu will be the min_dtype, everything else is 0 (attended to)
             causal_mask = torch.triu(diagonal, diagonal=1)
 
-        # Ensure that later positions always attend to earlier ones (set to 0 if target position is less than current position)
         causal_mask *= torch.arange(target_length, device=device) > cache_position.reshape(-1, 1)
-
         causal_mask = causal_mask[None, None, :, :].expand(input_tensor.shape[0], 1, -1, -1)
         if attention_mask is not None:
             causal_mask = causal_mask.clone()  # copy to contiguous memory for in-place edit
