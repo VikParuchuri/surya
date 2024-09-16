@@ -92,8 +92,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 decoder_position_ids = decoder_position_ids[-1:] + 1
                 bbox_logits = return_dict["bbox_logits"][:current_batch_size] # Ignore batch padding
                 class_logits = return_dict["class_logits"][:current_batch_size] # Ignore batch padding
-
-                bbox_preds = torch.round(bbox_logits[:, -1]).to(torch.long) # Round to nearest int for embedding
+                bbox_preds = bbox_logits[:, -1]
                 class_preds = torch.argmax(class_logits[:, -1], dim=-1)
                 scores = torch.max(F.softmax(class_logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
                 done = (class_preds == processor.eos_id) | (class_preds == processor.pad_id)
@@ -111,6 +110,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 for j, (bbox, class_, status) in enumerate(zip(bbox_preds, class_preds, all_done)):
                     if not status:
                         label = ID_TO_LABEL[int(class_) - SPECIAL_TOKENS] # Map from output class id to label
+                        bbox = [b - SPECIAL_TOKENS for b in bbox.tolist()] # Map from output bbox id to bbox
                         bbox = [bbox[0] - bbox[2] / 2, bbox[1] - bbox[3] / 2, bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2] # cx,cy to x0,y0, etc.
                         width_scaler = orig_sizes[j][0] / settings.LAYOUT_IMAGE_SIZE["width"]
                         height_scaler = orig_sizes[j][1] / settings.LAYOUT_IMAGE_SIZE["height"]
@@ -120,7 +120,6 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             bbox[2] * width_scaler,
                             bbox[3] * height_scaler
                         ]
-                        fixed_bbox = [int(x) for x in fixed_bbox]
                         poly = bbox_to_polygon(fixed_bbox)
                         batch_predictions[j].append(LayoutBox(
                             polygon=poly,
@@ -130,6 +129,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[-1]
 
+                bbox_preds = torch.round(bbox_preds).to(torch.long) # Round to nearest int for embedding
                 batch_decoder_input = torch.cat([bbox_preds, class_preds.unsqueeze(1)], dim=-1).unsqueeze(1)
                 max_position_id = torch.max(decoder_position_ids).item()
                 decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1 + max_position_id

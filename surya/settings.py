@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 2 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout_sar2"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout_sar3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
     LAYOUT_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
     LAYOUT_MAX_TOKENS: int = 96
