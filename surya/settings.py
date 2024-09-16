@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
+    # Table Rec
+    TABLE_REC_MODEL_CHECKPOINT: str = "microsoft/table-structure-recognition-v1.1-all"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 1000, "width": 1000}
+    TABLE_REC_MIN_SCORE: float = 0.5
+
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None
 
