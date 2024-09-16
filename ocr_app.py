@@ -95,6 +95,14 @@ def table_recognition(img) -> (Image.Image, List[TableResult]):
                 item.bbox[3] + table_bbox[1]
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
+        for item in results.unused_bboxes:
+            adjusted_bboxes.append([
+                item.bbox[0] + table_bbox[0],
+                item.bbox[1] + table_bbox[1],
+                item.bbox[2] + table_bbox[0],
+                item.bbox[3] + table_bbox[1]
+            ])
+            labels.append("Unused")
         table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels)
     return table_img, table_preds
 

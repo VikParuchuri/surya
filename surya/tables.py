@@ -5,7 +5,7 @@ from PIL import Image
 
 from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
-from surya.schema import TableBox, TableResult
+from surya.schema import TableBox, TableResult, Bbox
 from surya.settings import settings
 from tqdm import tqdm
 import numpy as np
@@ -103,6 +103,7 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
             out_data = []
             row_idx = 0
             col_idx = -1
+            used_boxes = set()
             for z, token in enumerate(row_pred):
                 if token == processor.token_cell_id:
                     col_idx += 1
@@ -116,9 +117,19 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
                         row_id=row_idx
                     )
                     out_data.append(cell)
+                    used_boxes.add(token)
+
+            unused_boxes = []
+            for z, bbox in enumerate(row_bboxes):
+                if z not in used_boxes:
+                    cell = Bbox(
+                        bbox=bbox,
+                    )
+                    unused_boxes.append(cell)
 
             result = TableResult(
                 bboxes=out_data,
+                unused_bboxes=unused_boxes,
                 image_bbox=[0, 0, orig_size[0], orig_size[1]],
             )
             output_order.append(result)

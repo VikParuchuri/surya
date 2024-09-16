@@ -167,7 +167,9 @@ class TableBox(Bbox):
     row_id: int
     col_id: int
 
+
 class TableResult(BaseModel):
     bboxes: List[TableBox]
+    unused_bboxes: List[Bbox]
     image_bbox: List[float]
 
