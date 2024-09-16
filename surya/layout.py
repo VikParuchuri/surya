@@ -89,14 +89,12 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
                 max_x = max(max_x, max_x_box)
                 max_y = max(max_y, max_y_box)
 
-            bbox.polygon[0][0] = min_x
-            bbox.polygon[0][1] = min_y
-            bbox.polygon[1][0] = max_x
-            bbox.polygon[1][1] = min_y
-            bbox.polygon[2][0] = max_x
-            bbox.polygon[2][1] = max_y
-            bbox.polygon[3][0] = min_x
-            bbox.polygon[3][1] = max_y
+            bbox.polygon = [
+                [min_x, min_y],
+                [max_x, min_y],
+                [max_x, max_y],
+                [min_x, max_y]
+            ]
 
         if bbox_idx in box_lines and bbox.label in ["Picture"]:
             bbox.label = "Figure"
@@ -104,17 +102,18 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
         new_boxes.append(bbox)
 
     # Merge tables together (sometimes one column is detected as a separate table)
-    for i in range(5): # Up to 5 rounds of merging
+    mergeable_types = ["Table", "Picture", "Figure"]
+    for ftype in mergeable_types:
         to_remove = set()
         for bbox_idx, bbox in enumerate(new_boxes):
-            if bbox.label != "Table" or bbox_idx in to_remove:
+            if bbox.label != ftype or bbox_idx in to_remove:
                 continue
 
             for bbox_idx2, bbox2 in enumerate(new_boxes):
-                if bbox2.label != "Table" or bbox_idx2 in to_remove or bbox_idx == bbox_idx2:
+                if bbox2.label != ftype or bbox_idx2 in to_remove or bbox_idx == bbox_idx2:
                     continue
 
-                if bbox.intersection_pct(bbox2) > 0:
+                if bbox.intersection_pct(bbox2, x_margin=.05) > 0:
                     bbox.merge(bbox2)
                     to_remove.add(bbox_idx2)
 

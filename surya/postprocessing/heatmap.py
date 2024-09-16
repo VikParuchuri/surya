@@ -82,7 +82,6 @@ def detect_boxes(linemap, text_threshold, low_text):
     det = []
     confidences = []
     max_confidence = 0
-    segmap = np.zeros_like(labels, dtype=np.uint8)
 
     for k in range(1, label_count):
         # size filtering
@@ -90,39 +89,37 @@ def detect_boxes(linemap, text_threshold, low_text):
         if size < 10:
             continue
 
-        mask = labels == k
-        selected_linemap = linemap[mask]
-
-        # thresholding
-        if np.max(selected_linemap) < text_threshold:
-            continue
-
         # make segmentation map
         x, y, w, h = stats[k, [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT]]
 
         try:
-            niter = int(np.sqrt(min(w, h)) * 2)
+            niter = int(np.sqrt(min(w, h)))
         except ValueError:
-            # Overflow in sqrt term
             niter = 0
 
         buffer = 1
-        sx, sy = max(0, x - niter), max(0, y - niter)
+        sx, sy = max(0, x - niter - buffer), max(0, y - niter - buffer)
         ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
-        segmap.fill(0)
-        segmap[mask] = 1
+        mask = (labels[sy:ey, sx:ex] == k)
+        selected_linemap = linemap[sy:ey, sx:ex][mask]
+        line_max = np.max(selected_linemap)
+
+        # thresholding
+        if line_max < text_threshold:
+            continue
+
+        segmap = mask.astype(np.uint8)
 
         ksize = buffer + niter
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(ksize, ksize))
-
-        # Doesn't work well without the zero start (ie, you can't trim the map tightly around the detected region)
-        selected_segmap = segmap[0:ey, 0:ex]
-        selected_segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
+        selected_segmap = cv2.dilate(segmap, kernel)
 
         # make box
         indices = np.nonzero(selected_segmap)
-        np_contours = np.column_stack((indices[1], indices[0]))
+        x_inds = indices[1] + sx
+        y_inds = indices[0] + sy
+        np_contours = np.column_stack((x_inds, y_inds))
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
 
@@ -139,8 +136,8 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
-        confidence = np.mean(selected_linemap[selected_linemap > low_text])
-        max_confidence = max(max_confidence, confidence)
+        confidence = line_max
+        max_confidence = max(max_confidence, line_max)
 
         confidences.append(confidence)
         det.append(box)
