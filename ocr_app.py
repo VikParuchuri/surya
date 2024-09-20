@@ -82,13 +82,13 @@ def table_recognition(img) -> (Image.Image, List[TableResult]):
     for table_bbox in layout_bboxes:
         table_imgs.append(img.crop(table_bbox))
     table_boxes = batch_text_detection(table_imgs, det_model, det_processor)
-    table_bboxes = [table_box.bboxes for table_box in table_boxes]
+    table_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in table_boxes]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
     table_img = img.copy()
     for results, table_bbox in zip(table_preds, layout_bboxes):
         adjusted_bboxes = []
         labels = []
-        for item in results.bboxes:
+        for item in results.cells:
             adjusted_bboxes.append([
                 item.bbox[0] + table_bbox[0],
                 item.bbox[1] + table_bbox[1],
@@ -96,14 +96,6 @@ def table_recognition(img) -> (Image.Image, List[TableResult]):
                 item.bbox[3] + table_bbox[1]
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
-        for item in results.unused_bboxes:
-            adjusted_bboxes.append([
-                item.bbox[0] + table_bbox[0],
-                item.bbox[1] + table_bbox[1],
-                item.bbox[2] + table_bbox[0],
-                item.bbox[3] + table_bbox[1]
-            ])
-            labels.append("Unused")
         table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels)
     return table_img, table_preds
 

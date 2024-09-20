@@ -167,11 +167,9 @@ class OrderResult(BaseModel):
     image_bbox: List[float]
 
 
-class TableCell(PolygonBox):
+class TableCell(Bbox):
     row_id: int
     col_id: int
-    text: str
-    cell_id: int
 
 
 class TableResult(BaseModel):

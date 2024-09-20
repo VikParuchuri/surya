@@ -113,7 +113,7 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
                 if bbox2.label != ftype or bbox_idx2 in to_remove or bbox_idx == bbox_idx2:
                     continue
 
-                if bbox.intersection_pct(bbox2, x_margin=.05) > 0:
+                if bbox.intersection_pct(bbox2, x_margin=.25) > .1:
                     bbox.merge(bbox2)
                     to_remove.add(bbox_idx2)
 

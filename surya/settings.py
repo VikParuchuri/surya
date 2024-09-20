@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 2 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout5"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering
@@ -72,9 +72,9 @@ class Settings(BaseSettings):
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
-    TABLE_REC_MODEL_CHECKPOINT: str = "microsoft/table-structure-recognition-v1.1-all"
-    TABLE_REC_IMAGE_SIZE: Dict = {"height": 1000, "width": 1000}
-    TABLE_REC_MIN_SCORE: float = 0.5
+    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/table_rec"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
+    TABLE_REC_MAX_BOXES: int = 384
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None
