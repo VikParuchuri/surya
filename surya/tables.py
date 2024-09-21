@@ -21,21 +21,39 @@ def get_batch_size():
     return batch_size
 
 
+def sort_bboxes(bboxes, tolerance=1):
+    vertical_groups = {}
+    for block in bboxes:
+        group_key = round(block[1] / tolerance) * tolerance
+        if group_key not in vertical_groups:
+            vertical_groups[group_key] = []
+        vertical_groups[group_key].append(block)
+
+    # Sort each group horizontally and flatten the groups into a single list
+    sorted_page_blocks = []
+    for _, group in sorted(vertical_groups.items()):
+        sorted_group = sorted(group, key=lambda x: x[0])
+        sorted_page_blocks.extend(sorted_group)
+
+    return sorted_page_blocks
+
+
 def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(bboxes)
     if batch_size is None:
         batch_size = get_batch_size()
 
-
     output_order = []
     for i in tqdm(range(0, len(images), batch_size), desc="Finding reading order"):
-        batch_bboxes = deepcopy(bboxes[i:i+batch_size])
+        batch_list_bboxes = deepcopy(bboxes[i:i+batch_size])
+        batch_list_bboxes = [sort_bboxes(page_bboxes) for page_bboxes in batch_list_bboxes] # Sort bboxes before passing in
+
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
 
         orig_sizes = [image.size for image in batch_images]
-        model_inputs = processor(images=batch_images, boxes=batch_bboxes)
+        model_inputs = processor(images=batch_images, boxes=deepcopy(batch_list_bboxes))
 
         batch_pixel_values = model_inputs["pixel_values"]
         batch_bboxes = model_inputs["input_boxes"]
@@ -79,9 +97,7 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
                 max_cols.append(max_col)
 
         assert len(row_predictions) == len(col_predictions) == len(max_rows) == len(max_cols) == len(batch_images)
-        for j, (row_pred, col_pred, max_row, max_col) in enumerate(zip(row_predictions, col_predictions, max_rows, max_cols)):
-            row_bboxes = bboxes[i+j]
-
+        for j, (row_pred, col_pred, max_row, max_col, row_bboxes) in enumerate(zip(row_predictions, col_predictions, max_rows, max_cols, batch_list_bboxes)):
             orig_size = orig_sizes[j]
             out_data = []
             assert len(row_pred) == len(col_pred) == len(row_bboxes)
