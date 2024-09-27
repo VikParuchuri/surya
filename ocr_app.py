@@ -4,6 +4,7 @@ from typing import List
 import pypdfium2
 import streamlit as st
 from surya.detection import batch_text_detection
+from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
@@ -75,17 +76,24 @@ def order_detection(img) -> (Image.Image, OrderResult):
     return order_img, pred
 
 
-def table_recognition(img) -> (Image.Image, List[TableResult]):
+def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Image.Image, List[TableResult]):
     _, layout_pred = layout_detection(img)
-    layout_bboxes = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+    layout_tables = [l for l in layout_pred.bboxes if l.label == "Table"]
+    layout_tables_bboxes = [l.bbox for l in layout_tables]
+
     table_imgs = []
-    for table_bbox in layout_bboxes:
+    for table_bbox in layout_tables_bboxes:
         table_imgs.append(img.crop(table_bbox))
-    table_boxes = batch_text_detection(table_imgs, det_model, det_processor)
-    table_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in table_boxes]
+    if use_pdf_boxes:
+        page_text = get_page_text_lines(filepath, page_idx, img.size)
+        table_texts = get_table_blocks(layout_tables, page_text, img.size)
+        table_bboxes = [[tb["bbox"] for tb in table_text] for table_text in table_texts]
+    else:
+        table_boxes = batch_text_detection(table_imgs, det_model, det_processor)
+        table_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in table_boxes]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
     table_img = img.copy()
-    for results, table_bbox in zip(table_preds, layout_bboxes):
+    for results, table_bbox in zip(table_preds, layout_tables_bboxes):
         adjusted_bboxes = []
         labels = []
         for item in results.cells:
@@ -180,6 +188,7 @@ text_rec = st.sidebar.button("Run OCR")
 layout_det = st.sidebar.button("Run Layout Analysis")
 order_det = st.sidebar.button("Run Reading Order")
 table_rec = st.sidebar.button("Run Table Rec")
+use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 
 if pil_image is None:
     st.stop()
@@ -218,7 +227,7 @@ if order_det:
 
 
 if table_rec:
-    table_img, pred = table_recognition(pil_image)
+    table_img, pred = table_recognition(pil_image, in_file, page_number - 1, use_pdf_boxes)
     with col1:
         st.image(table_img, caption="Table Recognition", use_column_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)

@@ -1,110 +1,86 @@
-from copy import deepcopy
-from typing import List, Dict, Optional, Union
+from typing import Dict, Union, Optional, List, Iterable
 
+import cv2
+import torch
+from torch import TensorType
+from transformers import DonutImageProcessor, DonutProcessor
+from transformers.image_processing_utils import BatchFeature
+from transformers.image_transforms import pad, normalize
+from transformers.image_utils import PILImageResampling, ImageInput, ChannelDimension, make_list_of_images, get_image_size
 import numpy as np
 from PIL import Image
-from torch import TensorType
-from transformers import DonutImageProcessor, BatchFeature
-from transformers.image_utils import ChannelDimension, ImageInput, PILImageResampling, make_list_of_images, valid_images
-
+import PIL
+from surya.model.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
+from surya.model.table_rec.config import BOX_DIM
 
 
-def load_processor(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT):
-    processor = TableRecImageProcessor.from_pretrained(checkpoint)
-    processor.size = settings.TABLE_REC_IMAGE_SIZE
-    box_size = 1024
-    max_tokens = 384
-    processor.token_sep_id = max_tokens + box_size + 1
-    processor.token_pad_id = max_tokens + box_size + 2
-    processor.token_unused_id = max_tokens + 3 # This is a label, so don't add box size
-    processor.token_row_id = max_tokens + box_size + 4
-    processor.token_eos_id = max_tokens + box_size + 5
-    processor.max_boxes = settings.TABLE_REC_MAX_BOXES - 1
-    processor.box_size = {"height": box_size, "width": box_size}
+def load_processor():
+    processor = SuryaProcessor()
+    processor.image_processor.train = False
+    processor.image_processor.max_size = settings.TABLE_REC_IMAGE_SIZE
+
+    processor.token_pad_id = 0
+    processor.token_eos_id = 1
+    processor.token_bos_id = 2
+    processor.token_row_id = 3
+    processor.token_unused_id = 4
+    processor.box_size = (BOX_DIM, BOX_DIM)
     return processor
 
 
-class TableRecImageProcessor(DonutImageProcessor):
-    def __init__(self, *args, **kwargs):
+class SuryaImageProcessor(DonutImageProcessor):
+    def __init__(self, *args, max_size=None, train=False, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.patch_size = kwargs.get("patch_size", (4, 4))
+        self.max_size = max_size
+        self.train = train
+
+    @classmethod
+    def numpy_resize(cls, image: np.ndarray, size, interpolation=cv2.INTER_LANCZOS4):
+        max_width, max_height = size["width"], size["height"]
+
+        resized_image = cv2.resize(image, (max_width, max_height), interpolation=interpolation)
+        resized_image = resized_image.transpose(2, 0, 1)
+
+        return resized_image
 
     def process_inner(self, images: List[np.ndarray]):
-        images = [img.transpose(2, 0, 1) for img in images] # convert to CHW format
+        assert images[0].shape[2] == 3 # RGB input images, channel dim last
 
-        assert images[0].shape[0] == 3 # RGB input images, channel dim last
+        # This also applies the right channel dim format, to channel x height x width
+        images = [SuryaImageProcessor.numpy_resize(img, self.max_size, self.resample) for img in images]
+        assert images[0].shape[0] == 3 # RGB input images, channel dim first
 
         # Convert to float32 for rescale/normalize
         images = [img.astype(np.float32) for img in images]
 
-        # Rescale and normalize
+        # Pads with 255 (whitespace)
+        # Pad to max size to improve performance
+        max_size = self.max_size
         images = [
-            self.rescale(img, scale=self.rescale_factor, input_data_format=ChannelDimension.FIRST)
-            for img in images
+            SuryaImageProcessor.pad_image(
+                image=image,
+                size=max_size,
+                input_data_format=ChannelDimension.FIRST,
+                pad_value=settings.RECOGNITION_PAD_VALUE
+            )
+            for image in images
         ]
+        # Rescale and normalize
+        for idx in range(len(images)):
+            images[idx] = images[idx] * self.rescale_factor
         images = [
-            self.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
+            SuryaImageProcessor.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
             for img in images
         ]
 
         return images
 
-    def process_boxes(self, boxes):
-        padded_boxes = []
-        box_masks = []
-        box_counts = []
-        for b in boxes:
-            # Left pad for generation
-            padded_b = deepcopy(b)
-            padded_b.insert(0, [self.token_row_id] * 4) # special token for max col/row
-            padded_boxes.append(padded_b)
-
-        max_boxes = max(len(b) for b in padded_boxes)
-        for i in range(len(padded_boxes)):
-            pad_len = max_boxes - len(padded_boxes[i])
-            box_len = len(padded_boxes[i])
-            box_mask = [0] * pad_len + [1] * box_len
-            padded_box = [[self.token_pad_id] * 4] * pad_len + padded_boxes[i]
-            padded_boxes[i] = padded_box
-            box_masks.append(box_mask)
-            box_counts.append([pad_len, max_boxes])
-
-        return padded_boxes, box_masks, box_counts
-
-    def resize_img_and_boxes(self, img, boxes):
-        orig_dim = img.size
-        new_size = (self.size["width"], self.size["height"])
-        img.thumbnail(new_size, Image.Resampling.LANCZOS)  # Shrink largest dimension to fit new size
-        img = img.resize(new_size, Image.Resampling.LANCZOS)  # Stretch smaller dimension to fit new size
-
-        img = np.asarray(img, dtype=np.uint8)
-
-        width, height = orig_dim
-        box_width, box_height = self.box_size["width"], self.box_size["height"]
-        for box in boxes:
-            # Rescale to 0-1024
-            box[0] = box[0] / width * box_width
-            box[1] = box[1] / height * box_height
-            box[2] = box[2] / width * box_width
-            box[3] = box[3] / height * box_height
-
-            if box[0] < 0:
-                box[0] = 0
-            if box[1] < 0:
-                box[1] = 0
-            if box[2] > box_width:
-                box[2] = box_width
-            if box[3] > box_height:
-                box[3] = box_height
-
-        return img, boxes
-
     def preprocess(
         self,
         images: ImageInput,
-        boxes: List[List[int]],
         do_resize: bool = None,
         size: Dict[str, int] = None,
         resample: PILImageResampling = None,
@@ -121,36 +97,138 @@ class TableRecImageProcessor(DonutImageProcessor):
         data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
         input_data_format: Optional[Union[str, ChannelDimension]] = None,
         **kwargs,
-    ) -> Image.Image:
+    ) -> PIL.Image.Image:
         images = make_list_of_images(images)
 
-        if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "torch.Tensor, tf.Tensor or jax.ndarray."
-            )
-
-        new_images = []
-        new_boxes = []
-        for img, box in zip(images, boxes):
-            if len(box) > self.max_boxes:
-                raise ValueError(f"Too many boxes, max is {self.max_boxes}")
-            img, box = self.resize_img_and_boxes(img, box)
-            new_images.append(img)
-            new_boxes.append(box)
-
-        images = new_images
-        boxes = new_boxes
-
         # Convert to numpy for later processing steps
-        images = [np.array(image) for image in images]
-
+        images = [np.array(img) for img in images]
         images = self.process_inner(images)
-        boxes, box_mask, box_counts = self.process_boxes(boxes)
-        data = {
-            "pixel_values": images,
-            "input_boxes": boxes,
-            "input_boxes_mask": box_mask,
-            "input_boxes_counts": box_counts,
-        }
+
+        data = {"pixel_values": images}
         return BatchFeature(data=data, tensor_type=return_tensors)
+
+    @classmethod
+    def pad_image(
+        cls,
+        image: np.ndarray,
+        size: Dict[str, int],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+        pad_value: float = 0.0,
+    ) -> np.ndarray:
+        output_height, output_width = size["height"], size["width"]
+        input_height, input_width = get_image_size(image, channel_dim=input_data_format)
+
+        delta_width = output_width - input_width
+        delta_height = output_height - input_height
+
+        assert delta_width >= 0 and delta_height >= 0
+
+        pad_top = delta_height // 2
+        pad_left = delta_width // 2
+
+        pad_bottom = delta_height - pad_top
+        pad_right = delta_width - pad_left
+
+        padding = ((pad_top, pad_bottom), (pad_left, pad_right))
+        return pad(image, padding, data_format=data_format, input_data_format=input_data_format, constant_values=pad_value)
+
+    @classmethod
+    def align_long_axis(
+        cls,
+        image: np.ndarray,
+        size: Dict[str, int],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+    ) -> np.ndarray:
+        input_height, input_width = image.shape[:2]
+        output_height, output_width = size["height"], size["width"]
+
+        if (output_width < output_height and input_width > input_height) or (
+            output_width > output_height and input_width < input_height
+        ):
+            image = np.rot90(image, 3)
+
+        return image
+
+    @classmethod
+    def normalize(
+        cls,
+        image: np.ndarray,
+        mean: Union[float, Iterable[float]],
+        std: Union[float, Iterable[float]],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
+        return normalize(
+            image, mean=mean, std=std, data_format=data_format, input_data_format=input_data_format, **kwargs
+        )
+
+
+class SuryaProcessor(DonutProcessor):
+    def __init__(self, image_processor=None, tokenizer=None, train=False, **kwargs):
+        image_processor = SuryaImageProcessor.from_pretrained(settings.RECOGNITION_MODEL_CHECKPOINT)
+        if image_processor is None:
+            raise ValueError("You need to specify an `image_processor`.")
+
+        tokenizer = Byt5LangTokenizer()
+        super().__init__(image_processor, tokenizer)
+        self.current_processor = self.image_processor
+        self._in_target_context_manager = False
+
+    def resize_boxes(self, img, boxes):
+        width, height = img.size
+        box_width, box_height = self.box_size
+        for box in boxes:
+            # Rescale to 0-1024
+            box[0] = box[0] / width * box_width
+            box[1] = box[1] / height * box_height
+            box[2] = box[2] / width * box_width
+            box[3] = box[3] / height * box_height
+
+            if box[0] < 0:
+                box[0] = 0
+            if box[1] < 0:
+                box[1] = 0
+            if box[2] > box_width:
+                box[2] = box_width
+            if box[3] > box_height:
+                box[3] = box_height
+
+        return boxes
+
+    def __call__(self, *args, **kwargs):
+        images = kwargs.pop("images", [])
+        boxes = kwargs.pop("boxes", [])
+        assert len(images) == len(boxes)
+
+        if len(args) > 0:
+            images = args[0]
+            args = args[1:]
+
+        new_boxes = []
+        max_len = max([len(b) for b in boxes]) + 1
+        box_masks = []
+        box_ends = []
+        for i in range(len(boxes)):
+            nb = self.resize_boxes(images[i], boxes[i])
+            nb.insert(0, [self.token_row_id] * 4) # Insert special token for max rows/cols
+
+            pad_length = max_len - len(nb)
+            box_mask = [1] * len(nb) + [0] * (pad_length)
+            box_ends.append(len(nb))
+            nb = nb + [[self.token_pad_id] * 4] * pad_length
+
+            new_boxes.append(nb)
+            box_masks.append(box_mask)
+
+        box_ends = torch.tensor(box_ends, dtype=torch.long)
+        box_starts = torch.tensor([0] * len(boxes), dtype=torch.long)
+        box_ranges = torch.stack([box_starts, box_ends], dim=1)
+
+        inputs = self.image_processor(images, *args, **kwargs)
+        inputs["input_boxes"] = torch.tensor(new_boxes, dtype=torch.long)
+        inputs["input_boxes_mask"] = torch.tensor(box_masks, dtype=torch.long)
+        inputs["input_boxes_counts"] = box_ranges
+        return inputs

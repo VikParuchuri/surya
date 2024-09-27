@@ -32,8 +32,6 @@ def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, pr
         batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
 
-    images = [image.convert("RGB") for image in images]  # also copies the images
-
     orig_sizes = [image.size for image in images]
     splits_per_image = [get_total_splits(size, processor) for size in orig_sizes]
 
@@ -55,7 +53,7 @@ def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, pr
     all_preds = []
     for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
         batch_image_idxs = batches[batch_idx]
-        batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
+        batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
 
         split_index = []
         split_heights = []

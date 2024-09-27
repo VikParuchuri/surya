@@ -1,34 +1,34 @@
-from transformers import VisionEncoderDecoderConfig, AutoModel, AutoModelForCausalLM
-
-from surya.model.ordering.config import VariableDonutSwinConfig
-from surya.model.ordering.encoder import VariableDonutSwinModel
-from surya.model.table_rec.config import TableRecDecoderConfig
-from surya.model.table_rec.decoder import TableRecDecoder
-from surya.model.table_rec.encoderdecoder import TableRecVisionEncoderDecoderModel
+from surya.model.recognition.encoder import DonutSwinModel
+from surya.model.table_rec.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig, \
+    SuryaTableRecTextEncoderConfig
+from surya.model.table_rec.decoder import SuryaTableRecDecoder, SuryaTableRecTextEncoder
+from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
 from surya.settings import settings
 
 
 def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
-    config = VisionEncoderDecoderConfig.from_pretrained(checkpoint)
 
-    decoder_config = vars(config.decoder)
-    decoder = TableRecDecoderConfig(**decoder_config)
+    config = SuryaTableRecConfig.from_pretrained(checkpoint)
+    decoder_config = config.decoder
+    decoder = SuryaTableRecDecoderConfig(**decoder_config)
     config.decoder = decoder
 
-    encoder_config = vars(config.encoder)
-    encoder = VariableDonutSwinConfig(**encoder_config)
+    encoder_config = config.encoder
+    encoder = DonutSwinTableRecConfig(**encoder_config)
     config.encoder = encoder
 
-    # Get transformers to load custom model
-    AutoModel.register(TableRecDecoderConfig, TableRecDecoder)
-    AutoModelForCausalLM.register(TableRecDecoderConfig, TableRecDecoder)
-    AutoModel.register(VariableDonutSwinConfig, VariableDonutSwinModel)
+    text_encoder_config = config.text_encoder
+    text_encoder = SuryaTableRecTextEncoderConfig(**text_encoder_config)
+    config.text_encoder = text_encoder
 
-    model = TableRecVisionEncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
-    assert isinstance(model.decoder, TableRecDecoder)
-    assert isinstance(model.encoder, VariableDonutSwinModel)
+    model = TableRecEncoderDecoderModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
+
+    assert isinstance(model.decoder, SuryaTableRecDecoder)
+    assert isinstance(model.encoder, DonutSwinModel)
+    assert isinstance(model.text_encoder, SuryaTableRecTextEncoder)
 
     model = model.to(device)
     model = model.eval()
-    print(f"Loaded reading order model {checkpoint} on device {device} with dtype {dtype}")
+
+    print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model
