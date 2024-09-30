@@ -123,6 +123,10 @@ class SuryaTableRecDecoderConfig(PretrainedConfig):
         tie_word_embeddings=False,
         aux_heads=0, # How many n-token-ahead heads to add
         causal=True,
+        max_classes=2 + SPECIAL_TOKENS,
+        max_width=1024 + SPECIAL_TOKENS,
+        max_height=1024 + SPECIAL_TOKENS,
+        out_box_size=1024,
         **kwargs,
     ):
         self.num_hidden_layers = num_hidden_layers
@@ -156,6 +160,10 @@ class SuryaTableRecDecoderConfig(PretrainedConfig):
         self.encoder_hidden_size=encoder_hidden_size
         self.causal = causal
         self.encoder_cross_attn_layers = encoder_cross_attn_layers
+        self.max_classes = max_classes
+        self.max_width = max_width
+        self.max_height = max_height
+        self.out_box_size = out_box_size
 
         super().__init__(
             pad_token_id=pad_token_id,

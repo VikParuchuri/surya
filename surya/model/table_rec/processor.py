@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Union, Optional, List, Iterable
 
 import cv2
@@ -12,7 +13,7 @@ from PIL import Image
 import PIL
 from surya.model.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
-from surya.model.table_rec.config import BOX_DIM
+from surya.model.table_rec.config import BOX_DIM, SPECIAL_TOKENS
 
 
 def load_processor():
@@ -26,6 +27,7 @@ def load_processor():
     processor.token_row_id = 3
     processor.token_unused_id = 4
     processor.box_size = (BOX_DIM, BOX_DIM)
+    processor.special_token_count = SPECIAL_TOKENS
     return processor
 
 
@@ -176,6 +178,8 @@ class SuryaProcessor(DonutProcessor):
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
         self._in_target_context_manager = False
+        self.max_input_boxes = kwargs.get("max_input_boxes", 256)
+        self.extra_input_boxes = kwargs.get("extra_input_boxes", 64)
 
     def resize_boxes(self, img, boxes):
         width, height = img.size
@@ -207,15 +211,24 @@ class SuryaProcessor(DonutProcessor):
             images = args[0]
             args = args[1:]
 
+        for i in range(len(boxes)):
+            if len(boxes[i]) > self.max_input_boxes:
+                downsample_ratio = math.ceil(len(boxes[i]) / self.max_input_boxes)
+                boxes[i] = boxes[i][::downsample_ratio]
+
         new_boxes = []
         max_len = max([len(b) for b in boxes]) + 1
         box_masks = []
         box_ends = []
         for i in range(len(boxes)):
             nb = self.resize_boxes(images[i], boxes[i])
-            nb.insert(0, [self.token_row_id] * 4) # Insert special token for max rows/cols
+            nb = [[b + self.special_token_count for b in box] for box in nb] # shift up
 
-            pad_length = max_len - len(nb)
+            nb.insert(0, [self.token_row_id] * 4) # Insert special token for max rows/cols
+            for _ in range(self.extra_input_boxes):
+                nb.append([self.token_unused_id] * 4)
+
+            pad_length = max(max_len, self.max_input_boxes + self.extra_input_boxes) - len(nb)
             box_mask = [1] * len(nb) + [0] * (pad_length)
             box_ends.append(len(nb))
             nb = nb + [[self.token_pad_id] * 4] * pad_length

@@ -19,8 +19,8 @@ _MAX_SQRT_GRADIENT = 1000.0
 
 @dataclass
 class TableRecModelOutput(ModelOutput):
-    row_logits: torch.Tensor
-    col_logits: torch.Tensor | None = None
+    bbox_logits: torch.Tensor
+    class_logits: torch.Tensor | None = None
     hidden_states: torch.Tensor | None = None
 
 
@@ -442,14 +442,42 @@ class LabelEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.vocab_size = config.vocab_size
-        self.row_embed = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.col_embed = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.x1_embed = nn.Embedding(config.max_width, config.hidden_size)
+        self.y1_embed = nn.Embedding(config.max_height, config.hidden_size)
+        self.x2_embed = nn.Embedding(config.max_width, config.hidden_size)
+        self.y2_embed = nn.Embedding(config.max_height, config.hidden_size)
+        self.w_embed = nn.Embedding(config.max_width, config.hidden_size)
+        self.h_embed = nn.Embedding(config.max_height, config.hidden_size)
+        self.cx_embed = nn.Embedding(config.max_width, config.hidden_size)
+        self.cy_embed = nn.Embedding(config.max_height, config.hidden_size)
+        self.class_embed = nn.Embedding(config.max_classes, config.hidden_size)
+        self.max_width = config.max_width
+        self.max_height = config.max_height
+        self.max_classes = config.max_classes
 
     def forward(self, labels: torch.LongTensor, input_box_counts: torch.LongTensor):
-        row_labels, col_labels = labels.unbind(dim=-1)
-        row_labels = torch.clamp(row_labels, 0, self.vocab_size - 1).long()
-        col_labels = torch.clamp(col_labels, 0, self.vocab_size - 1).long()
-        embedded = self.row_embed(row_labels) + self.col_embed(col_labels) # Embed the labels in as well
+        cx, cy, w, h, class_ = labels.to(torch.long).unbind(dim=-1)
+        # Shape is (batch_size, num_boxes/seq len, d_model)
+        x1 = (cx - w // 2).long()
+        y1 = (cy - h // 2).long()
+        x2 = (cx + w // 2).long()
+        y2 = (cy + h // 2).long()
+        x1 = torch.clamp(x1, 0, self.max_width - 1)
+        y1 = torch.clamp(y1, 0, self.max_height - 1)
+        x2 = torch.clamp(x2, 0, self.max_width - 1)
+        y2 = torch.clamp(y2, 0, self.max_height - 1)
+
+        class_ = torch.clamp(class_, 0, self.max_classes - 1).long()
+
+        w = torch.clamp(w, 0, self.max_width - 1).long()
+        h = torch.clamp(h, 0, self.max_height - 1).long()
+        cx = torch.clamp(cx, 0, self.max_width - 1).long()
+        cy = torch.clamp(cy, 0, self.max_height - 1).long()
+
+        coord_embeds = self.x1_embed(x1) + self.y1_embed(y1) + self.x2_embed(x2) + self.y2_embed(y2)
+        class_embeds = self.class_embed(class_)
+        embedded = coord_embeds + self.w_embed(w) + self.h_embed(h) + self.cx_embed(cx) + self.cy_embed(cy) + class_embeds
+
         return embedded
 
 
@@ -649,8 +677,9 @@ class SuryaTableRecDecoder(SuryaTableRecDecoderPreTrainedModel):
         self.model = SuryaTableRecDecoderModel(config, embed_labels=True, embed_positions=False)
         self.vocab_size = config.vocab_size
 
-        self.row_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        self.col_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.bbox_head = nn.Linear(config.hidden_size, config.max_width * 4, bias=False)
+        self.class_head = nn.Linear(config.hidden_size, config.max_classes, bias=False)
+        self.max_width = config.max_width
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -698,15 +727,16 @@ class SuryaTableRecDecoder(SuryaTableRecDecoderPreTrainedModel):
         )
 
         hidden_states = outputs[0]
-        row_logits = self.row_head(hidden_states)
-        col_logits = self.col_head(hidden_states)
+        bbox_logits = self.bbox_head(hidden_states)
+        class_logits = self.class_head(hidden_states)
+        bsz, seq_len = class_logits.shape[:2]
+        bbox_logits = bbox_logits.view(bsz, seq_len, 4, self.max_width)
 
         return TableRecModelOutput(
-            row_logits=row_logits,
-            col_logits=col_logits,
-            hidden_states=outputs.hidden_states,
+            bbox_logits=bbox_logits,
+            class_logits=class_logits,
+            hidden_states=hidden_states,
         )
-
 @dataclass
 class TextEncoderOutput(CausalLMOutput):
     hidden_states: torch.FloatTensor = None

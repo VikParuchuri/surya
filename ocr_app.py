@@ -104,7 +104,7 @@ def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Ima
                 item.bbox[3] + table_bbox[1]
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
-        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels)
+        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=12)
     return table_img, table_preds
 
 
@@ -182,6 +182,7 @@ if "pdf" in filetype:
     pil_image = get_page_image(in_file, page_number)
 else:
     pil_image = Image.open(in_file).convert("RGB")
+    page_number = None
 
 text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
@@ -227,7 +228,7 @@ if order_det:
 
 
 if table_rec:
-    table_img, pred = table_recognition(pil_image, in_file, page_number - 1, use_pdf_boxes)
+    table_img, pred = table_recognition(pil_image, in_file, page_number - 1 if page_number else None, use_pdf_boxes)
     with col1:
         st.image(table_img, caption="Table Recognition", use_column_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)

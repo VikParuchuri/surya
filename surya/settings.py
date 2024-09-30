@@ -72,8 +72,8 @@ class Settings(BaseSettings):
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
-    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/table_rec_ar3"
-    TABLE_REC_IMAGE_SIZE: Dict = {"height": 512, "width": 512}
+    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/table_rec_ar"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 640, "width": 640}
     TABLE_REC_MAX_BOXES: int = 512
     TABLE_REC_MAX_ROWS: int = 384
 
