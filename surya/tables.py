@@ -60,7 +60,7 @@ def corners_to_cx_cy(pred):
     return [x, y, w, h]
 
 
-def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True, threshold=.2):
+def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True, row_threshold=.2, col_threshold=.2):
     sel_bboxes = []
     for cell_idx, cell in enumerate(input_boxes):
         rc_corner_bbox = cx_cy_to_corners(rc_box)
@@ -68,12 +68,12 @@ def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True
 
         if row:
             if cell_idx not in used_cells_row:
-                if intersection_pct > threshold:
+                if intersection_pct > row_threshold:
                     sel_bboxes.append(cell)
                     used_cells_row.add(cell_idx)
         else:
             if cell_idx not in used_cells_col:
-                if intersection_pct > threshold:
+                if intersection_pct > col_threshold:
                     sel_bboxes.append(cell)
                     used_cells_col.add(cell_idx)
 
@@ -183,7 +183,8 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
                         continue
                     class_pred = class_pred.item() - SPECIAL_TOKENS
                     nb = processor.resize_boxes(batch_images[batch_idx], deepcopy(bboxes))
-                    new_bbox, ucr, ucc = snap_to_bboxes(box_pred.tolist(), nb, ucr, ucc, row=class_pred == 0)
+                    is_row = class_pred == 0
+                    new_bbox, ucr, ucc = snap_to_bboxes(box_pred.tolist(), nb, ucr, ucc, row=is_row)
                     new_bbox = torch.tensor(new_bbox, dtype=torch.long, device=model.device)
                     box_preds[batch_idx] = new_bbox
 
@@ -266,7 +267,6 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
 
             rows = [p[:4] for p in preds if p[4] == 0]
             cols = [p[:4] for p in preds if p[4] == 1]
-
             for row_idx, row in enumerate(rows):
                 cell = TableCell(
                     bbox=row,
