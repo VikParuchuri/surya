@@ -62,8 +62,8 @@ def corners_to_cx_cy(pred):
 
 def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True, row_threshold=.2, col_threshold=.2):
     sel_bboxes = []
+    rc_corner_bbox = cx_cy_to_corners(rc_box)
     for cell_idx, cell in enumerate(input_boxes):
-        rc_corner_bbox = cx_cy_to_corners(rc_box)
         intersection_pct = Bbox(bbox=cell).intersection_pct(Bbox(bbox=rc_corner_bbox))
 
         if row:
@@ -97,15 +97,15 @@ def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True
 
 
 
-def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
+def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
-    assert len(images) == len(bboxes)
+    assert len(images) == len(input_bboxes)
     if batch_size is None:
         batch_size = get_batch_size()
 
     output_order = []
-    for i in tqdm(range(0, len(images), batch_size), desc="Finding reading order"):
-        batch_list_bboxes = deepcopy(bboxes[i:i+batch_size])
+    for i in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
+        batch_list_bboxes = deepcopy(input_bboxes[i:i+batch_size])
         batch_list_bboxes = [sort_bboxes(page_bboxes) for page_bboxes in batch_list_bboxes] # Sort bboxes before passing in
 
         batch_images = images[i:i+batch_size]
@@ -199,62 +199,14 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
-        """
+
         for j, (preds, bboxes, orig_size) in enumerate(zip(batch_predictions, batch_list_bboxes, orig_sizes)):
-            out_data = []
-            # They either match up, or there are too many bboxes passed in
             img_w, img_h = orig_size
+            width_scaler = img_w / model.config.decoder.out_box_size
+            height_scaler = img_h / model.config.decoder.out_box_size
+
             # cx, cy to corners
             for i, pred in enumerate(preds):
-                scale_w = img_w / model.config.decoder.out_box_size
-                scale_h = img_h / model.config.decoder.out_box_size
-                class_ = int(pred[4] - SPECIAL_TOKENS)
-                pred = cx_cy_to_corners(pred)
-
-                preds[i] = [pred[0] * scale_w, pred[1] * scale_h, pred[2] * scale_w, pred[3] * scale_h, class_]
-
-            rows = [p[:4] for p in preds if p[4] == 0]
-            cols = [p[:4] for p in preds if p[4] == 1]
-
-            for cell in bboxes:
-                max_intersection = 0
-                row_pred = -1
-                for row_idx, row in enumerate(rows):
-                    intersection_pct = Bbox(bbox=cell).intersection_pct(Bbox(bbox=row))
-                    if intersection_pct > max_intersection:
-                        max_intersection = intersection_pct
-                        row_pred = row_idx
-
-                max_intersection = 0
-                col_pred = -1
-                for col_idx, col in enumerate(cols):
-                    intersection_pct = Bbox(bbox=cell).intersection_pct(Bbox(bbox=col))
-                    if intersection_pct > max_intersection:
-                        max_intersection = intersection_pct
-                        col_pred = col_idx
-
-                cell = TableCell(
-                    bbox=cell,
-                    col_id=col_pred,
-                    row_id=row_pred
-                )
-                out_data.append(cell)
-
-            result = TableResult(
-                cells=out_data,
-                image_bbox=[0, 0, img_w, img_h],
-            )
-
-            output_order.append(result)
-        """
-        for j, (preds, bboxes, orig_size) in enumerate(zip(batch_predictions, batch_list_bboxes, orig_sizes)):
-            out_data = []
-            # They either match up, or there are too many bboxes passed in
-            img_w, img_h = orig_size
-            # cx, cy to corners
-            for i, pred in enumerate(preds):
-                width_scaler = img_w / model.config.decoder.out_box_size
-                height_scaler = img_h / model.config.decoder.out_box_size
                 w = pred[2] / 2
                 h = pred[3] / 2
                 x1 = pred[0] - w
@@ -265,26 +217,88 @@ def batch_table_recognition(images: List, bboxes: List[List[List[float]]], model
 
                 preds[i] = [x1 * width_scaler, y1 * height_scaler, x2 * width_scaler, y2 * height_scaler, class_]
 
-            rows = [p[:4] for p in preds if p[4] == 0]
-            cols = [p[:4] for p in preds if p[4] == 1]
-            for row_idx, row in enumerate(rows):
+            # Get rows and columns
+            bb_rows = [p[:4] for p in preds if p[4] == 0]
+            bb_cols = [p[:4] for p in preds if p[4] == 1]
+
+            rows = []
+            cols = []
+            for row_idx, row in enumerate(bb_rows):
                 cell = TableCell(
                     bbox=row,
-                    col_id=-1,
                     row_id=row_idx
                 )
-                out_data.append(cell)
+                rows.append(cell)
 
-            for col_idx, col in enumerate(cols):
+            for col_idx, col in enumerate(bb_cols):
                 cell = TableCell(
                     bbox=col,
                     col_id=col_idx,
-                    row_id=-1
                 )
-                out_data.append(cell)
+                cols.append(cell)
+
+            # Assign cells to rows/columns
+            cells = []
+            for cell in bboxes:
+                max_intersection = 0
+                row_pred = None
+                for row_idx, row in enumerate(rows):
+                    intersection_pct = Bbox(bbox=cell).intersection_pct(row)
+                    if intersection_pct > max_intersection:
+                        max_intersection = intersection_pct
+                        row_pred = row_idx
+
+                max_intersection = 0
+                col_pred = None
+                for col_idx, col in enumerate(cols):
+                    intersection_pct = Bbox(bbox=cell).intersection_pct(col)
+                    if intersection_pct > max_intersection:
+                        max_intersection = intersection_pct
+                        col_pred = col_idx
+
+                cells.append(
+                    TableCell(
+                        bbox=cell,
+                        row_id=row_pred,
+                        col_id=col_pred
+                    )
+                )
+
+            for cell in cells:
+                if cell.row_id is None:
+                    closest_row = None
+                    closest_row_dist = None
+                    for cell2 in cells:
+                        if cell2.row_id is None:
+                            continue
+                        cell_y_center = (cell.bbox[1] + cell.bbox[3]) / 2
+                        cell2_y_center = (cell2.bbox[1] + cell2.bbox[3]) / 2
+                        y_dist = abs(cell_y_center - cell2_y_center)
+                        if closest_row_dist is None or y_dist < closest_row_dist:
+                            closest_row = cell2.row_id
+                            closest_row_dist = y_dist
+                    cell.row_id = closest_row
+
+                if cell.col_id is None:
+                    closest_col = None
+                    closest_col_dist = None
+                    for cell2 in cells:
+                        if cell2.col_id is None:
+                            continue
+                        cell_x_center = (cell.bbox[0] + cell.bbox[2]) / 2
+                        cell2_x_center = (cell2.bbox[0] + cell2.bbox[2]) / 2
+                        x_dist = abs(cell2_x_center - cell_x_center)
+                        if closest_col_dist is None or x_dist < closest_col_dist:
+                            closest_col = cell2.col_id
+                            closest_col_dist = x_dist
+
+                    cell.col_id = closest_col
+
 
             result = TableResult(
-                cells=out_data,
+                cells=cells,
+                rows=rows,
+                cols=cols,
                 image_bbox=[0, 0, img_w, img_h],
             )
 

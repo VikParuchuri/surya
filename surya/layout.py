@@ -12,7 +12,7 @@ from surya.settings import settings
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[np.ndarray], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
     logits = np.stack(heatmaps, axis=0)
-    vertical_line_bboxes = [line for line in detection_result.vertical_lines]
+    vertical_line_bboxes = detection_result.vertical_lines
     line_bboxes = detection_result.bboxes
 
     # Scale back to processor size
@@ -38,6 +38,8 @@ def get_regions_from_detection_result(detection_result: TextDetectionResult, hea
     detected_boxes = []
     for heatmap_idx in range(1, len(id2label)):  # Skip the blank class
         heatmap = logits[heatmap_idx]
+        if np.max(heatmap) < settings.DETECTOR_BLANK_THRESHOLD:
+            continue
         bboxes = get_detected_boxes(heatmap)
         bboxes = [bbox for bbox in bboxes if bbox.area > 25]
         for bb in bboxes:
@@ -150,10 +152,14 @@ def get_regions(heatmaps: List[np.ndarray], orig_size, id2label, segment_assignm
         heatmap = heatmaps[i]
         assert heatmap.shape == segment_assignment.shape
         heatmap[segment_assignment != i] = 0  # zero out where another segment is
+
+        # Skip processing empty labels
+        if np.max(heatmap) < settings.DETECTOR_BLANK_THRESHOLD:
+            continue
+
         bbox = get_and_clean_boxes(heatmap, list(reversed(heatmap.shape)), orig_size)
         for bb in bbox:
             bboxes.append(LayoutBox(polygon=bb.polygon, label=id2label[i]))
-        heatmaps.append(heatmap)
 
     bboxes = keep_largest_boxes(bboxes)
     return bboxes

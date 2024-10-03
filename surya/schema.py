@@ -176,10 +176,12 @@ class OrderResult(BaseModel):
 
 
 class TableCell(Bbox):
-    row_id: int
-    col_id: int
+    row_id: int | None = None
+    col_id: int | None = None
 
 
 class TableResult(BaseModel):
     cells: List[TableCell]
+    rows: List[TableCell]
+    cols: List[TableCell]
     image_bbox: List[float]

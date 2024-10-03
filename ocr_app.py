@@ -78,11 +78,10 @@ def order_detection(img) -> (Image.Image, OrderResult):
 
 def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Image.Image, List[TableResult]):
     _, layout_pred = layout_detection(img)
-    layout_tables = [l for l in layout_pred.bboxes if l.label == "Table"]
-    layout_tables_bboxes = [l.bbox for l in layout_tables]
+    layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
 
     table_imgs = []
-    for table_bbox in layout_tables_bboxes:
+    for table_bbox in layout_tables:
         table_imgs.append(img.crop(table_bbox))
     if use_pdf_boxes:
         page_text = get_page_text_lines(filepath, page_idx, img.size)
@@ -93,7 +92,7 @@ def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Ima
         table_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in table_boxes]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
     table_img = img.copy()
-    for results, table_bbox in zip(table_preds, layout_tables_bboxes):
+    for results, table_bbox in zip(table_preds, layout_tables):
         adjusted_bboxes = []
         labels = []
         for item in results.cells:
