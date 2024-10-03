@@ -173,7 +173,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
 
 
 
-def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10):
+def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color='red'):
     polys = []
     for bb in bboxes:
         # Clockwise polygon
@@ -185,10 +185,10 @@ def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10):
         ]
         polys.append(poly)
 
-    return draw_polys_on_image(polys, image, labels, label_font_size=label_font_size)
+    return draw_polys_on_image(polys, image, labels, label_font_size=label_font_size, color=color)
 
 
-def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10):
+def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10, color='red'):
     draw = ImageDraw.Draw(image)
     font_path = get_font_path()
     label_font = ImageFont.truetype(font_path, label_font_size)
@@ -196,7 +196,7 @@ def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offse
     for i in range(len(corners)):
         poly = corners[i]
         poly = [(int(p[0]), int(p[1])) for p in poly]
-        draw.polygon(poly, outline='red', width=1)
+        draw.polygon(poly, outline=color, width=1)
 
         if labels is not None:
             label = labels[i]
@@ -215,7 +215,7 @@ def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offse
             draw.text(
                 text_position,
                 label,
-                fill="red",
+                fill=color,
                 font=label_font
             )
 

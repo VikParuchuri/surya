@@ -84,7 +84,7 @@ def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Ima
     for table_bbox in layout_tables:
         table_imgs.append(img.crop(table_bbox))
     if use_pdf_boxes:
-        page_text = get_page_text_lines(filepath, page_idx, img.size)
+        page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
         table_texts = get_table_blocks(layout_tables, page_text, img.size)
         table_bboxes = [[tb["bbox"] for tb in table_text] for table_text in table_texts]
     else:

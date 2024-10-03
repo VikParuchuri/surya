@@ -13,7 +13,7 @@ from surya.model.detection.model import load_model as load_det_model, load_proce
 from surya.model.table_rec.model import load_model as load_model
 from surya.model.table_rec.processor import load_processor
 from surya.tables import batch_table_recognition
-from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
+from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 
 
@@ -49,6 +49,8 @@ def main():
             pnums.append(0)
         else:
             pnums.append(pnums[-1] + 1)
+
+        prev_name = name
 
     line_predictions = batch_text_detection(images, det_model, det_processor)
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
@@ -117,8 +119,18 @@ def main():
         if args.images:
             boxes = [l.bbox for l in pred.cells]
             labels = [f"{l.row_id}/{l.col_id}" for l in pred.cells]
-            bbox_image = draw_bboxes_on_image(boxes, table_img, labels=labels, label_font_size=20)
-            bbox_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_table.png"))
+            bbox_image = draw_bboxes_on_image(boxes, copy.deepcopy(table_img), labels=labels, label_font_size=20)
+            bbox_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_cells.png"))
+
+            rows = [l.bbox for l in pred.rows]
+            cols = [l.bbox for l in pred.cols]
+            row_labels = [f"Row {l.row_id}" for l in pred.rows]
+            col_labels = [f"Col {l.col_id}" for l in pred.cols]
+
+            rc_image = copy.deepcopy(table_img)
+            rc_image = draw_bboxes_on_image(rows, rc_image, labels=row_labels, label_font_size=20, color="blue")
+            rc_image = draw_bboxes_on_image(cols, rc_image, labels=col_labels, label_font_size=20, color="red")
+            rc_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_rc.png"))
 
     with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(table_predictions, f, ensure_ascii=False)

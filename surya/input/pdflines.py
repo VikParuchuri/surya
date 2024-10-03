@@ -4,13 +4,21 @@ from surya.postprocessing.text import sort_text_lines
 from surya.schema import PolygonBox
 
 
-def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list):
+def rotate_90(bbox: list) -> list:
+    return [bbox[1], bbox[0], bbox[3], bbox[2]]
+
+
+
+
+
+def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list) -> list:
     assert len(page_idxs) == len(out_sizes)
     pages_text = dictionary_output(filepath, sort=False, page_range=page_idxs, keep_chars=True)
     for full_text, out_size in zip(pages_text, out_sizes):
-        text_bbox = full_text["bbox"]
-        text_w_scale = out_size[0] / text_bbox[2]
-        text_h_scale = out_size[1] / text_bbox[3]
+        width = full_text["width"]
+        height = full_text["height"]
+        text_w_scale = out_size[0] / width
+        text_h_scale = out_size[1] / height
         for block in full_text["blocks"]:
             for line in block["lines"]:
                 line["bbox"] = [line["bbox"][0] * text_w_scale, line["bbox"][1] * text_h_scale,
@@ -22,7 +30,7 @@ def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list):
     return pages_text
 
 
-def get_table_blocks(tables: list, full_text: list, img_size: list, table_thresh=.8):
+def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh=.8):
     # Returns coordinates relative to input table, not full image
     table_texts = []
     for table in tables:
@@ -33,6 +41,7 @@ def get_table_blocks(tables: list, full_text: list, img_size: list, table_thresh
             [table[0], table[3]]
         ])
         table_text = []
+        rotation = full_text["rotation"]
         for block in full_text["blocks"]:
             for line in block["lines"]:
                 line_poly = PolygonBox(polygon=[
@@ -47,10 +56,21 @@ def get_table_blocks(tables: list, full_text: list, img_size: list, table_thresh
                 curr_box = None
                 for span in line["spans"]:
                     for char in span["chars"]:
+                        same_span = False
+                        if curr_span:
+                            if rotation == 90:
+                                same_span = (char["bbox"][0] - curr_box[0]) / img_size[0] < 0.01 and abs(char["bbox"][1] - curr_box[3]) / img_size[1] < 0.01
+                            elif rotation == 180:
+                                same_span = (char["bbox"][2] - curr_box[0]) / img_size[0] < 0.01 and (char["bbox"][1] - curr_box[1]) / img_size[1] < 0.01
+                            elif rotation == 270:
+                                same_span = (char["bbox"][0] - curr_box[0]) / img_size[0] < 0.01 and abs(char["bbox"][3] - curr_box[1]) / img_size[1] < 0.01
+                            else:
+                                same_span = (char["bbox"][0] - curr_box[2]) / img_size[0] < 0.01 and (char["bbox"][1] - curr_box[1]) / img_size[1] < 0.01
+
                         if curr_span is None:
                             curr_span = char["char"]
                             curr_box = char["bbox"]
-                        elif (char["bbox"][0] - curr_box[2]) / img_size[0] < 0.01 and (char["bbox"][1] - curr_box[1]) / img_size[1] < 0.01:
+                        elif same_span:
                             curr_span += char["char"]
                             curr_box = [min(curr_box[0], char["bbox"][0]), min(curr_box[1], char["bbox"][1]),
                                         max(curr_box[2], char["bbox"][2]), max(curr_box[3], char["bbox"][3])]
