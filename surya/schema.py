@@ -123,6 +123,10 @@ class Bbox(BaseModel):
     def polygon(self):
         return [[self.bbox[0], self.bbox[1]], [self.bbox[2], self.bbox[1]], [self.bbox[2], self.bbox[3]], [self.bbox[0], self.bbox[3]]]
 
+    @property
+    def center(self):
+        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
+
     def intersection_pct(self, other):
         if self.area == 0:
             return 0
@@ -178,6 +182,7 @@ class OrderResult(BaseModel):
 class TableCell(Bbox):
     row_id: int | None = None
     col_id: int | None = None
+    text: str | None = None
 
 
 class TableResult(BaseModel):

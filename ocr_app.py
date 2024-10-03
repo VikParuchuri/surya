@@ -85,11 +85,10 @@ def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Ima
         table_imgs.append(img.crop(table_bbox))
     if use_pdf_boxes:
         page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
-        table_texts = get_table_blocks(layout_tables, page_text, img.size)
-        table_bboxes = [[tb["bbox"] for tb in table_text] for table_text in table_texts]
+        table_bboxes = get_table_blocks(layout_tables, page_text, img.size)
     else:
-        table_boxes = batch_text_detection(table_imgs, det_model, det_processor)
-        table_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in table_boxes]
+        ocr_results = run_ocr(table_imgs, [None] * len(table_imgs), det_model, det_processor, rec_model, rec_processor)
+        table_bboxes = [[{"bbox": tb.bbox, "text": tb.text} for tb in ocr_result.text_lines] for ocr_result in ocr_results]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
     table_img = img.copy()
     for results, table_bbox in zip(table_preds, layout_tables):

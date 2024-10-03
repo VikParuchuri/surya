@@ -1,6 +1,6 @@
 from collections import defaultdict
 from copy import deepcopy
-from typing import List
+from typing import List, Dict
 import torch
 from PIL import Image
 
@@ -26,7 +26,7 @@ def get_batch_size():
 def sort_bboxes(bboxes, tolerance=1):
     vertical_groups = {}
     for block in bboxes:
-        group_key = round(block[1] / tolerance) * tolerance
+        group_key = round(block["bbox"][1] / tolerance) * tolerance
         if group_key not in vertical_groups:
             vertical_groups[group_key] = []
         vertical_groups[group_key].append(block)
@@ -34,7 +34,7 @@ def sort_bboxes(bboxes, tolerance=1):
     # Sort each group horizontally and flatten the groups into a single list
     sorted_page_blocks = []
     for _, group in sorted(vertical_groups.items()):
-        sorted_group = sorted(group, key=lambda x: x[0])
+        sorted_group = sorted(group, key=lambda x: x["bbox"][0])
         sorted_page_blocks.extend(sorted_group)
 
     return sorted_page_blocks
@@ -96,17 +96,30 @@ def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True
     return cx_cy_box, used_cells_row, used_cells_col
 
 
+def is_rotated(rows, cols):
+    # Determine if the table is rotated by looking at row and column width / height ratios
+    # Rows should have a >1 ratio, cols <1
+    widths = sum([r.width for r in rows])
+    heights = sum([c.height for c in cols])
+    r_ratio = widths / heights
 
-def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
+    widths = sum([c.width for c in cols])
+    heights = sum([r.height for r in rows])
+    c_ratio = widths / heights
+
+    return r_ratio * 2 < c_ratio
+
+def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
-    assert len(images) == len(input_bboxes)
+    assert len(images) == len(table_cells)
     if batch_size is None:
         batch_size = get_batch_size()
 
     output_order = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
-        batch_list_bboxes = deepcopy(input_bboxes[i:i+batch_size])
-        batch_list_bboxes = [sort_bboxes(page_bboxes) for page_bboxes in batch_list_bboxes] # Sort bboxes before passing in
+        batch_table_cells = deepcopy(table_cells[i:i+batch_size])
+        batch_table_cells = [sort_bboxes(page_bboxes) for page_bboxes in batch_table_cells] # Sort bboxes before passing in
+        batch_list_bboxes = [[block["bbox"] for block in page] for page in batch_table_cells]
 
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
@@ -200,7 +213,7 @@ def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]],
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
 
-        for j, (preds, bboxes, orig_size) in enumerate(zip(batch_predictions, batch_list_bboxes, orig_sizes)):
+        for j, (preds, input_cells, orig_size) in enumerate(zip(batch_predictions, batch_table_cells, orig_sizes)):
             img_w, img_h = orig_size
             width_scaler = img_w / model.config.decoder.out_box_size
             height_scaler = img_h / model.config.decoder.out_box_size
@@ -239,11 +252,11 @@ def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]],
 
             # Assign cells to rows/columns
             cells = []
-            for cell in bboxes:
+            for cell in input_cells:
                 max_intersection = 0
                 row_pred = None
                 for row_idx, row in enumerate(rows):
-                    intersection_pct = Bbox(bbox=cell).intersection_pct(row)
+                    intersection_pct = Bbox(bbox=cell["bbox"]).intersection_pct(row)
                     if intersection_pct > max_intersection:
                         max_intersection = intersection_pct
                         row_pred = row_idx
@@ -251,19 +264,21 @@ def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]],
                 max_intersection = 0
                 col_pred = None
                 for col_idx, col in enumerate(cols):
-                    intersection_pct = Bbox(bbox=cell).intersection_pct(col)
+                    intersection_pct = Bbox(bbox=cell["bbox"]).intersection_pct(col)
                     if intersection_pct > max_intersection:
                         max_intersection = intersection_pct
                         col_pred = col_idx
 
                 cells.append(
                     TableCell(
-                        bbox=cell,
+                        bbox=cell["bbox"],
+                        text=cell.get("text"),
                         row_id=row_pred,
                         col_id=col_pred
                     )
                 )
 
+            rotated = is_rotated(rows, cols)
             for cell in cells:
                 if cell.row_id is None:
                     closest_row = None
@@ -271,8 +286,12 @@ def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]],
                     for cell2 in cells:
                         if cell2.row_id is None:
                             continue
-                        cell_y_center = (cell.bbox[1] + cell.bbox[3]) / 2
-                        cell2_y_center = (cell2.bbox[1] + cell2.bbox[3]) / 2
+                        if rotated:
+                            cell_y_center = cell.center[0]
+                            cell2_y_center = cell2.center[0]
+                        else:
+                            cell_y_center = cell.center[1]
+                            cell2_y_center = cell2.center[1]
                         y_dist = abs(cell_y_center - cell2_y_center)
                         if closest_row_dist is None or y_dist < closest_row_dist:
                             closest_row = cell2.row_id
@@ -285,15 +304,19 @@ def batch_table_recognition(images: List, input_bboxes: List[List[List[float]]],
                     for cell2 in cells:
                         if cell2.col_id is None:
                             continue
-                        cell_x_center = (cell.bbox[0] + cell.bbox[2]) / 2
-                        cell2_x_center = (cell2.bbox[0] + cell2.bbox[2]) / 2
+                        if rotated:
+                            cell_x_center = cell.center[1]
+                            cell2_x_center = cell2.center[1]
+                        else:
+                            cell_x_center = cell.center[0]
+                            cell2_x_center = cell2.center[0]
+
                         x_dist = abs(cell2_x_center - cell_x_center)
                         if closest_col_dist is None or x_dist < closest_col_dist:
                             closest_col = cell2.col_id
                             closest_col_dist = x_dist
 
                     cell.col_id = closest_col
-
 
             result = TableResult(
                 cells=cells,

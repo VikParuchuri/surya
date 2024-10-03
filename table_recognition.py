@@ -12,6 +12,9 @@ from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
 from surya.model.table_rec.model import load_model as load_model
 from surya.model.table_rec.processor import load_processor
+from surya.model.recognition.model import load_model as load_rec_model
+from surya.model.recognition.processor import load_processor as load_rec_processor
+from surya.ocr import run_ocr
 from surya.tables import batch_table_recognition
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
@@ -56,10 +59,15 @@ def main():
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
     table_boxes = []
     table_cells = []
-    table_cells_text = []
 
     table_imgs = []
     table_counts = []
+
+    rec_model, rec_processor = None, None
+    if args.detect_boxes or any([tl is None for tl in text_lines]):
+        rec_model = load_rec_model()
+        rec_processor = load_rec_processor()
+
     for layout_pred, text_line, img in zip(layout_predictions, text_lines, images):
         # The bbox for the entire table
         bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
@@ -76,19 +84,11 @@ def main():
 
         # The text cells inside each table
         if text_line is None or args.detect_boxes:
-            cell_bboxes = batch_text_detection(page_table_imgs, det_model, det_processor)
-            cell_bboxes = [[tb.bbox for tb in table_box.bboxes] for table_box in cell_bboxes]
-            cell_text = [[None for tb in table_box.bboxes] for table_box in cell_bboxes]
-            table_cells_text.extend(cell_text)
+            ocr_results = run_ocr(page_table_imgs, [None] * len(page_table_imgs), det_model, det_processor, rec_model, rec_processor)
+            cell_bboxes = [[{"bbox": tb.bbox, "text": tb.text} for tb in ocr_result.text_lines] for ocr_result in ocr_results]
             table_cells.extend(cell_bboxes)
         else:
-            table_texts = get_table_blocks(bbox, text_line, img.size)
-            table_cells.extend(
-                [[tb["bbox"] for tb in table_text] for table_text in table_texts]
-            )
-            table_cells_text.extend(
-                [[tb["text"] for tb in table_text] for table_text in table_texts]
-            )
+            table_cells.extend(get_table_blocks(bbox, text_line, img.size))
 
     table_preds = batch_table_recognition(table_imgs, table_cells, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)
