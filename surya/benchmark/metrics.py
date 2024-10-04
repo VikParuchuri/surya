@@ -20,9 +20,11 @@ def box_area(box):
     return (box[2] - box[0]) * (box[3] - box[1])
 
 
-def calculate_iou(box1, box2):
+def calculate_iou(box1, box2, box1_only=False):
     intersection = intersection_area(box1, box2)
-    union = box_area(box1) + box_area(box2) - intersection
+    union = box_area(box1)
+    if not box1_only:
+        union += box_area(box2) - intersection
 
     if union == 0:
         return 0
@@ -36,7 +38,7 @@ def match_boxes(preds, references):
     iou_matrix = np.zeros((num_actual, num_predicted))
     for i, actual in enumerate(references):
         for j, pred in enumerate(preds):
-            iou_matrix[i, j] = calculate_iou(actual, pred)
+            iou_matrix[i, j] = calculate_iou(actual, pred, box1_only=True)
 
     sorted_indices = np.argsort(iou_matrix, axis=None)[::-1]
     sorted_ious = iou_matrix.flatten()[sorted_indices]
@@ -55,7 +57,7 @@ def match_boxes(preds, references):
 
     unassigned_actual = set(range(num_actual)) - assigned_actual
     unassigned_pred = set(range(num_predicted)) - assigned_pred
-    matches.extend([(i, None, 0.0) for i in unassigned_actual])
+    matches.extend([(i, None, -1.0) for i in unassigned_actual])
     matches.extend([(None, j, 0.0) for j in unassigned_pred])
 
     return matches

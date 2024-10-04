@@ -149,8 +149,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
         model.text_encoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         batch_predictions = [[] for _ in range(current_batch_size)]
-        used_cells_row = [set() for _ in range(current_batch_size)]
-        used_cells_col = [set() for _ in range(current_batch_size)]
 
         with torch.inference_mode():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
@@ -190,19 +188,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
                 if all_done.all():
                     break
-
-                for batch_idx, (box_pred, class_pred, ucr, ucc, bboxes, status) in enumerate(zip(box_preds, rowcol_preds, used_cells_row, used_cells_col, batch_list_bboxes, all_done)):
-                    if status:
-                        continue
-                    class_pred = class_pred.item() - SPECIAL_TOKENS
-                    nb = processor.resize_boxes(batch_images[batch_idx], deepcopy(bboxes))
-                    is_row = class_pred == 0
-                    new_bbox, ucr, ucc = snap_to_bboxes(box_pred.tolist(), nb, ucr, ucc, row=is_row)
-                    new_bbox = torch.tensor(new_bbox, dtype=torch.long, device=model.device)
-                    #box_preds[batch_idx] = new_bbox
-
-                    used_cells_row[batch_idx] = ucr
-                    used_cells_col[batch_idx] = ucc
 
                 batch_decoder_input = torch.cat([box_preds.unsqueeze(1), rowcol_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
 

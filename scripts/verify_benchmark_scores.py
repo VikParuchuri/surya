@@ -28,8 +28,8 @@ def verify_order(data):
 
 
 def verify_table_rec(data):
-    row_score = data["mean_row_iou"]
-    col_score = data["mean_col_iou"]
+    row_score = data["surya"]["mean_row_iou"]
+    col_score = data["surya"]["mean_col_iou"]
 
     if row_score < 0.75 or col_score < 0.75:
         raise ValueError("Scores do not meet the required threshold")
