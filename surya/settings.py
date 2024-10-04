@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 2 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout4"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
 
     # Ordering
@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     ORDER_MAX_BOXES: int = 256
     ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
+
+    # Table Rec
+    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/surya_tablerec"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 640, "width": 640}
+    TABLE_REC_MAX_BOXES: int = 512
+    TABLE_REC_MAX_ROWS: int = 384
+    TABLE_REC_BATCH_SIZE: Optional[int] = None
+    TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

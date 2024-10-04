@@ -123,6 +123,18 @@ class Bbox(BaseModel):
     def polygon(self):
         return [[self.bbox[0], self.bbox[1]], [self.bbox[2], self.bbox[1]], [self.bbox[2], self.bbox[3]], [self.bbox[0], self.bbox[3]]]
 
+    @property
+    def center(self):
+        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
+
+    def intersection_pct(self, other):
+        if self.area == 0:
+            return 0
+
+        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
+        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
+        intersection = x_overlap * y_overlap
+        return intersection / self.area
 
 class LayoutBox(PolygonBox):
     label: str
@@ -164,4 +176,17 @@ class LayoutResult(BaseModel):
 
 class OrderResult(BaseModel):
     bboxes: List[OrderBox]
+    image_bbox: List[float]
+
+
+class TableCell(Bbox):
+    row_id: int | None = None
+    col_id: int | None = None
+    text: str | None = None
+
+
+class TableResult(BaseModel):
+    cells: List[TableCell]
+    rows: List[TableCell]
+    cols: List[TableCell]
     image_bbox: List[float]

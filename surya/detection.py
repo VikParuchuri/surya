@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Generator
 
 import torch
 import numpy as np
@@ -26,13 +26,16 @@ def get_batch_size():
     return batch_size
 
 
-def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, processor, batch_size=None) -> Tuple[List[List[np.ndarray]], List[Tuple[int, int]]]:
+def batch_detection(
+    images: List,
+    model: EfficientViTForSemanticSegmentation,
+    processor,
+    batch_size=None
+) -> Generator[Tuple[List[List[np.ndarray]], List[Tuple[int, int]]], None, None]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
-
-    images = [image.convert("RGB") for image in images]  # also copies the images
 
     orig_sizes = [image.size for image in images]
     splits_per_image = [get_total_splits(size, processor) for size in orig_sizes]
@@ -52,10 +55,9 @@ def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, pr
     if len(current_batch) > 0:
         batches.append(current_batch)
 
-    all_preds = []
     for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
         batch_image_idxs = batches[batch_idx]
-        batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
+        batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
 
         split_index = []
         split_heights = []
@@ -98,11 +100,7 @@ def batch_detection(images: List, model: EfficientViTForSemanticSegmentation, pr
                     heatmaps[k] = np.vstack([heatmaps[k], pred_heatmaps[k]])
                 preds[idx] = heatmaps
 
-        all_preds.extend(preds)
-
-    assert len(all_preds) == len(images)
-    assert all([len(pred) == heatmap_count for pred in all_preds])
-    return all_preds, orig_sizes
+        yield preds, [orig_sizes[j] for j in batch_image_idxs]
 
 
 def parallel_get_lines(preds, orig_sizes):
@@ -125,16 +123,21 @@ def parallel_get_lines(preds, orig_sizes):
 
 
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
-    preds, orig_sizes = batch_detection(images, model, processor, batch_size=batch_size)
+    detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
+
     results = []
-    if settings.IN_STREAMLIT or len(images) < settings.DETECTOR_MIN_PARALLEL_THRESH: # Ensures we don't parallelize with streamlit, or with very few images
-        for i in range(len(images)):
-            result = parallel_get_lines(preds[i], orig_sizes[i])
-            results.append(result)
-    else:
-        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+    max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+    parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+
+    if parallelize:
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(parallel_get_lines, preds, orig_sizes))
+            for preds, orig_sizes in detection_generator:
+                batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
+                results.extend(batch_results)
+    else:
+        for preds, orig_sizes in detection_generator:
+            for pred, orig_size in zip(preds, orig_sizes):
+                results.append(parallel_get_lines(pred, orig_size))
 
     return results
 

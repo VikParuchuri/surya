@@ -1,5 +1,6 @@
 import PIL
 
+from surya.input.pdflines import get_page_text_lines
 from surya.input.processing import open_pdf, get_page_images
 import os
 import filetype
@@ -26,15 +27,20 @@ def load_pdf(pdf_path, max_pages=None, start_page=None):
 
     page_indices = list(range(start_page, last_page))
     images = get_page_images(doc, page_indices)
+    text_lines = get_page_text_lines(
+        pdf_path,
+        page_indices,
+        [i.size for i in images]
+    )
     doc.close()
     names = [get_name_from_path(pdf_path) for _ in page_indices]
-    return images, names
+    return images, names, text_lines
 
 
 def load_image(image_path):
     image = Image.open(image_path).convert("RGB")
     name = get_name_from_path(image_path)
-    return [image], [name]
+    return [image], [name], [None]
 
 
 def load_from_file(input_path, max_pages=None, start_page=None):
@@ -51,21 +57,24 @@ def load_from_folder(folder_path, max_pages=None, start_page=None):
 
     images = []
     names = []
+    text_lines = []
     for path in image_paths:
         extension = filetype.guess(path)
         if extension and extension.extension == "pdf":
-            image, name = load_pdf(path, max_pages, start_page)
+            image, name, text_line = load_pdf(path, max_pages, start_page)
             images.extend(image)
             names.extend(name)
+            text_lines.extend(text_line)
         else:
             try:
-                image, name = load_image(path)
+                image, name, text_line = load_image(path)
                 images.extend(image)
                 names.extend(name)
+                text_lines.extend(text_line)
             except PIL.UnidentifiedImageError:
                 print(f"Could not load image {path}")
                 continue
-    return images, names
+    return images, names, text_lines
 
 
 def load_lang_file(lang_path, names):

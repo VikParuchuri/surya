@@ -4,21 +4,26 @@ from typing import List
 import pypdfium2
 import streamlit as st
 from surya.detection import batch_text_detection
+from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.ordering.processor import load_processor as load_order_processor
 from surya.model.ordering.model import load_model as load_order_model
+from surya.model.table_rec.model import load_model as load_table_model
+from surya.model.table_rec.processor import load_processor as load_table_processor
 from surya.ordering import batch_ordering
-from surya.postprocessing.heatmap import draw_polys_on_image
+from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult
+from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult, TableResult
 from surya.settings import settings
+from surya.tables import batch_table_recognition
+
 
 @st.cache_resource()
 def load_det_cached():
@@ -40,6 +45,11 @@ def load_order_cached():
     return load_order_model(), load_order_processor()
 
 
+@st.cache_resource()
+def load_table_cached():
+    return load_table_model(), load_table_processor()
+
+
 def text_detection(img) -> (Image.Image, TextDetectionResult):
     pred = batch_text_detection([img], det_model, det_processor)[0]
     polygons = [p.polygon for p in pred.bboxes]
@@ -52,7 +62,7 @@ def layout_detection(img) -> (Image.Image, LayoutResult):
     pred = batch_layout_detection([img], layout_model, layout_processor, [det_pred])[0]
     polygons = [p.polygon for p in pred.bboxes]
     labels = [p.label for p in pred.bboxes]
-    layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels)
+    layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
     return layout_img, pred
 
 
@@ -62,8 +72,41 @@ def order_detection(img) -> (Image.Image, OrderResult):
     pred = batch_ordering([img], [bboxes], order_model, order_processor)[0]
     polys = [l.polygon for l in pred.bboxes]
     positions = [str(l.position) for l in pred.bboxes]
-    order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=20)
+    order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=18)
     return order_img, pred
+
+
+def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
+    if skip_table_detection:
+        layout_tables = [(0, 0, img.size[0], img.size[1])]
+        table_imgs = [img]
+    else:
+        _, layout_pred = layout_detection(img)
+        layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+        table_imgs = [img.crop(tb) for tb in layout_tables]
+
+    if use_pdf_boxes:
+        page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
+        table_bboxes = get_table_blocks(layout_tables, page_text, img.size)
+    else:
+        det_results = batch_text_detection(table_imgs, det_model, det_processor)
+        table_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
+    table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
+    table_img = img.copy()
+
+    for results, table_bbox in zip(table_preds, layout_tables):
+        adjusted_bboxes = []
+        labels = []
+        for item in results.cells:
+            adjusted_bboxes.append([
+                item.bbox[0] + table_bbox[0],
+                item.bbox[1] + table_bbox[1],
+                item.bbox[2] + table_bbox[0],
+                item.bbox[3] + table_bbox[1]
+            ])
+            labels.append(f"{item.row_id} / {item.col_id}")
+        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=18)
+    return table_img, table_preds
 
 
 # Function for OCR
@@ -83,7 +126,7 @@ def open_pdf(pdf_file):
 
 
 @st.cache_data()
-def get_page_image(pdf_file, page_num, dpi=96):
+def get_page_image(pdf_file, page_num, dpi=settings.IMAGE_DPI):
     doc = open_pdf(pdf_file)
     renderer = doc.render(
         pypdfium2.PdfBitmap.to_pil,
@@ -108,6 +151,7 @@ det_model, det_processor = load_det_cached()
 rec_model, rec_processor = load_rec_cached()
 layout_model, layout_processor = load_layout_cached()
 order_model, order_processor = load_order_cached()
+table_model, table_processor = load_table_cached()
 
 
 st.markdown("""
@@ -139,11 +183,15 @@ if "pdf" in filetype:
     pil_image = get_page_image(in_file, page_number)
 else:
     pil_image = Image.open(in_file).convert("RGB")
+    page_number = None
 
 text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
 layout_det = st.sidebar.button("Run Layout Analysis")
 order_det = st.sidebar.button("Run Reading Order")
+table_rec = st.sidebar.button("Run Table Rec")
+use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
+skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
 
 if pil_image is None:
     st.stop()
@@ -179,6 +227,13 @@ if order_det:
     with col1:
         st.image(order_img, caption="Reading Order", use_column_width=True)
         st.json(pred.model_dump(), expanded=True)
+
+
+if table_rec:
+    table_img, pred = table_recognition(pil_image, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
+    with col1:
+        st.image(table_img, caption="Table Recognition", use_column_width=True)
+        st.json([p.model_dump() for p in pred], expanded=True)
 
 with col2:
     st.image(pil_image, caption="Uploaded Image", use_column_width=True)
