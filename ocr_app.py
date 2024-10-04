@@ -62,7 +62,7 @@ def layout_detection(img) -> (Image.Image, LayoutResult):
     pred = batch_layout_detection([img], layout_model, layout_processor, [det_pred])[0]
     polygons = [p.polygon for p in pred.bboxes]
     labels = [p.label for p in pred.bboxes]
-    layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels)
+    layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
     return layout_img, pred
 
 
@@ -72,25 +72,28 @@ def order_detection(img) -> (Image.Image, OrderResult):
     pred = batch_ordering([img], [bboxes], order_model, order_processor)[0]
     polys = [l.polygon for l in pred.bboxes]
     positions = [str(l.position) for l in pred.bboxes]
-    order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=20)
+    order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=18)
     return order_img, pred
 
 
-def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Image.Image, List[TableResult]):
-    _, layout_pred = layout_detection(img)
-    layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
+    if skip_table_detection:
+        layout_tables = [(0, 0, img.size[0], img.size[1])]
+        table_imgs = [img]
+    else:
+        _, layout_pred = layout_detection(img)
+        layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+        table_imgs = [img.crop(tb) for tb in layout_tables]
 
-    table_imgs = []
-    for table_bbox in layout_tables:
-        table_imgs.append(img.crop(table_bbox))
     if use_pdf_boxes:
         page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
         table_bboxes = get_table_blocks(layout_tables, page_text, img.size)
     else:
-        ocr_results = run_ocr(table_imgs, [None] * len(table_imgs), det_model, det_processor, rec_model, rec_processor)
-        table_bboxes = [[{"bbox": tb.bbox, "text": tb.text} for tb in ocr_result.text_lines] for ocr_result in ocr_results]
+        det_results = batch_text_detection(table_imgs, det_model, det_processor)
+        table_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
     table_img = img.copy()
+
     for results, table_bbox in zip(table_preds, layout_tables):
         adjusted_bboxes = []
         labels = []
@@ -102,7 +105,7 @@ def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool) -> (Ima
                 item.bbox[3] + table_bbox[1]
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
-        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=12)
+        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=18)
     return table_img, table_preds
 
 
@@ -123,7 +126,7 @@ def open_pdf(pdf_file):
 
 
 @st.cache_data()
-def get_page_image(pdf_file, page_num, dpi=96):
+def get_page_image(pdf_file, page_num, dpi=settings.IMAGE_DPI):
     doc = open_pdf(pdf_file)
     renderer = doc.render(
         pypdfium2.PdfBitmap.to_pil,
@@ -188,6 +191,7 @@ layout_det = st.sidebar.button("Run Layout Analysis")
 order_det = st.sidebar.button("Run Reading Order")
 table_rec = st.sidebar.button("Run Table Rec")
 use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
+skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
 
 if pil_image is None:
     st.stop()
@@ -226,7 +230,7 @@ if order_det:
 
 
 if table_rec:
-    table_img, pred = table_recognition(pil_image, in_file, page_number - 1 if page_number else None, use_pdf_boxes)
+    table_img, pred = table_recognition(pil_image, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
     with col1:
         st.image(table_img, caption="Table Recognition", use_column_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)

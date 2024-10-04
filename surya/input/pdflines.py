@@ -4,13 +4,6 @@ from surya.postprocessing.text import sort_text_lines
 from surya.schema import PolygonBox
 
 
-def rotate_90(bbox: list) -> list:
-    return [bbox[1], bbox[0], bbox[3], bbox[2]]
-
-
-
-
-
 def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list) -> list:
     assert len(page_idxs) == len(out_sizes)
     pages_text = dictionary_output(filepath, sort=False, page_range=page_idxs, keep_chars=True)

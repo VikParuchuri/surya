@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "surya-ocr"
-version = "0.5.0"
+version = "0.5.1"
 description = "OCR, layout, reading order, and line detection in 90+ languages"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
@@ -17,6 +17,7 @@ include = [
     "run_ocr_app.py",
     "detect_layout.py",
     "reading_order.py",
+    "table_recognition.py"
 ]
 
 [tool.poetry.dependencies]
@@ -51,6 +52,7 @@ surya_ocr = "ocr_text:main"
 surya_layout = "detect_layout:main"
 surya_gui = "run_ocr_app:run_app"
 surya_order = "reading_order:main"
+surya_table = "table_recognition:main"
 
 [build-system]
 requires = ["poetry-core"]

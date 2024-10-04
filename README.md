@@ -6,6 +6,7 @@ Surya is a document OCR toolkit that does:
 - Line-level text detection in any language
 - Layout analysis (table, image, header, etc detection)
 - Reading order detection
+- Table recognition (detecting rows/columns)
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
@@ -272,6 +273,43 @@ processor = load_processor()
 order_predictions = batch_ordering([image], [bboxes], model, processor)
 ```
 
+## Table Recognition
+
+This command will write out a json file with the detected table cells and row/column ids, along with row/column bounding boxes.
+
+```shell
+surya_table DATA_PATH
+```
+
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
+- `--images` will save images of the pages and detected table cells + rows and columns (optional)
+- `--max` specifies the maximum number of pages to process if you don't want to process everything
+- `--results_dir` specifies the directory to save results to instead of the default
+- `--detect_boxes` specifies if cells should be detected.  By default, they're pulled out of the PDF, but this is not always possible. 
+- `--skip_table_detection` tells table recognition not to detect tables first.  Use this if your image is already cropped to a table.
+
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
+
+- `cells` - detected table cells
+  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
+  - `row_id` - the id of the row this cell belongs to.
+  - `col_id` - the id of the column this cell belongs to.
+  - `text` - if text could be pulled out of the pdf, the text of this cell.
+- `rows` - detected table rows
+  - `bbox` - the bounding box of the table row
+  - `row_id` - the id of the row
+- `cols` - detected table columns
+  - `bbox` - the bounding box of the table column
+  - `col_id`- the id of the column
+- `page` - the page number in the file
+- `table_idx` - the index of the table on the page (sorted in vertical order)
+- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
+
+**Performance tips**
+
+Setting the `TABLE_REC_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `150MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `64`, which will use about 10GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `8`.
+
+
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
@@ -381,9 +419,17 @@ I benchmarked the layout analysis on [Publaynet](https://github.com/ibm-aur-nlp/
 
 **Methodology**
 
-I benchmarked the layout analysis on the layout dataset from [here](https://www.icst.pku.edu.cn/cpdp/sjzy/), which was not in the training data.  Unfortunately, this dataset is fairly noisy, and not all the labels are correct.  It was very hard to find a dataset annotated with reading order and also layout information.  I wanted to avoid using a cloud service for the ground truth.
+I benchmarked the reading order on the layout dataset from [here](https://www.icst.pku.edu.cn/cpdp/sjzy/), which was not in the training data.  Unfortunately, this dataset is fairly noisy, and not all the labels are correct.  It was very hard to find a dataset annotated with reading order and also layout information.  I wanted to avoid using a cloud service for the ground truth.
 
 The accuracy is computed by finding if each pair of layout boxes is in the correct order, then taking the % that are correct.
+
+## Table Recognition
+
+.93 penalized row iou (out of 1), and .86 penalized column iou.  Took .05 seconds per image on an A10.
+
+**Methodology**
+
+The benchmark uses a subset of [Fintabnet](https://developer.ibm.com/exchanges/data/all/fintabnet/) from IBM.  It has labeled rows and columns.  After table recognition is run, the predicted rows and columns are compared to the ground truth.  There is an additional penalty for predicting too many or too few rows/columns.
 
 ## Running your own benchmarks
 
@@ -396,7 +442,7 @@ You can benchmark the performance of surya on your machine.
 
 This will evaluate tesseract and surya for text line detection across a randomly sampled set of images from [doclaynet](https://huggingface.co/datasets/vikp/doclaynet_bench).
 
-```
+```shell
 python benchmark/detection.py --max 256
 ```
 
@@ -409,7 +455,7 @@ python benchmark/detection.py --max 256
 
 This will evaluate surya and optionally tesseract on multilingual pdfs from common crawl (with synthetic data for missing languages).
 
-```
+```shell
 python benchmark/recognition.py --tesseract
 ```
 
@@ -425,7 +471,7 @@ python benchmark/recognition.py --tesseract
 
 This will evaluate surya on the publaynet dataset.
 
-```
+```shell
 python benchmark/layout.py
 ```
 
@@ -435,8 +481,18 @@ python benchmark/layout.py
 
 **Reading Order**
 
-```
+```shell
 python benchmark/ordering.py
+```
+
+- `--max` controls how many images to process for the benchmark
+- `--debug` will render images with detected text
+- `--results_dir` will let you specify a directory to save results to instead of the default one
+
+**Table Recognition**
+
+```shell
+python benchmark/table_recognition.py
 ```
 
 - `--max` controls how many images to process for the benchmark

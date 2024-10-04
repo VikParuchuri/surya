@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--images", action="store_true", help="Save images of detected layout bboxes.", default=False)
     parser.add_argument("--detect_boxes", action="store_true", help="Detect table boxes.", default=False)
+    parser.add_argument("--skip_table_detection", action="store_true", help="Tables are already cropped, so don't re-detect tables.", default=False)
     args = parser.parse_args()
 
     model = load_model()
@@ -63,29 +64,30 @@ def main():
     table_imgs = []
     table_counts = []
 
-    rec_model, rec_processor = None, None
-    if args.detect_boxes or any([tl is None for tl in text_lines]):
-        rec_model = load_rec_model()
-        rec_processor = load_rec_processor()
-
     for layout_pred, text_line, img in zip(layout_predictions, text_lines, images):
-        # The bbox for the entire table
-        bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
-        # Number of tables per page
-        table_counts.append(len(bbox))
+        # The table may already be cropped
+        if args.skip_table_detection:
+            table_imgs.append(img)
+            table_counts.append(1)
+            table_boxes.append(layout_pred.image_bbox)
+        else:
+            # The bbox for the entire table
+            bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+            # Number of tables per page
+            table_counts.append(len(bbox))
 
-        if len(bbox) == 0:
-            continue
+            if len(bbox) == 0:
+                continue
 
-        table_boxes.extend(bbox)
+            table_boxes.extend(bbox)
 
-        page_table_imgs = [img.crop(bb) for bb in bbox]
-        table_imgs.extend(page_table_imgs)
+            page_table_imgs = [img.crop(bb) for bb in bbox]
+            table_imgs.extend(page_table_imgs)
 
         # The text cells inside each table
         if text_line is None or args.detect_boxes:
-            ocr_results = run_ocr(page_table_imgs, [None] * len(page_table_imgs), det_model, det_processor, rec_model, rec_processor)
-            cell_bboxes = [[{"bbox": tb.bbox, "text": tb.text} for tb in ocr_result.text_lines] for ocr_result in ocr_results]
+            det_results = batch_text_detection(page_table_imgs, det_model, det_processor,)
+            cell_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
             table_cells.extend(cell_bboxes)
         else:
             table_cells.extend(get_table_blocks(bbox, text_line, img.size))

@@ -13,13 +13,13 @@ from surya.model.table_rec.config import SPECIAL_TOKENS
 
 
 def get_batch_size():
-    batch_size = settings.ORDER_BATCH_SIZE
+    batch_size = settings.TABLE_REC_BATCH_SIZE
     if batch_size is None:
         batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "mps":
             batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 32
+            batch_size = 64
     return batch_size
 
 
@@ -100,11 +100,11 @@ def is_rotated(rows, cols):
     # Determine if the table is rotated by looking at row and column width / height ratios
     # Rows should have a >1 ratio, cols <1
     widths = sum([r.width for r in rows])
-    heights = sum([c.height for c in cols])
+    heights = sum([c.height for c in cols]) + 1
     r_ratio = widths / heights
 
     widths = sum([c.width for c in cols])
-    heights = sum([r.height for r in rows])
+    heights = sum([r.height for r in rows]) + 1
     c_ratio = widths / heights
 
     return r_ratio * 2 < c_ratio
@@ -199,7 +199,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                     is_row = class_pred == 0
                     new_bbox, ucr, ucc = snap_to_bboxes(box_pred.tolist(), nb, ucr, ucc, row=is_row)
                     new_bbox = torch.tensor(new_bbox, dtype=torch.long, device=model.device)
-                    box_preds[batch_idx] = new_bbox
+                    #box_preds[batch_idx] = new_bbox
 
                     used_cells_row[batch_idx] = ucr
                     used_cells_col[batch_idx] = ucc
