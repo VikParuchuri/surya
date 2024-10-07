@@ -40,62 +40,6 @@ def sort_bboxes(bboxes, tolerance=1):
     return sorted_page_blocks
 
 
-def cx_cy_to_corners(pred):
-    w = pred[2] / 2
-    h = pred[3] / 2
-    x1 = pred[0] - w
-    y1 = pred[1] - h
-    x2 = pred[0] + w
-    y2 = pred[1] + h
-
-    return [x1, y1, x2, y2]
-
-
-def corners_to_cx_cy(pred):
-    x = (pred[0] + pred[2]) / 2
-    y = (pred[1] + pred[3]) / 2
-    w = pred[2] - pred[0]
-    h = pred[3] - pred[1]
-
-    return [x, y, w, h]
-
-
-def snap_to_bboxes(rc_box, input_boxes, used_cells_row, used_cells_col, row=True, row_threshold=.2, col_threshold=.2):
-    sel_bboxes = []
-    rc_corner_bbox = cx_cy_to_corners(rc_box)
-    for cell_idx, cell in enumerate(input_boxes):
-        intersection_pct = Bbox(bbox=cell).intersection_pct(Bbox(bbox=rc_corner_bbox))
-
-        if row:
-            if cell_idx not in used_cells_row:
-                if intersection_pct > row_threshold:
-                    sel_bboxes.append(cell)
-                    used_cells_row.add(cell_idx)
-        else:
-            if cell_idx not in used_cells_col:
-                if intersection_pct > col_threshold:
-                    sel_bboxes.append(cell)
-                    used_cells_col.add(cell_idx)
-
-    if len(sel_bboxes) == 0:
-        return rc_box, used_cells_row, used_cells_col
-
-    new_bbox = [
-        min([b[0] for b in sel_bboxes]),
-        min([b[1] for b in sel_bboxes]),
-        max([b[2] for b in sel_bboxes]),
-        max([b[3] for b in sel_bboxes])
-    ]
-    new_bbox = [
-        max(new_bbox[0], rc_corner_bbox[0]),
-        max(new_bbox[1], rc_corner_bbox[1]),
-        min(new_bbox[2], rc_corner_bbox[2]),
-        min(new_bbox[3], rc_corner_bbox[3])
-    ]
-    cx_cy_box = corners_to_cx_cy(new_bbox)
-    return cx_cy_box, used_cells_row, used_cells_col
-
-
 def is_rotated(rows, cols):
     # Determine if the table is rotated by looking at row and column width / height ratios
     # Rows should have a >1 ratio, cols <1

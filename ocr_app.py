@@ -76,17 +76,18 @@ def order_detection(img) -> (Image.Image, OrderResult):
     return order_img, pred
 
 
-def table_recognition(img, highres_image, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
+def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
     if skip_table_detection:
-        layout_tables = [(0, 0, img.size[0], img.size[1])]
+        layout_tables = [(0, 0, highres_img.size[0], highres_img.size[1])]
         table_imgs = [img]
     else:
         _, layout_pred = layout_detection(img)
-        layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+        layout_tables_lowres = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
         table_imgs = []
-        width_scale = highres_image.size[0] / img.size[0]
-        height_scale = highres_image.size[1] / img.size[1]
-        for tb in layout_tables:
+        width_scale = highres_img.size[0] / img.size[0]
+        height_scale = highres_img.size[1] / img.size[1]
+        layout_tables = []
+        for tb in layout_tables_lowres:
             highres_bbox = [
                 int(tb[0] * width_scale),
                 int(tb[1] * height_scale),
@@ -94,13 +95,14 @@ def table_recognition(img, highres_image, filepath, page_idx: int, use_pdf_boxes
                 int(tb[3] * height_scale)
             ]
             table_imgs.append(
-                highres_image.crop(highres_bbox)
+                highres_img.crop(highres_bbox)
             )
+            layout_tables.append(highres_bbox)
 
-    if use_pdf_boxes:
-        page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
-        table_bboxes = get_table_blocks(layout_tables, page_text, img.size)
-    else:
+    page_text = get_page_text_lines(filepath, [page_idx], [highres_img.size])[0]
+    table_bboxes = get_table_blocks(layout_tables, page_text, highres_img.size)
+
+    if not use_pdf_boxes or any(len(tb) == 0 for tb in table_bboxes):
         det_results = batch_text_detection(table_imgs, det_model, det_processor)
         table_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
     table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
@@ -109,15 +111,18 @@ def table_recognition(img, highres_image, filepath, page_idx: int, use_pdf_boxes
     for results, table_bbox in zip(table_preds, layout_tables):
         adjusted_bboxes = []
         labels = []
+        width_scale = img.size[0] / highres_img.size[0]
+        height_scale = img.size[1] / highres_img.size[1]
+
         for item in results.cells:
             adjusted_bboxes.append([
-                item.bbox[0] + table_bbox[0],
-                item.bbox[1] + table_bbox[1],
-                item.bbox[2] + table_bbox[0],
-                item.bbox[3] + table_bbox[1]
+                (item.bbox[0] + table_bbox[0]) * width_scale,
+                (item.bbox[1] + table_bbox[1]) * height_scale,
+                (item.bbox[2] + table_bbox[0]) * width_scale,
+                (item.bbox[3] + table_bbox[1]) * height_scale
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
-        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=18)
+        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=12)
     return table_img, table_preds
 
 

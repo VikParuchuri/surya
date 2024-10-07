@@ -96,7 +96,7 @@ def main():
 
         # The text cells inside each table
         table_blocks = get_table_blocks(highres_bbox, text_line, highres_img.size) if text_line is not None else None
-        if text_line is None or args.detect_boxes or len(table_blocks) == 0:
+        if text_line is None or args.detect_boxes or any(len(tb) == 0 for tb in table_blocks):
             det_results = batch_text_detection(page_table_imgs, det_model, det_processor,)
             cell_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
             table_cells.extend(cell_bboxes)
