@@ -76,14 +76,26 @@ def order_detection(img) -> (Image.Image, OrderResult):
     return order_img, pred
 
 
-def table_recognition(img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
+def table_recognition(img, highres_image, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
     if skip_table_detection:
         layout_tables = [(0, 0, img.size[0], img.size[1])]
         table_imgs = [img]
     else:
         _, layout_pred = layout_detection(img)
         layout_tables = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
-        table_imgs = [img.crop(tb) for tb in layout_tables]
+        table_imgs = []
+        width_scale = highres_image.size[0] / img.size[0]
+        height_scale = highres_image.size[1] / img.size[1]
+        for tb in layout_tables:
+            highres_bbox = [
+                int(tb[0] * width_scale),
+                int(tb[1] * height_scale),
+                int(tb[2] * width_scale),
+                int(tb[3] * height_scale)
+            ]
+            table_imgs.append(
+                highres_image.crop(highres_bbox)
+            )
 
     if use_pdf_boxes:
         page_text = get_page_text_lines(filepath, [page_idx], [img.size])[0]
@@ -180,9 +192,11 @@ if "pdf" in filetype:
     page_count = page_count(in_file)
     page_number = st.sidebar.number_input(f"Page number out of {page_count}:", min_value=1, value=1, max_value=page_count)
 
-    pil_image = get_page_image(in_file, page_number)
+    pil_image = get_page_image(in_file, page_number, settings.IMAGE_DPI)
+    pil_image_highres = get_page_image(in_file, page_number, dpi=settings.IMAGE_DPI_HIGHRES)
 else:
     pil_image = Image.open(in_file).convert("RGB")
+    pil_image_highres = pil_image
     page_number = None
 
 text_det = st.sidebar.button("Run Text Detection")
@@ -213,7 +227,7 @@ if layout_det:
 
 # Run OCR
 if text_rec:
-    rec_img, pred = ocr(pil_image, languages)
+    rec_img, pred = ocr(pil_image_highres, languages)
     with col1:
         st.image(rec_img, caption="OCR Result", use_column_width=True)
         json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])
@@ -230,7 +244,7 @@ if order_det:
 
 
 if table_rec:
-    table_img, pred = table_recognition(pil_image, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
+    table_img, pred = table_recognition(pil_image, pil_image_highres, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
     with col1:
         st.image(table_img, caption="Table Recognition", use_column_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)

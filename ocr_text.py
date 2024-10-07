@@ -30,10 +30,10 @@ def main():
     args = parser.parse_args()
 
     if os.path.isdir(args.input_path):
-        images, names, _ = load_from_folder(args.input_path, args.max, args.start_page)
+        images, names, _ = load_from_folder(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path)
     else:
-        images, names, _ = load_from_file(args.input_path, args.max, args.start_page)
+        images, names, _ = load_from_file(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     if args.lang_file:

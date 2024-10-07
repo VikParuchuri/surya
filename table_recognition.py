@@ -12,9 +12,6 @@ from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
 from surya.model.table_rec.model import load_model as load_model
 from surya.model.table_rec.processor import load_processor
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
-from surya.ocr import run_ocr
 from surya.tables import batch_table_recognition
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
@@ -40,10 +37,12 @@ def main():
     det_processor = load_det_processor()
 
     if os.path.isdir(args.input_path):
-        images, names, text_lines = load_from_folder(args.input_path, args.max)
+        images, _, _ = load_from_folder(args.input_path, args.max)
+        highres_images, names, text_lines = load_from_folder(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path)
     else:
-        images, names, text_lines = load_from_file(args.input_path, args.max)
+        images, _, _ = load_from_file(args.input_path, args.max)
+        highres_images, names, text_lines = load_from_file(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     pnums = []
@@ -58,18 +57,18 @@ def main():
 
     line_predictions = batch_text_detection(images, det_model, det_processor)
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
-    table_boxes = []
     table_cells = []
 
     table_imgs = []
     table_counts = []
 
-    for layout_pred, text_line, img in zip(layout_predictions, text_lines, images):
+    for layout_pred, text_line, img, highres_img in zip(layout_predictions, text_lines, images, highres_images):
         # The table may already be cropped
         if args.skip_table_detection:
-            table_imgs.append(img)
+            table_imgs.append(highres_img)
             table_counts.append(1)
-            table_boxes.append(layout_pred.image_bbox)
+            page_table_imgs = [highres_img]
+            highres_bbox = [[0, 0, highres_img.size[0], highres_img.size[1]]]
         else:
             # The bbox for the entire table
             bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
@@ -79,25 +78,34 @@ def main():
             if len(bbox) == 0:
                 continue
 
-            table_boxes.extend(bbox)
+            width_scaler = highres_img.size[0] / img.size[0]
+            height_scaler = highres_img.size[1] / img.size[1]
+            page_table_imgs = []
+            highres_bbox = []
+            for bb in bbox:
+                highres_bb = [
+                    int(bb[0] * width_scaler),
+                    int(bb[1] * height_scaler),
+                    int(bb[2] * width_scaler),
+                    int(bb[3] * height_scaler),
+                ]
+                page_table_imgs.append(highres_img.crop(highres_bb))
+                highres_bbox.append(highres_bb)
 
-            page_table_imgs = [img.crop(bb) for bb in bbox]
             table_imgs.extend(page_table_imgs)
 
         # The text cells inside each table
-        if text_line is None or args.detect_boxes:
+        table_blocks = get_table_blocks(highres_bbox, text_line, highres_img.size) if text_line is not None else None
+        if text_line is None or args.detect_boxes or len(table_blocks) == 0:
             det_results = batch_text_detection(page_table_imgs, det_model, det_processor,)
             cell_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
             table_cells.extend(cell_bboxes)
         else:
-            table_cells.extend(get_table_blocks(bbox, text_line, img.size))
+            table_cells.extend(table_blocks)
 
     table_preds = batch_table_recognition(table_imgs, table_cells, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
-
-    if args.images:
-        pass
 
     img_idx = 0
     prev_count = 0

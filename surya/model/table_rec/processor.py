@@ -217,7 +217,7 @@ class SuryaProcessor(DonutProcessor):
                 boxes[i] = boxes[i][::downsample_ratio]
 
         new_boxes = []
-        max_len = max([len(b) for b in boxes]) + 1
+        max_len = max([len(b) for b in boxes]) + 1 + self.extra_input_boxes
         box_masks = []
         box_ends = []
         for i in range(len(boxes)):

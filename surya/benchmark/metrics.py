@@ -51,7 +51,10 @@ def match_boxes(preds, references):
     for idx, iou in zip(zip(actual_indices, predicted_indices), sorted_ious):
         i, j = idx
         if i not in assigned_actual and j not in assigned_pred:
-            matches.append((i, j, iou_matrix[i, j]))
+            iou_val = iou_matrix[i, j]
+            if iou_val > .95: # Account for rounding on box edges
+                iou_val = 1.0
+            matches.append((i, j, iou_val))
             assigned_actual.add(i)
             assigned_pred.add(j)
 
