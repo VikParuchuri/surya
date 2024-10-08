@@ -179,7 +179,7 @@ class SuryaProcessor(DonutProcessor):
         self.current_processor = self.image_processor
         self._in_target_context_manager = False
         self.max_input_boxes = kwargs.get("max_input_boxes", 256)
-        self.extra_input_boxes = kwargs.get("extra_input_boxes", 64)
+        self.extra_input_boxes = kwargs.get("extra_input_boxes", 32)
 
     def resize_boxes(self, img, boxes):
         width, height = img.size
@@ -217,21 +217,22 @@ class SuryaProcessor(DonutProcessor):
                 boxes[i] = boxes[i][::downsample_ratio]
 
         new_boxes = []
-        max_len = max([len(b) for b in boxes]) + 1 + self.extra_input_boxes
+        max_len = self.max_input_boxes + self.extra_input_boxes
         box_masks = []
         box_ends = []
         for i in range(len(boxes)):
             nb = self.resize_boxes(images[i], boxes[i])
             nb = [[b + self.special_token_count for b in box] for box in nb] # shift up
+            nb = nb[:self.max_input_boxes - 1]
 
             nb.insert(0, [self.token_row_id] * 4) # Insert special token for max rows/cols
             for _ in range(self.extra_input_boxes):
                 nb.append([self.token_unused_id] * 4)
 
-            pad_length = max(max_len, self.max_input_boxes + self.extra_input_boxes) - len(nb)
-            box_mask = [1] * len(nb) + [0] * (pad_length)
+            pad_length = max_len - len(nb)
+            box_mask = [1] * len(nb) + [1] * (pad_length)
             box_ends.append(len(nb))
-            nb = nb + [[self.token_pad_id] * 4] * pad_length
+            nb = nb + [[self.token_unused_id] * 4] * pad_length
 
             new_boxes.append(nb)
             box_masks.append(box_mask)

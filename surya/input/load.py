@@ -1,6 +1,5 @@
 import PIL
 
-from surya.input.pdflines import get_page_text_lines
 from surya.input.processing import open_pdf, get_page_images
 from surya.settings import settings
 import os
@@ -14,7 +13,7 @@ def get_name_from_path(path):
     return os.path.basename(path).split(".")[0]
 
 
-def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI):
+def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
     doc = open_pdf(pdf_path)
     last_page = len(doc)
 
@@ -29,11 +28,14 @@ def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI):
 
     page_indices = list(range(start_page, last_page))
     images = get_page_images(doc, page_indices, dpi=dpi)
-    text_lines = get_page_text_lines(
-        pdf_path,
-        page_indices,
-        [i.size for i in images]
-    )
+    text_lines = None
+    if load_text_lines:
+        from surya.input.pdflines import get_page_text_lines # Putting import here because pypdfium2 causes warnings if its not the top import
+        text_lines = get_page_text_lines(
+            pdf_path,
+            page_indices,
+            [i.size for i in images]
+        )
     doc.close()
     names = [get_name_from_path(pdf_path) for _ in page_indices]
     return images, names, text_lines
@@ -45,15 +47,15 @@ def load_image(image_path):
     return [image], [name], [None]
 
 
-def load_from_file(input_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI):
+def load_from_file(input_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
     input_type = filetype.guess(input_path)
     if input_type.extension == "pdf":
-        return load_pdf(input_path, max_pages, start_page, dpi=dpi)
+        return load_pdf(input_path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines)
     else:
         return load_image(input_path)
 
 
-def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI):
+def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
     image_paths = [os.path.join(folder_path, image_name) for image_name in os.listdir(folder_path) if not image_name.startswith(".")]
     image_paths = [ip for ip in image_paths if not os.path.isdir(ip)]
 
@@ -63,7 +65,7 @@ def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.
     for path in image_paths:
         extension = filetype.guess(path)
         if extension and extension.extension == "pdf":
-            image, name, text_line = load_pdf(path, max_pages, start_page, dpi=dpi)
+            image, name, text_line = load_pdf(path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines)
             images.extend(image)
             names.extend(name)
             text_lines.extend(text_line)

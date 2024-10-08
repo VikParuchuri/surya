@@ -18,6 +18,11 @@ It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmar
 |:------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
 | ![New York Times Article Layout](static/images/excerpt_layout.png) | ![New York Times Article Reading Order](static/images/excerpt_reading.jpg) |
 
+|             Table Recognition             |     |
+|:-----------------------------------------:|:----------------:|
+| ![Table Rec](static/images/table_rec.png) | <img width=500/> |
+
+
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
 
 ## Community
@@ -425,7 +430,12 @@ The accuracy is computed by finding if each pair of layout boxes is in the corre
 
 ## Table Recognition
 
-.93 penalized row iou (out of 1), and .86 penalized column iou.  Took .05 seconds per image on an A10.
+| Model             |   Row Intersection |   Col Intersection |   Time Per Image |
+|-------------------|--------------------|--------------------|------------------|
+| Surya             |               0.96 |               0.92 |             0.03 |
+| Table transformer |               0.72 |               0.84 |             0.02 |
+
+Higher is better for intersection, which the percentage of the actual row/column overlapped by the predictions.
 
 **Methodology**
 
@@ -498,6 +508,7 @@ python benchmark/table_recognition.py
 - `--max` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
+- `--tatr` specifies whether to also run table transformer
 
 # Training
 

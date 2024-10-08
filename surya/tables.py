@@ -44,11 +44,11 @@ def is_rotated(rows, cols):
     # Determine if the table is rotated by looking at row and column width / height ratios
     # Rows should have a >1 ratio, cols <1
     widths = sum([r.width for r in rows])
-    heights = sum([c.height for c in cols]) + 1
+    heights = sum([c.height for c in rows]) + 1
     r_ratio = widths / heights
 
     widths = sum([c.width for c in cols])
-    heights = sum([r.height for r in rows]) + 1
+    heights = sum([r.height for r in cols]) + 1
     c_ratio = widths / heights
 
     return r_ratio * 2 < c_ratio

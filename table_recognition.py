@@ -15,6 +15,7 @@ from surya.model.table_rec.processor import load_processor
 from surya.tables import batch_table_recognition
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
+from surya.postprocessing.util import rescale_bboxes, rescale_bbox
 
 
 def main():
@@ -38,11 +39,11 @@ def main():
 
     if os.path.isdir(args.input_path):
         images, _, _ = load_from_folder(args.input_path, args.max)
-        highres_images, names, text_lines = load_from_folder(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
+        highres_images, names, text_lines = load_from_folder(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES, load_text_lines=True)
         folder_name = os.path.basename(args.input_path)
     else:
         images, _, _ = load_from_file(args.input_path, args.max)
-        highres_images, names, text_lines = load_from_file(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
+        highres_images, names, text_lines = load_from_file(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES, load_text_lines=True)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     pnums = []
@@ -78,17 +79,10 @@ def main():
             if len(bbox) == 0:
                 continue
 
-            width_scaler = highres_img.size[0] / img.size[0]
-            height_scaler = highres_img.size[1] / img.size[1]
             page_table_imgs = []
             highres_bbox = []
             for bb in bbox:
-                highres_bb = [
-                    int(bb[0] * width_scaler),
-                    int(bb[1] * height_scaler),
-                    int(bb[2] * width_scaler),
-                    int(bb[3] * height_scaler),
-                ]
+                highres_bb = rescale_bbox(bb, img.size, highres_img.size)
                 page_table_imgs.append(highres_img.crop(highres_bb))
                 highres_bbox.append(highres_bb)
 

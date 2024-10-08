@@ -3,6 +3,8 @@ import collections
 import copy
 import json
 
+from tabulate import tabulate
+
 from surya.input.processing import convert_if_not_rgb
 from surya.model.table_rec.model import load_model
 from surya.model.table_rec.processor import load_processor
@@ -120,13 +122,18 @@ def main():
     with open(os.path.join(result_path, "results.json"), "w+") as f:
         json.dump(out_data, f, indent=4)
 
-    print(f"Surya mean penalized row iou is {out_data['surya']['mean_row_iou']:.2f}.  Mean penalized column iou is {out_data['surya']['mean_col_iou']:.2f}.")
-    if args.tatr:
-        print(f"TATR mean penalized row iou is {out_data['tatr']['mean_row_iou']:.2f}.  Mean penalized column iou is {out_data['tatr']['mean_col_iou']:.2f}.")
-    print(f"Surya took {surya_time / len(images):.2f} seconds per image, and {surya_time:.1f} seconds total.")
-    if args.tatr:
-        print(f"TATR took {tatr_time / len(images):.2f} seconds per image, and {tatr_time:.1f} seconds total.")
-    print("Mean iou is the average of the iou scores for each row or column, with penalties for too many/few predictions.")
+    table = [
+        ["Model", "Row Intersection", "Col Intersection", "Time Per Image"],
+        ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.2f}",
+         f"{surya_time / len(images):.2f}"],
+        ["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.2f}",
+         f"{tatr_time / len(images):.2f}"]
+    ]
+
+    print(tabulate(table, headers="firstrow", tablefmt="github"))
+
+    print("Intersection is the average of the intersection % between each actual row/column, and the predictions.  With penalties for too many/few predictions.")
+    print("Note that table transformers is unbatched, since the example code in the repo is unbatched.")
     print(f"Wrote results to {result_path}")
 
 

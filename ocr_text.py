@@ -30,10 +30,12 @@ def main():
     args = parser.parse_args()
 
     if os.path.isdir(args.input_path):
-        images, names, _ = load_from_folder(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
+        images, names, _ = load_from_folder(args.input_path, args.max, args.start_page)
+        highres_images, _, _ = load_from_folder(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path)
     else:
-        images, names, _ = load_from_file(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
+        images, names, _ = load_from_file(args.input_path, args.max, args.start_page)
+        highres_images, _, _ = load_from_file(args.input_path, args.max, args.start_page, settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     if args.lang_file:
@@ -60,7 +62,7 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     start = time.time()
-    predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor)
+    predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor, highres_images=highres_images)
     if args.debug:
         print(f"OCR took {time.time() - start:.2f} seconds")
         max_chars = max([len(l.text) for p in predictions_by_image for l in p.text_lines])
@@ -70,7 +72,7 @@ def main():
         for idx, (name, image, pred, langs) in enumerate(zip(names, images, predictions_by_image, image_langs)):
             bboxes = [l.bbox for l in pred.text_lines]
             pred_text = [l.text for l in pred.text_lines]
-            page_image = draw_text_on_image(bboxes, pred_text, image.size, langs, has_math="_math" in langs)
+            page_image = draw_text_on_image(bboxes, pred_text, image.size, langs, has_math="_math" in langs if langs else False)
             page_image.save(os.path.join(result_path, f"{name}_{idx}_text.png"))
 
     out_preds = defaultdict(list)
