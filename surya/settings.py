@@ -10,7 +10,8 @@ import os
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
-    IMAGE_DPI: int = 192
+    IMAGE_DPI: int = 96 # Used for detection, layout, reading order
+    IMAGE_DPI_HIGHRES: int = 192  # Used for OCR, table rec
     IN_STREAMLIT: bool = False # Whether we're running in streamlit
     ENABLE_EFFICIENT_ATTENTION: bool = True # Usually keep True, but if you get CUDA errors, setting to False can help
 
@@ -70,6 +71,14 @@ class Settings(BaseSettings):
     ORDER_MAX_BOXES: int = 256
     ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
+
+    # Table Rec
+    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/surya_tablerec"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 640, "width": 640}
+    TABLE_REC_MAX_BOXES: int = 512
+    TABLE_REC_MAX_ROWS: int = 384
+    TABLE_REC_BATCH_SIZE: Optional[int] = None
+    TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

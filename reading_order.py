@@ -33,10 +33,10 @@ def main():
     det_processor = load_det_processor()
 
     if os.path.isdir(args.input_path):
-        images, names = load_from_folder(args.input_path, args.max)
+        images, names, _ = load_from_folder(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path)
     else:
-        images, names = load_from_file(args.input_path, args.max)
+        images, names, _ = load_from_file(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     line_predictions = batch_text_detection(images, det_model, det_processor)

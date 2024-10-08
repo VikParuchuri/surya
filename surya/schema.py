@@ -71,19 +71,23 @@ class PolygonBox(BaseModel):
         y2 = max(self.bbox[3], other.bbox[3])
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
-    def intersection_area(self, other, margin=0):
-        x_overlap = max(0, min(self.bbox[2], other.bbox[2] - margin) - max(self.bbox[0], other.bbox[0] + margin))
-        y_overlap = max(0, min(self.bbox[3], other.bbox[3] - margin) - max(self.bbox[1], other.bbox[1] + margin))
+    def intersection_area(self, other, x_margin=0, y_margin=0):
+        x_overlap = max(0, min(self.bbox[2] + x_margin, other.bbox[2] + x_margin) - max(self.bbox[0] - x_margin, other.bbox[0] - x_margin))
+        y_overlap = max(0, min(self.bbox[3] + y_margin, other.bbox[3] + y_margin) - max(self.bbox[1] - y_margin, other.bbox[1] - y_margin))
         return x_overlap * y_overlap
 
-    def intersection_pct(self, other, margin=0):
-        assert 0 <= margin <= 1
+    def intersection_pct(self, other, x_margin=0, y_margin=0):
+        assert 0 <= x_margin <= 1
+        assert 0 <= y_margin <= 1
         if self.area == 0:
             return 0
 
-        if margin:
-            margin = int(min(self.width, other.width) * margin)
-        intersection = self.intersection_area(other, margin)
+        if x_margin:
+            x_margin = int(min(self.width, other.width) * x_margin)
+        if y_margin:
+            y_margin = int(min(self.height, other.height) * y_margin)
+
+        intersection = self.intersection_area(other, x_margin, y_margin)
         return intersection / self.area
 
 
@@ -119,6 +123,18 @@ class Bbox(BaseModel):
     def polygon(self):
         return [[self.bbox[0], self.bbox[1]], [self.bbox[2], self.bbox[1]], [self.bbox[2], self.bbox[3]], [self.bbox[0], self.bbox[3]]]
 
+    @property
+    def center(self):
+        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
+
+    def intersection_pct(self, other):
+        if self.area == 0:
+            return 0
+
+        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
+        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
+        intersection = x_overlap * y_overlap
+        return intersection / self.area
 
 class LayoutBox(PolygonBox):
     label: str
@@ -160,4 +176,17 @@ class LayoutResult(BaseModel):
 
 class OrderResult(BaseModel):
     bboxes: List[OrderBox]
+    image_bbox: List[float]
+
+
+class TableCell(Bbox):
+    row_id: int | None = None
+    col_id: int | None = None
+    text: str | None = None
+
+
+class TableResult(BaseModel):
+    cells: List[TableCell]
+    rows: List[TableCell]
+    cols: List[TableCell]
     image_bbox: List[float]

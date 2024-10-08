@@ -4,6 +4,7 @@ from itertools import repeat
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 
+
 def intersection_area(box1, box2):
     x_left = max(box1[0], box2[0])
     y_top = max(box1[1], box2[1])
@@ -15,6 +16,59 @@ def intersection_area(box1, box2):
 
     return (x_right - x_left) * (y_bottom - y_top)
 
+def box_area(box):
+    return (box[2] - box[0]) * (box[3] - box[1])
+
+
+def calculate_iou(box1, box2, box1_only=False):
+    intersection = intersection_area(box1, box2)
+    union = box_area(box1)
+    if not box1_only:
+        union += box_area(box2) - intersection
+
+    if union == 0:
+        return 0
+    return intersection / union
+
+
+def match_boxes(preds, references):
+    num_actual = len(references)
+    num_predicted = len(preds)
+
+    iou_matrix = np.zeros((num_actual, num_predicted))
+    for i, actual in enumerate(references):
+        for j, pred in enumerate(preds):
+            iou_matrix[i, j] = calculate_iou(actual, pred, box1_only=True)
+
+    sorted_indices = np.argsort(iou_matrix, axis=None)[::-1]
+    sorted_ious = iou_matrix.flatten()[sorted_indices]
+    actual_indices, predicted_indices = np.unravel_index(sorted_indices, iou_matrix.shape)
+
+    assigned_actual = set()
+    assigned_pred = set()
+
+    matches = []
+    for idx, iou in zip(zip(actual_indices, predicted_indices), sorted_ious):
+        i, j = idx
+        if i not in assigned_actual and j not in assigned_pred:
+            iou_val = iou_matrix[i, j]
+            if iou_val > .95: # Account for rounding on box edges
+                iou_val = 1.0
+            matches.append((i, j, iou_val))
+            assigned_actual.add(i)
+            assigned_pred.add(j)
+
+    unassigned_actual = set(range(num_actual)) - assigned_actual
+    unassigned_pred = set(range(num_predicted)) - assigned_pred
+    matches.extend([(i, None, -1.0) for i in unassigned_actual])
+    matches.extend([(None, j, 0.0) for j in unassigned_pred])
+
+    return matches
+
+def penalized_iou_score(preds, references):
+    matches = match_boxes(preds, references)
+    iou = sum([match[2] for match in matches]) / len(matches)
+    return iou
 
 def intersection_pixels(box1, box2):
     x_left = max(box1[0], box2[0])

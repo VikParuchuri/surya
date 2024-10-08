@@ -82,7 +82,6 @@ def detect_boxes(linemap, text_threshold, low_text):
     det = []
     confidences = []
     max_confidence = 0
-    segmap = np.zeros_like(labels, dtype=np.uint8)
 
     for k in range(1, label_count):
         # size filtering
@@ -90,39 +89,37 @@ def detect_boxes(linemap, text_threshold, low_text):
         if size < 10:
             continue
 
-        mask = labels == k
-        selected_linemap = linemap[mask]
-
-        # thresholding
-        if np.max(selected_linemap) < text_threshold:
-            continue
-
         # make segmentation map
         x, y, w, h = stats[k, [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT]]
 
         try:
-            niter = int(np.sqrt(min(w, h)) * 2)
+            niter = int(np.sqrt(min(w, h)))
         except ValueError:
-            # Overflow in sqrt term
             niter = 0
 
         buffer = 1
-        sx, sy = max(0, x - niter), max(0, y - niter)
+        sx, sy = max(0, x - niter - buffer), max(0, y - niter - buffer)
         ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
-        segmap.fill(0)
-        segmap[mask] = 1
+        mask = (labels[sy:ey, sx:ex] == k)
+        selected_linemap = linemap[sy:ey, sx:ex][mask]
+        line_max = np.max(selected_linemap)
+
+        # thresholding
+        if line_max < text_threshold:
+            continue
+
+        segmap = mask.astype(np.uint8)
 
         ksize = buffer + niter
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(ksize, ksize))
-
-        # Doesn't work well without the zero start (ie, you can't trim the map tightly around the detected region)
-        selected_segmap = segmap[0:ey, 0:ex]
-        selected_segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
+        selected_segmap = cv2.dilate(segmap, kernel)
 
         # make box
         indices = np.nonzero(selected_segmap)
-        np_contours = np.column_stack((indices[1], indices[0]))
+        x_inds = indices[1] + sx
+        y_inds = indices[0] + sy
+        np_contours = np.column_stack((x_inds, y_inds))
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
 
@@ -139,8 +136,8 @@ def detect_boxes(linemap, text_threshold, low_text):
         box = np.roll(box, 4-startidx, 0)
         box = np.array(box)
 
-        confidence = np.mean(selected_linemap[selected_linemap > low_text])
-        max_confidence = max(max_confidence, confidence)
+        confidence = line_max
+        max_confidence = max(max_confidence, line_max)
 
         confidences.append(confidence)
         det.append(box)
@@ -175,16 +172,23 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
     return bboxes
 
 
-def draw_bboxes_on_image(bboxes, image, labels=None):
-    draw = ImageDraw.Draw(image)
 
-    for bbox in bboxes:
-        draw.rectangle(bbox, outline="red", width=1)
+def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: str | list='red'):
+    polys = []
+    for bb in bboxes:
+        # Clockwise polygon
+        poly = [
+            [bb[0], bb[1]],
+            [bb[2], bb[1]],
+            [bb[2], bb[3]],
+            [bb[0], bb[3]]
+        ]
+        polys.append(poly)
 
-    return image
+    return draw_polys_on_image(polys, image, labels, label_font_size=label_font_size, color=color)
 
 
-def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10):
+def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10, color: str | list='red'):
     draw = ImageDraw.Draw(image)
     font_path = get_font_path()
     label_font = ImageFont.truetype(font_path, label_font_size)
@@ -192,7 +196,7 @@ def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offse
     for i in range(len(corners)):
         poly = corners[i]
         poly = [(int(p[0]), int(p[1])) for p in poly]
-        draw.polygon(poly, outline='red', width=1)
+        draw.polygon(poly, outline=color[i] if isinstance(color, list) else color, width=1)
 
         if labels is not None:
             label = labels[i]
@@ -211,7 +215,7 @@ def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offse
             draw.text(
                 text_position,
                 label,
-                fill="red",
+                fill=color[i] if isinstance(color, list) else color,
                 font=label_font
             )
 

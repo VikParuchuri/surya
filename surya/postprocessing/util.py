@@ -26,6 +26,10 @@ def rescale_bbox(bbox, processor_size, image_size):
     return new_bbox
 
 
+def rescale_bboxes(bboxes, orig_size, new_size):
+    return [rescale_bbox(bbox, orig_size, new_size) for bbox in bboxes]
+
+
 def rescale_point(point, processor_size, image_size):
     # Point is in x, y format
     page_width, page_height = processor_size
