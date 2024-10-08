@@ -62,7 +62,7 @@ def run_recognition(images: List[Image.Image], langs: List[List[str] | None], re
 
 def run_ocr(images: List[Image.Image], langs: List[List[str] | None], det_model, det_processor, rec_model, rec_processor, batch_size=None, highres_images: List[Image.Image] | None = None) -> List[OCRResult]:
     images = convert_if_not_rgb(images)
-    highres_images = convert_if_not_rgb(highres_images) if highres_images is not None else None
+    highres_images = convert_if_not_rgb(highres_images) if highres_images is not None else [None] * len(images)
     det_predictions = batch_text_detection(images, det_model, det_processor)
 
     all_slices = []
@@ -71,10 +71,13 @@ def run_ocr(images: List[Image.Image], langs: List[List[str] | None], det_model,
 
     for idx, (det_pred, image, highres_image, lang) in enumerate(zip(det_predictions, images, highres_images, langs)):
         polygons = [p.polygon for p in det_pred.bboxes]
-        width_scaler = highres_image.size[0] / image.size[0]
-        height_scaler = highres_image.size[1] / image.size[1]
-        scaled_polygons = [[[int(p[0] * width_scaler), int(p[1] * height_scaler)] for p in polygon] for polygon in polygons]
-        slices = slice_polys_from_image(highres_image, scaled_polygons)
+        if highres_image:
+            width_scaler = highres_image.size[0] / image.size[0]
+            height_scaler = highres_image.size[1] / image.size[1]
+            scaled_polygons = [[[int(p[0] * width_scaler), int(p[1] * height_scaler)] for p in polygon] for polygon in polygons]
+            slices = slice_polys_from_image(highres_image, scaled_polygons)
+        else:
+            slices = slice_polys_from_image(image, polygons)
         slice_map.append(len(slices))
         all_langs.extend([lang] * len(slices))
         all_slices.extend(slices)
