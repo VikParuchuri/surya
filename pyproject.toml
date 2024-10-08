@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "surya-ocr"
-version = "0.5.1"
-description = "OCR, layout, reading order, and line detection in 90+ languages"
+version = "0.6.0"
+description = "OCR, layout, reading order, and table recognition in 90+ languages"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/VikParuchuri/surya"
-keywords = ["ocr", "pdf", "text detection", "text recognition"]
+keywords = ["ocr", "pdf", "text detection", "text recognition", "tables"]
 packages = [
     {include = "surya"}
 ]

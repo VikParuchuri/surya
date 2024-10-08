@@ -106,18 +106,16 @@ def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: 
     for results, table_bbox in zip(table_preds, layout_tables):
         adjusted_bboxes = []
         labels = []
-        width_scale = img.size[0] / highres_img.size[0]
-        height_scale = img.size[1] / highres_img.size[1]
 
         for item in results.cells:
             adjusted_bboxes.append([
-                (item.bbox[0] + table_bbox[0]) * width_scale,
-                (item.bbox[1] + table_bbox[1]) * height_scale,
-                (item.bbox[2] + table_bbox[0]) * width_scale,
-                (item.bbox[3] + table_bbox[1]) * height_scale
+                (item.bbox[0] + table_bbox[0]),
+                (item.bbox[1] + table_bbox[1]),
+                (item.bbox[2] + table_bbox[0]),
+                (item.bbox[3] + table_bbox[1])
             ])
             labels.append(f"{item.row_id} / {item.col_id}")
-        table_img = draw_bboxes_on_image(adjusted_bboxes, table_img, labels=labels, label_font_size=10)
+        table_img = draw_bboxes_on_image(adjusted_bboxes, highres_img, labels=labels, label_font_size=18)
     return table_img, table_preds
 
 

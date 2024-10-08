@@ -126,9 +126,11 @@ def main():
         ["Model", "Row Intersection", "Col Intersection", "Time Per Image"],
         ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.2f}",
          f"{surya_time / len(images):.2f}"],
-        ["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.2f}",
-         f"{tatr_time / len(images):.2f}"]
     ]
+
+    if args.tatr:
+        table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.2f}",
+         f"{tatr_time / len(images):.2f}"])
 
     print(tabulate(table, headers="firstrow", tablefmt="github"))
 
