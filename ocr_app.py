@@ -3,6 +3,8 @@ from typing import List
 
 import pypdfium2
 import streamlit as st
+from pypdfium2 import PdfiumError
+
 from surya.detection import batch_text_detection
 from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
@@ -93,8 +95,12 @@ def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: 
             )
             layout_tables.append(highres_bbox)
 
-    page_text = get_page_text_lines(filepath, [page_idx], [highres_img.size])[0]
-    table_bboxes = get_table_blocks(layout_tables, page_text, highres_img.size)
+    try:
+        page_text = get_page_text_lines(filepath, [page_idx], [highres_img.size])[0]
+        table_bboxes = get_table_blocks(layout_tables, page_text, highres_img.size)
+    except PdfiumError:
+        # This happens when we try to get text from an image
+        table_bboxes = [[] for _ in layout_tables]
 
     if not use_pdf_boxes or any(len(tb) == 0 for tb in table_bboxes):
         det_results = batch_text_detection(table_imgs, det_model, det_processor)
