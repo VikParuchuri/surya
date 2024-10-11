@@ -112,16 +112,21 @@ def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: 
     for results, table_bbox in zip(table_preds, layout_tables):
         adjusted_bboxes = []
         labels = []
+        colors = []
 
-        for item in results.cells:
+        for item in results.rows + results.cols:
             adjusted_bboxes.append([
                 (item.bbox[0] + table_bbox[0]),
                 (item.bbox[1] + table_bbox[1]),
                 (item.bbox[2] + table_bbox[0]),
                 (item.bbox[3] + table_bbox[1])
             ])
-            labels.append(f"{item.row_id} / {item.col_id}")
-        table_img = draw_bboxes_on_image(adjusted_bboxes, highres_img, labels=labels, label_font_size=18)
+            labels.append(item.label)
+            if hasattr(item, "row_id"):
+                colors.append("blue")
+            else:
+                colors.append("red")
+        table_img = draw_bboxes_on_image(adjusted_bboxes, highres_img, labels=labels, label_font_size=18, color=colors)
     return table_img, table_preds
 
 

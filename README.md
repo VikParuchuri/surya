@@ -298,8 +298,6 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 - `cells` - detected table cells
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-  - `row_id` - the id of the row this cell belongs to.
-  - `col_id` - the id of the column this cell belongs to.
   - `text` - if text could be pulled out of the pdf, the text of this cell.
 - `rows` - detected table rows
   - `bbox` - the bounding box of the table row

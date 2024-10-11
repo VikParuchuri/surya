@@ -121,11 +121,6 @@ def main():
         table_predictions[orig_name].append(out_pred)
 
         if args.images:
-            boxes = [l.bbox for l in pred.cells]
-            labels = [f"{l.row_id}/{l.col_id}" for l in pred.cells]
-            bbox_image = draw_bboxes_on_image(boxes, copy.deepcopy(table_img), labels=labels, label_font_size=20)
-            bbox_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_cells.png"))
-
             rows = [l.bbox for l in pred.rows]
             cols = [l.bbox for l in pred.cols]
             row_labels = [f"Row {l.row_id}" for l in pred.rows]

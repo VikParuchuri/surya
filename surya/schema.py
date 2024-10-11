@@ -180,13 +180,27 @@ class OrderResult(BaseModel):
 
 
 class TableCell(Bbox):
-    row_id: int | None = None
-    col_id: int | None = None
     text: str | None = None
+
+
+class TableRow(Bbox):
+    row_id: int
+
+    @property
+    def label(self):
+        return f'Row {self.row_id}'
+
+
+class TableCol(Bbox):
+    col_id: int
+
+    @property
+    def label(self):
+        return f'Column {self.col_id}'
 
 
 class TableResult(BaseModel):
     cells: List[TableCell]
-    rows: List[TableCell]
-    cols: List[TableCell]
+    rows: List[TableRow]
+    cols: List[TableCol]
     image_bbox: List[float]

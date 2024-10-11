@@ -2,6 +2,7 @@ from pdftext.extraction import dictionary_output
 
 from surya.postprocessing.text import sort_text_lines
 from surya.schema import PolygonBox
+import numpy as np
 
 
 def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list) -> list:
@@ -23,9 +24,62 @@ def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list) -> list
     return pages_text
 
 
-def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh=.8):
+def get_dynamic_gap_thresh(full_text: dict, img_size: list, default_thresh=.01, min_chars=100):
+    space_dists = []
+    for block in full_text["blocks"]:
+        for line in block["lines"]:
+            for span in line["spans"]:
+                for i in range(1, len(span["chars"])):
+                    char1 = span["chars"][i - 1]
+                    char2 = span["chars"][i]
+                    if full_text["rotation"] == 90:
+                        space_dists.append((char2["bbox"][0] - char1["bbox"][2]) / img_size[0])
+                    elif full_text["rotation"] == 180:
+                        space_dists.append((char2["bbox"][1] - char1["bbox"][3]) / img_size[1])
+                    elif full_text["rotation"] == 270:
+                        space_dists.append((char1["bbox"][0] - char2["bbox"][2]) / img_size[0])
+                    else:
+                        space_dists.append((char1["bbox"][1] - char2["bbox"][3]) / img_size[1])
+    cell_gap_thresh = np.percentile(space_dists, 80) if len(space_dists) > min_chars else default_thresh
+    return cell_gap_thresh
+
+
+def is_same_span(char, curr_box, img_size, space_thresh, rotation):
+    def normalized_diff(a, b, dimension, mult=1, use_abs=True):
+        func = abs if use_abs else lambda x: x
+        return func(a - b) / img_size[dimension] < space_thresh * mult
+
+    bbox = char["bbox"]
+    if rotation == 90:
+        return all([
+            normalized_diff(bbox[0], curr_box[0], 0, use_abs=False),
+            normalized_diff(bbox[1], curr_box[3], 1),
+            normalized_diff(bbox[0], curr_box[0], 0, mult=5)
+        ])
+    elif rotation == 180:
+        return all([
+            normalized_diff(bbox[2], curr_box[0], 0, use_abs=False),
+            normalized_diff(bbox[1], curr_box[1], 1),
+            normalized_diff(bbox[2], curr_box[0], 1, mult=5)
+        ])
+    elif rotation == 270:
+        return all([
+            normalized_diff(bbox[0], curr_box[0], 0, use_abs=False),
+            normalized_diff(bbox[3], curr_box[1], 1),
+            normalized_diff(bbox[0], curr_box[0], 1, mult=5)
+        ])
+    else:  # 0 or default case
+        return all([
+            normalized_diff(bbox[0], curr_box[2], 0, use_abs=False),
+            normalized_diff(bbox[1], curr_box[1], 1),
+            normalized_diff(bbox[0], curr_box[2], 1, mult=5)
+        ])
+
+
+def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh=.8, space_thresh=.01):
     # Returns coordinates relative to input table, not full image
     table_texts = []
+    space_thresh = max(space_thresh, get_dynamic_gap_thresh(full_text, img_size, default_thresh=space_thresh))
     for table in tables:
         table_poly = PolygonBox(polygon=[
             [table[0], table[1]],
@@ -51,14 +105,7 @@ def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh
                     for char in span["chars"]:
                         same_span = False
                         if curr_span:
-                            if rotation == 90:
-                                same_span = (char["bbox"][0] - curr_box[0]) / img_size[0] < 0.01 and abs(char["bbox"][1] - curr_box[3]) / img_size[1] < 0.01
-                            elif rotation == 180:
-                                same_span = (char["bbox"][2] - curr_box[0]) / img_size[0] < 0.01 and (char["bbox"][1] - curr_box[1]) / img_size[1] < 0.01
-                            elif rotation == 270:
-                                same_span = (char["bbox"][0] - curr_box[0]) / img_size[0] < 0.01 and abs(char["bbox"][3] - curr_box[1]) / img_size[1] < 0.01
-                            else:
-                                same_span = (char["bbox"][0] - curr_box[2]) / img_size[0] < 0.01 and (char["bbox"][1] - curr_box[1]) / img_size[1] < 0.01
+                            same_span = is_same_span(char, curr_box, img_size, space_thresh, rotation)
 
                         if curr_span is None:
                             curr_span = char["char"]
