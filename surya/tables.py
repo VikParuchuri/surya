@@ -5,7 +5,7 @@ import torch
 from PIL import Image
 
 from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
-from surya.schema import TableResult, TableCell, Bbox
+from surya.schema import TableResult, TableCell, Bbox, TableCol, TableRow
 from surya.settings import settings
 from tqdm import tqdm
 import numpy as np
@@ -39,19 +39,6 @@ def sort_bboxes(bboxes, tolerance=1):
 
     return sorted_page_blocks
 
-
-def is_rotated(rows, cols):
-    # Determine if the table is rotated by looking at row and column width / height ratios
-    # Rows should have a >1 ratio, cols <1
-    widths = sum([r.width for r in rows])
-    heights = sum([c.height for c in rows]) + 1
-    r_ratio = widths / heights
-
-    widths = sum([c.width for c in cols])
-    heights = sum([r.height for r in cols]) + 1
-    c_ratio = widths / heights
-
-    return r_ratio * 2 < c_ratio
 
 def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
@@ -166,86 +153,26 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
             rows = []
             cols = []
             for row_idx, row in enumerate(bb_rows):
-                cell = TableCell(
+                rows.append(TableRow(
                     bbox=row,
                     row_id=row_idx
-                )
-                rows.append(cell)
+                ))
 
             for col_idx, col in enumerate(bb_cols):
-                cell = TableCell(
+                cols.append(TableCol(
                     bbox=col,
                     col_id=col_idx,
-                )
-                cols.append(cell)
+                ))
 
             # Assign cells to rows/columns
             cells = []
             for cell in input_cells:
-                max_intersection = 0
-                row_pred = None
-                for row_idx, row in enumerate(rows):
-                    intersection_pct = Bbox(bbox=cell["bbox"]).intersection_pct(row)
-                    if intersection_pct > max_intersection:
-                        max_intersection = intersection_pct
-                        row_pred = row_idx
-
-                max_intersection = 0
-                col_pred = None
-                for col_idx, col in enumerate(cols):
-                    intersection_pct = Bbox(bbox=cell["bbox"]).intersection_pct(col)
-                    if intersection_pct > max_intersection:
-                        max_intersection = intersection_pct
-                        col_pred = col_idx
-
                 cells.append(
                     TableCell(
                         bbox=cell["bbox"],
                         text=cell.get("text"),
-                        row_id=row_pred,
-                        col_id=col_pred
                     )
                 )
-
-            rotated = is_rotated(rows, cols)
-            for cell in cells:
-                if cell.row_id is None:
-                    closest_row = None
-                    closest_row_dist = None
-                    for cell2 in cells:
-                        if cell2.row_id is None:
-                            continue
-                        if rotated:
-                            cell_y_center = cell.center[0]
-                            cell2_y_center = cell2.center[0]
-                        else:
-                            cell_y_center = cell.center[1]
-                            cell2_y_center = cell2.center[1]
-                        y_dist = abs(cell_y_center - cell2_y_center)
-                        if closest_row_dist is None or y_dist < closest_row_dist:
-                            closest_row = cell2.row_id
-                            closest_row_dist = y_dist
-                    cell.row_id = closest_row
-
-                if cell.col_id is None:
-                    closest_col = None
-                    closest_col_dist = None
-                    for cell2 in cells:
-                        if cell2.col_id is None:
-                            continue
-                        if rotated:
-                            cell_x_center = cell.center[1]
-                            cell2_x_center = cell2.center[1]
-                        else:
-                            cell_x_center = cell.center[0]
-                            cell2_x_center = cell2.center[0]
-
-                        x_dist = abs(cell2_x_center - cell_x_center)
-                        if closest_col_dist is None or x_dist < closest_col_dist:
-                            closest_col = cell2.col_id
-                            closest_col_dist = x_dist
-
-                    cell.col_id = closest_col
 
             result = TableResult(
                 cells=cells,
