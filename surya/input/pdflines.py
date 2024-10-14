@@ -115,10 +115,11 @@ def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh
                             curr_box = [min(curr_box[0], char["bbox"][0]), min(curr_box[1], char["bbox"][1]),
                                         max(curr_box[2], char["bbox"][2]), max(curr_box[3], char["bbox"][3])]
                         else:
-                            table_text.append({"text": curr_span, "bbox": curr_box})
+                            if curr_span.strip():
+                                table_text.append({"text": curr_span, "bbox": curr_box})
                             curr_span = char["char"]
                             curr_box = char["bbox"]
-                if curr_span is not None:
+                if curr_span is not None and curr_span.strip():
                     table_text.append({"text": curr_span, "bbox": curr_box})
         # Adjust to be relative to input table
         for item in table_text:
