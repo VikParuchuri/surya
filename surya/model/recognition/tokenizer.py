@@ -1,7 +1,4 @@
-from itertools import chain
-import random
-from typing import List, Optional, Tuple, Union
-from tokenizers import AddedToken
+from typing import List, Union
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
