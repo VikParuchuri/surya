@@ -7,7 +7,6 @@ warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_
 import logging
 logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
-from typing import List, Optional, Tuple
 from surya.model.recognition.encoderdecoder import OCREncoderDecoderModel
 from surya.model.recognition.config import DonutSwinConfig, SuryaOCRConfig, SuryaOCRDecoderConfig, SuryaOCRTextEncoderConfig
 from surya.model.recognition.encoder import DonutSwinModel
