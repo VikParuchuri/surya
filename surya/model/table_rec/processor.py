@@ -1,4 +1,5 @@
 import math
+import random
 from typing import Dict, Union, Optional, List, Iterable
 
 import cv2
@@ -178,7 +179,7 @@ class SuryaProcessor(DonutProcessor):
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
         self._in_target_context_manager = False
-        self.max_input_boxes = kwargs.get("max_input_boxes", 256)
+        self.max_input_boxes = kwargs.get("max_input_boxes", settings.TABLE_REC_MAX_ROWS)
         self.extra_input_boxes = kwargs.get("extra_input_boxes", 32)
 
     def resize_boxes(self, img, boxes):
@@ -186,10 +187,10 @@ class SuryaProcessor(DonutProcessor):
         box_width, box_height = self.box_size
         for box in boxes:
             # Rescale to 0-1024
-            box[0] = box[0] / width * box_width
-            box[1] = box[1] / height * box_height
-            box[2] = box[2] / width * box_width
-            box[3] = box[3] / height * box_height
+            box[0] = math.ceil(box[0] / width * box_width)
+            box[1] = math.ceil(box[1] / height * box_height)
+            box[2] = math.floor(box[2] / width * box_width)
+            box[3] = math.floor(box[3] / height * box_height)
 
             if box[0] < 0:
                 box[0] = 0
@@ -199,6 +200,9 @@ class SuryaProcessor(DonutProcessor):
                 box[2] = box_width
             if box[3] > box_height:
                 box[3] = box_height
+
+        boxes = [b for b in boxes if b[3] > b[1] and b[2] > b[0]]
+        boxes = [b for b in boxes if (b[3] - b[1]) * (b[2] - b[0]) > 10]
 
         return boxes
 
@@ -212,9 +216,11 @@ class SuryaProcessor(DonutProcessor):
             args = args[1:]
 
         for i in range(len(boxes)):
+            random.seed(1)
             if len(boxes[i]) > self.max_input_boxes:
-                downsample_ratio = math.ceil(len(boxes[i]) / self.max_input_boxes)
-                boxes[i] = boxes[i][::downsample_ratio]
+                downsample_ratio = self.max_input_boxes / len(boxes[i])
+                boxes[i] = [b for b in boxes[i] if random.random() < downsample_ratio]
+            boxes[i] = boxes[i][:self.max_input_boxes]
 
         new_boxes = []
         max_len = self.max_input_boxes + self.extra_input_boxes

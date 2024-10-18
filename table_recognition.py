@@ -125,11 +125,16 @@ def main():
             cols = [l.bbox for l in pred.cols]
             row_labels = [f"Row {l.row_id}" for l in pred.rows]
             col_labels = [f"Col {l.col_id}" for l in pred.cols]
+            cells = [l.bbox for l in pred.cells]
 
             rc_image = copy.deepcopy(table_img)
             rc_image = draw_bboxes_on_image(rows, rc_image, labels=row_labels, label_font_size=20, color="blue")
             rc_image = draw_bboxes_on_image(cols, rc_image, labels=col_labels, label_font_size=20, color="red")
             rc_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_rc.png"))
+
+            cell_image = copy.deepcopy(table_img)
+            cell_image = draw_bboxes_on_image(cells, cell_image, color="green")
+            cell_image.save(os.path.join(result_path, f"{name}_page{pnum + 1}_table{table_idx}_cells.png"))
 
     with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(table_predictions, f, ensure_ascii=False)
