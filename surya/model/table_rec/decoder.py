@@ -172,9 +172,9 @@ class SuryaTableRecDecoderSdpaCrossAttention(nn.Module):
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_states.contiguous(),
-            key_states.contiguous(),
-            value_states.contiguous(),
+            query_states,
+            key_states,
+            value_states,
             attn_mask=None,
             dropout_p=self.attention_dropout if self.training else 0.0,
             scale=self.head_dim**-0.5,
@@ -260,9 +260,9 @@ class SuryaTableRecDecoderSdpaAttention(nn.Module):
                 causal_mask = torch.where(position_mask, torch.finfo(causal_mask.dtype).min, causal_mask)
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_states.contiguous(),
-            key_states.contiguous(),
-            value_states.contiguous(),
+            query_states,
+            key_states,
+            value_states,
             attn_mask=causal_mask,
             dropout_p=self.attention_dropout if self.training else 0.0,
             scale=self.head_dim**-0.5,

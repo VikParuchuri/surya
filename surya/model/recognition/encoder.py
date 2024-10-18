@@ -363,9 +363,9 @@ class DonutSwinSelfAttention(nn.Module):
             attention_mask = attention_mask + relative_position_bias
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_layer.contiguous(),
-            key_layer.contiguous(),
-            value_layer.contiguous(),
+            query_layer,
+            key_layer,
+            value_layer,
             attn_mask=attention_mask,
             dropout_p=self.dropout_p if self.training else 0.0,
             scale=self.attention_head_size**-0.5,
