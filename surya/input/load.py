@@ -28,7 +28,7 @@ def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, 
 
     page_indices = list(range(start_page, last_page))
     images = get_page_images(doc, page_indices, dpi=dpi)
-    text_lines = None
+    text_lines = [None] * len(page_indices)
     if load_text_lines:
         from surya.input.pdflines import get_page_text_lines # Putting import here because pypdfium2 causes warnings if its not the top import
         text_lines = get_page_text_lines(
