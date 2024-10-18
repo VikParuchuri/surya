@@ -1,11 +1,11 @@
 from typing import Optional, Union, Tuple, List
 
 import torch
-from transformers import VisionEncoderDecoderModel
+from transformers import VisionEncoderDecoderModel, GenerationMixin
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 
 
-class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel):
+class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel, GenerationMixin):
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,

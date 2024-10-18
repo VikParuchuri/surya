@@ -106,24 +106,6 @@ class TableRecEncoderDecoderModel(PreTrainedModel):
             decoder_hidden_states=decoder_outputs.hidden_states,
         )
 
-    def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):
-        return shift_tokens_right(labels, self.config.pad_token_id, self.config.decoder_start_token_id)
-
-    def prepare_inputs_for_generation(
-        self, input_ids, past_key_values=None, attention_mask=None, use_cache=None, encoder_outputs=None, **kwargs
-    ):
-        decoder_inputs = self.decoder.prepare_inputs_for_generation(input_ids, past_key_values=past_key_values)
-        decoder_attention_mask = decoder_inputs["attention_mask"] if "attention_mask" in decoder_inputs else None
-        input_dict = {
-            "attention_mask": attention_mask,
-            "decoder_attention_mask": decoder_attention_mask,
-            "decoder_input_ids": decoder_inputs["input_ids"],
-            "encoder_outputs": encoder_outputs,
-            "past_key_values": decoder_inputs["past_key_values"],
-            "use_cache": use_cache,
-        }
-        return input_dict
-
     def resize_token_embeddings(self, *args, **kwargs):
         raise NotImplementedError(
             "Resizing the embedding layers via the VisionEncoderDecoderModel directly is not supported.Please use the"
