@@ -1,5 +1,7 @@
+import threading
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+from queue import Queue
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -191,39 +193,65 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     id2label = model.config.id2label
 
     results = []
+    result_lock = threading.Lock()
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+    batch_queue = Queue(maxsize=4)
 
-    if parallelize:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            img_idx = 0
-            for preds, orig_sizes in layout_generator:
-                futures = []
-                for pred, orig_size in zip(preds, orig_sizes):
-                    future = executor.submit(
+    def inference_producer():
+        for batch in layout_generator:
+            batch_queue.put(batch)
+        batch_queue.put(None)  # Signal end of batches
+
+    def postprocessing_consumer():
+        if parallelize:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                img_idx = 0
+                while True:
+                    batch = batch_queue.get()
+                    if batch is None:
+                        break
+
+                    preds, orig_sizes = batch
+                    img_idxs = [img_idx + i for i in range(len(preds))]
+                    batch_results = list(executor.map(
                         parallel_get_regions,
+                        preds,
+                        orig_sizes,
+                        [id2label] * len(preds),
+                        [detection_results[idx] for idx in img_idxs] if detection_results else [None] * len(preds)
+                    ))
+
+                    with result_lock:
+                        results.extend(batch_results)
+                        img_idx += len(preds)
+        else:
+            img_idx = 0
+            while True:
+                batch = batch_queue.get()
+                if batch is None:
+                    break
+
+                preds, orig_sizes = batch
+                for pred, orig_size in zip(preds, orig_sizes):
+                    results.append(parallel_get_regions(
                         pred,
                         orig_size,
                         id2label,
                         detection_results[img_idx] if detection_results else None
-                    )
+                    ))
 
-                    futures.append(future)
                     img_idx += 1
 
-                for future in futures:
-                    results.append(future.result())
-    else:
-        img_idx = 0
-        for preds, orig_sizes in layout_generator:
-            for pred, orig_size in zip(preds, orig_sizes):
-                results.append(parallel_get_regions(
-                    pred,
-                    orig_size,
-                    id2label,
-                    detection_results[img_idx] if detection_results else None
-                ))
+    # Start producer and consumer threads
+    producer = threading.Thread(target=inference_producer)
+    consumer = threading.Thread(target=postprocessing_consumer)
 
-                img_idx += 1
+    producer.start()
+    consumer.start()
+
+    # Wait for both threads to complete
+    producer.join()
+    consumer.join()
 
     return results
