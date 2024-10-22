@@ -36,7 +36,7 @@ def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     return new_boxes
 
 
-def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
+def clean_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     new_boxes = []
     for box_obj in boxes:
         xs = [point[0] for point in box_obj.polygon]
@@ -173,7 +173,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
         bbox.rescale(processor_size, image_size)
         bbox.fit_to_bounds([0, 0, image_size[0], image_size[1]])
 
-    bboxes = clean_contained_boxes(bboxes)
+    bboxes = clean_boxes(bboxes)
     return bboxes
 
 
