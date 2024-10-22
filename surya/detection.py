@@ -9,7 +9,7 @@ from PIL import Image
 from surya.model.detection.model import EfficientViTForSemanticSegmentation
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
+from surya.input.processing import prepare_image_detection, split_image, get_total_splits
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -128,15 +128,18 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
     results = []
-    result_lock = threading.Lock()
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-    batch_queue = Queue(maxsize=4)
+    batch_queue = Queue()
 
     def inference_producer():
-        for batch in detection_generator:
-            batch_queue.put(batch)
-        batch_queue.put(None)  # Signal end of batches
+        try:
+            for batch in detection_generator:
+                batch_queue.put(batch)
+        except Exception as e:
+            print("Error with batch detection", e)
+        finally:
+            batch_queue.put(None)  # Signal end of batches
 
     def postprocessing_consumer():
         if parallelize:
@@ -146,27 +149,28 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
                     if batch is None:
                         break
 
-                    preds, orig_sizes = batch
-                    batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
-
-                    with result_lock:
+                    try:
+                        preds, orig_sizes = batch
+                        batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
                         results.extend(batch_results)
+                    except Exception as e:
+                        print("Error with postprocessing", e)
         else:
             while True:
                 batch = batch_queue.get()
                 if batch is None:
                     break
 
-                preds, orig_sizes = batch
-                batch_results = [parallel_get_lines(pred, orig_size)
-                                 for pred, orig_size in zip(preds, orig_sizes)]
-
-                with result_lock:
+                try:
+                    preds, orig_sizes = batch
+                    batch_results = list(map(parallel_get_lines, preds, orig_sizes))
                     results.extend(batch_results)
+                except Exception as e:
+                    print("Error with postprocessing", e)
 
     # Start producer and consumer threads
-    producer = threading.Thread(target=inference_producer)
-    consumer = threading.Thread(target=postprocessing_consumer)
+    producer = threading.Thread(target=inference_producer, daemon=True)
+    consumer = threading.Thread(target=postprocessing_consumer, daemon=True)
 
     producer.start()
     consumer.start()
