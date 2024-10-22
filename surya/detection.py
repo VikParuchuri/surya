@@ -131,12 +131,16 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
     batch_queue = Queue()
+    processing_error = threading.Event()
 
     def inference_producer():
         try:
             for batch in detection_generator:
                 batch_queue.put(batch)
+                if processing_error.is_set():
+                    break
         except Exception as e:
+            processing_error.set()
             print("Error with batch detection", e)
         finally:
             batch_queue.put(None)  # Signal end of batches
@@ -144,7 +148,7 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
     def postprocessing_consumer():
         if parallelize:
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                while True:
+                while not processing_error.is_set():
                     batch = batch_queue.get()
                     if batch is None:
                         break
@@ -154,9 +158,10 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
                         batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
                         results.extend(batch_results)
                     except Exception as e:
+                        processing_error.set()
                         print("Error with postprocessing", e)
         else:
-            while True:
+            while not processing_error.is_set():
                 batch = batch_queue.get()
                 if batch is None:
                     break
@@ -166,6 +171,7 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
                     batch_results = list(map(parallel_get_lines, preds, orig_sizes))
                     results.extend(batch_results)
                 except Exception as e:
+                    processing_error.set()
                     print("Error with postprocessing", e)
 
     # Start producer and consumer threads

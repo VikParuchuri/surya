@@ -196,12 +196,16 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
     batch_queue = Queue()
+    processing_error = threading.Event()
 
     def inference_producer():
         try:
             for batch in layout_generator:
                 batch_queue.put(batch)
+                if processing_error.is_set():
+                    break
         except Exception as e:
+            processing_error.set()
             print("Error in layout detection producer", e)
         finally:
             batch_queue.put(None)  # Signal end of batches
@@ -210,7 +214,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
         if parallelize:
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 img_idx = 0
-                while True:
+                while not processing_error.is_set():
                     batch = batch_queue.get()
                     if batch is None:
                         break
@@ -229,10 +233,11 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
                         results.extend(batch_results)
                         img_idx += len(preds)
                     except Exception as e:
+                        processing_error.set()
                         print("Error in layout postprocessing", e)
         else:
             img_idx = 0
-            while True:
+            while not processing_error.is_set():
                 batch = batch_queue.get()
                 if batch is None:
                     break
@@ -250,6 +255,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
                     results.extend(batch_results)
                     img_idx += len(preds)
                 except Exception as e:
+                    processing_error.set()
                     print("Error in layout postprocessing", e)
 
     # Start producer and consumer threads
