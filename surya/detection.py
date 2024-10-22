@@ -9,7 +9,7 @@ from PIL import Image
 from surya.model.detection.model import EfficientViTForSemanticSegmentation
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
+from surya.input.processing import prepare_image_detection, split_image, get_total_splits
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -128,53 +128,17 @@ def batch_text_detection(images: List, model, processor, batch_size=None) -> Lis
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
     results = []
-    result_lock = threading.Lock()
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-    batch_queue = Queue(maxsize=4)
 
-    def inference_producer():
-        for batch in detection_generator:
-            batch_queue.put(batch)
-        batch_queue.put(None)  # Signal end of batches
-
-    def postprocessing_consumer():
-        if parallelize:
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                while True:
-                    batch = batch_queue.get()
-                    if batch is None:
-                        break
-
-                    preds, orig_sizes = batch
-                    batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
-
-                    with result_lock:
-                        results.extend(batch_results)
-        else:
-            while True:
-                batch = batch_queue.get()
-                if batch is None:
-                    break
-
-                preds, orig_sizes = batch
-                batch_results = [parallel_get_lines(pred, orig_size)
-                                 for pred, orig_size in zip(preds, orig_sizes)]
-
-                with result_lock:
-                    results.extend(batch_results)
-
-    # Start producer and consumer threads
-    producer = threading.Thread(target=inference_producer)
-    consumer = threading.Thread(target=postprocessing_consumer)
-
-    producer.start()
-    consumer.start()
-
-    # Wait for both threads to complete
-    producer.join()
-    consumer.join()
+    if parallelize:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            for preds, orig_sizes in detection_generator:
+                batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
+                results.extend(batch_results)
+    else:
+        for preds, orig_sizes in detection_generator:
+            for pred, orig_size in zip(preds, orig_sizes):
+                results.append(parallel_get_lines(pred, orig_size))
 
     return results
-
-

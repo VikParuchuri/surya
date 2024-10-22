@@ -1,12 +1,10 @@
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import cv2
-import math
 from PIL import ImageDraw, ImageFont
 
 from surya.postprocessing.fonts import get_font_path
-from surya.postprocessing.util import rescale_bbox
 from surya.schema import PolygonBox
 from surya.settings import settings
 from surya.postprocessing.text import get_text_size
