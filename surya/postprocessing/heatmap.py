@@ -39,6 +39,11 @@ def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
 def clean_contained_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     new_boxes = []
     for box_obj in boxes:
+        xs = [point[0] for point in box_obj.polygon]
+        ys = [point[1] for point in box_obj.polygon]
+        if max(xs) == min(xs) or max(ys) == min(ys):
+            continue
+
         box = box_obj.bbox
         contained = False
         for other_box_obj in boxes:
