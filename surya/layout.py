@@ -1,3 +1,4 @@
+import multiprocessing
 import threading
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -195,37 +196,81 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     results = []
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+    batch_queue = Queue()
+    processing_error = threading.Event()
 
-    if parallelize:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    def inference_producer():
+        try:
+            for batch in layout_generator:
+                batch_queue.put(batch)
+                if processing_error.is_set():
+                    break
+        except Exception as e:
+            processing_error.set()
+            print("Error in layout detection producer", e)
+        finally:
+            batch_queue.put(None)  # Signal end of batches
+
+    def postprocessing_consumer(executor):
+        if parallelize:
             img_idx = 0
-            for preds, orig_sizes in layout_generator:
-                futures = []
-                for pred, orig_size in zip(preds, orig_sizes):
-                    future = executor.submit(
+            while not processing_error.is_set():
+                batch = batch_queue.get()
+                if batch is None:
+                    break
+
+                try:
+                    preds, orig_sizes = batch
+                    img_idxs = [img_idx + i for i in range(len(preds))]
+                    batch_results = list(executor.map(
                         parallel_get_regions,
-                        pred,
-                        orig_size,
-                        id2label,
-                        detection_results[img_idx] if detection_results else None
-                    )
+                        preds,
+                        orig_sizes,
+                        [id2label] * len(preds),
+                        [detection_results[idx] for idx in img_idxs] if detection_results else [None] * len(preds)
+                    ))
 
-                    futures.append(future)
-                    img_idx += 1
+                    results.extend(batch_results)
+                    img_idx += len(preds)
+                except Exception as e:
+                    processing_error.set()
+                    print("Error in layout postprocessing", e)
+        else:
+            img_idx = 0
+            while not processing_error.is_set():
+                batch = batch_queue.get()
+                if batch is None:
+                    break
 
-                for future in futures:
-                    results.append(future.result())
-    else:
-        img_idx = 0
-        for preds, orig_sizes in layout_generator:
-            for pred, orig_size in zip(preds, orig_sizes):
-                results.append(parallel_get_regions(
-                    pred,
-                    orig_size,
-                    id2label,
-                    detection_results[img_idx] if detection_results else None
-                ))
+                try:
+                    preds, orig_sizes = batch
+                    img_idxs = [img_idx + i for i in range(len(preds))]
+                    batch_results = list(map(
+                                parallel_get_regions,
+                                preds,
+                                orig_sizes,
+                                [id2label] * len(preds),
+                                [detection_results[idx] for idx in img_idxs] if detection_results else [None] * len(preds)
+                            ))
+                    results.extend(batch_results)
+                    img_idx += len(preds)
+                except Exception as e:
+                    processing_error.set()
+                    print("Error in layout postprocessing", e)
 
-                img_idx += 1
+    # Start producer and consumer threads
+    producer = threading.Thread(target=inference_producer)
+    executor = ProcessPoolExecutor(max_workers=max_workers, mp_context=multiprocessing.get_context("spawn")) if parallelize else None
+    consumer = threading.Thread(target=postprocessing_consumer, args=(executor,))
+
+    producer.start()
+    consumer.start()
+
+    # Wait for both threads to complete
+    producer.join()
+    consumer.join()
+
+    if executor:
+        executor.shutdown()
 
     return results
