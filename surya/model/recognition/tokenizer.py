@@ -26,7 +26,12 @@ def utf16_numbers_to_text(numbers):
         byte_array.append(number & 0xFF)         # Lower byte
         byte_array.append((number >> 8) & 0xFF)  # Upper byte
 
-    text = byte_array.decode('utf-16le', errors="ignore")
+    try:
+        text = byte_array.decode('utf-16le', errors="ignore")
+    except Exception as e:
+        print(f"Error decoding utf16: {e}")
+        text = ""
+
     return text
 
 

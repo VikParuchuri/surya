@@ -1,3 +1,5 @@
+import contextlib
+import multiprocessing
 import threading
 from queue import Queue
 from typing import List, Tuple, Generator
@@ -15,6 +17,8 @@ from surya.settings import settings
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 import torch.nn.functional as F
+
+from surya.util.parallel import FakeParallel
 
 
 def get_batch_size():
@@ -127,18 +131,52 @@ def parallel_get_lines(preds, orig_sizes):
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
-    results = []
+    postprocessing_futures = []
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+    batch_queue = Queue()
+    processing_error = threading.Event()
 
-    if parallelize:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for preds, orig_sizes in detection_generator:
-                batch_results = list(executor.map(parallel_get_lines, preds, orig_sizes))
-                results.extend(batch_results)
-    else:
-        for preds, orig_sizes in detection_generator:
-            for pred, orig_size in zip(preds, orig_sizes):
-                results.append(parallel_get_lines(pred, orig_size))
+    def inference_producer():
+        try:
+            for batch in detection_generator:
+                batch_queue.put(batch)
+                if processing_error.is_set():
+                    break
+        except Exception as e:
+            processing_error.set()
+            print("Error with batch detection", e)
+        finally:
+            batch_queue.put(None)  # Signal end of batches
+
+    def postprocessing_consumer(executor):
+        while not processing_error.is_set():
+            batch = batch_queue.get()
+            if batch is None:
+                break
+
+            try:
+                preds, orig_sizes = batch
+                func = executor.submit if parallelize else FakeParallel
+                for pred, orig_size in zip(preds, orig_sizes):
+                    postprocessing_futures.append(func(parallel_get_lines, pred, orig_size))
+            except Exception as e:
+                processing_error.set()
+                print("Error with postprocessing", e)
+
+    # Start producer and consumer threads
+    producer = threading.Thread(target=inference_producer, daemon=True)
+    producer.start()
+
+    with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=multiprocessing.get_context("spawn")
+    ) if parallelize else contextlib.nullcontext() as executor:
+        consumer = threading.Thread(target=postprocessing_consumer, args=(executor,), daemon=True)
+        consumer.start()
+        producer.join()
+        consumer.join()
+
+        results = [future.result() for future in postprocessing_futures]
 
     return results
