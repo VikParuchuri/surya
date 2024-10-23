@@ -232,15 +232,14 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
                 print("Error in layout postprocessing", e)
 
     # Start producer and consumer threads
-    producer = threading.Thread(target=inference_producer)
+    producer = threading.Thread(target=inference_producer, daemon=True)
+    producer.start()
 
     with ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=multiprocessing.get_context("spawn")
     ) if parallelize else contextlib.nullcontext() as executor:
-        consumer = threading.Thread(target=postprocessing_consumer, args=(executor,))
-
-        producer.start()
+        consumer = threading.Thread(target=postprocessing_consumer, args=(executor,), daemon=True)
         consumer.start()
         producer.join()
         consumer.join()
