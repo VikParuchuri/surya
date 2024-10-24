@@ -128,7 +128,6 @@ def parallel_get_lines(preds, orig_sizes):
     return result
 
 
-
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 

@@ -1,11 +1,53 @@
 from typing import Optional, Union, Tuple, List
 
 import torch
-from transformers import VisionEncoderDecoderModel, GenerationMixin
+from transformers import VisionEncoderDecoderModel, GenerationMixin, PreTrainedModel, PretrainedConfig
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 
+from surya.model.ordering.decoder import MBartOrder
+from surya.model.ordering.encoder import VariableDonutSwinModel
 
-class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel, GenerationMixin):
+
+class OrderVisionEncoderDecoderModel(PreTrainedModel, GenerationMixin):
+    def __init__(
+        self,
+        config: Optional[PretrainedConfig] = None,
+        encoder: Optional[PreTrainedModel] = None,
+        decoder: Optional[PreTrainedModel] = None,
+        text_encoder: Optional[PreTrainedModel] = None,
+    ):
+        # initialize with config
+        # make sure input & output embeddings is not tied
+        config.tie_word_embeddings = False
+        config.decoder.tie_word_embeddings = False
+        super().__init__(config)
+
+        if encoder is None:
+            encoder = VariableDonutSwinModel(config.encoder)
+
+        if decoder is None:
+            decoder = MBartOrder(config.decoder, attn_implementation=config._attn_implementation)
+
+        self.encoder = encoder
+        self.decoder = decoder
+
+        # make sure that the individual model's config refers to the shared config
+        # so that the updates to the config will be synced
+        self.encoder.config = self.config.encoder
+        self.decoder.config = self.config.decoder
+
+    def get_encoder(self):
+        return self.encoder
+
+    def get_decoder(self):
+        return self.decoder
+
+    def get_output_embeddings(self):
+        return self.decoder.get_output_embeddings()
+
+    def set_output_embeddings(self, new_embeddings):
+        return self.decoder.set_output_embeddings(new_embeddings)
+
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
@@ -88,3 +130,13 @@ class OrderVisionEncoderDecoderModel(VisionEncoderDecoderModel, GenerationMixin)
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
         )
+
+    def resize_token_embeddings(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Resizing the embedding layers via the VisionEncoderDecoderModel directly is not supported.Please use the"
+            " respective methods of the wrapped decoder object (model.decoder.resize_token_embeddings(...))"
+        )
+
+    def _reorder_cache(self, past_key_values, beam_idx):
+        # apply decoder cache reordering here
+        return self.decoder._reorder_cache(past_key_values, beam_idx)

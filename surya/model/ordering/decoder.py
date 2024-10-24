@@ -195,18 +195,12 @@ class MBartGQAttention(nn.Module):
         return attn_output, attn_weights_reshaped, past_key_value
 
 
-MBART_ATTENTION_CLASSES = {
-    "eager": MBartGQAttention,
-    "flash_attention_2": None
-}
-
-
 class MBartOrderDecoderLayer(MBartDecoderLayer):
     def __init__(self, config: MBartConfig):
         nn.Module.__init__(self)
         self.embed_dim = config.d_model
 
-        self.self_attn = MBART_ATTENTION_CLASSES[config._attn_implementation](
+        self.self_attn = MBartGQAttention(
             embed_dim=self.embed_dim,
             num_heads=config.decoder_attention_heads,
             num_kv_heads=config.kv_heads,
@@ -220,7 +214,7 @@ class MBartOrderDecoderLayer(MBartDecoderLayer):
         self.activation_dropout = config.activation_dropout
 
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
-        self.encoder_attn = MBART_ATTENTION_CLASSES[config._attn_implementation](
+        self.encoder_attn = MBartGQAttention(
             self.embed_dim,
             config.decoder_attention_heads,
             num_kv_heads=config.kv_heads,
