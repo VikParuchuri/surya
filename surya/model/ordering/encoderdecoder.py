@@ -127,8 +127,8 @@ class OrderVisionEncoderDecoderModel(PreTrainedModel, GenerationMixin):
             decoder_attentions=decoder_outputs.attentions,
             cross_attentions=decoder_outputs.cross_attentions,
             encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
+            encoder_hidden_states=None,
+            encoder_attentions=None,
         )
 
     def resize_token_embeddings(self, *args, **kwargs):

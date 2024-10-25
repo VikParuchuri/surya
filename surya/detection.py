@@ -1,10 +1,8 @@
-import contextlib
-import multiprocessing
-import threading
-from queue import Queue
+import torch
+torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
+
 from typing import List, Tuple, Generator
 
-import torch
 import numpy as np
 from PIL import Image
 
@@ -17,8 +15,6 @@ from surya.settings import settings
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 import torch.nn.functional as F
-
-from surya.util.parallel import FakeParallel
 
 
 def get_batch_size():

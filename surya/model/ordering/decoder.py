@@ -1,12 +1,11 @@
 import copy
 from typing import Optional, List, Union, Tuple
 
-from transformers import MBartForCausalLM, MBartConfig
+from transformers import MBartForCausalLM, MBartConfig, GenerationMixin, PreTrainedModel
 from torch import nn
 from transformers.activations import ACT2FN
 from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask, _prepare_4d_attention_mask
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions, BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.mbart.modeling_mbart import MBartPreTrainedModel, MBartDecoder, MBartLearnedPositionalEmbedding, MBartDecoderLayer
 from surya.model.ordering.config import MBartOrderConfig
 import torch
 import math
@@ -23,6 +22,28 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
         return hidden_states
     hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+
+
+class MBartLearnedPositionalEmbedding(nn.Embedding):
+    """
+    This module learns positional embeddings up to a fixed maximum size.
+    """
+
+    def __init__(self, num_embeddings: int, embedding_dim: int):
+        # MBart is set up so that if padding_idx is specified then offset the embedding ids by 2
+        # and adjust num_embeddings appropriately. Other models don't have this hack
+        self.offset = 2
+        super().__init__(num_embeddings + self.offset, embedding_dim)
+
+    def forward(self, input_ids: torch.Tensor, past_key_values_length: int = 0):
+        """`input_ids' shape is expected to be [bsz x seqlen]."""
+
+        bsz, seq_len = input_ids.shape[:2]
+        positions = torch.arange(
+            past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
+        ).expand(bsz, -1)
+
+        return super().forward(positions + self.offset)
 
 
 class MBartGQAttention(nn.Module):
@@ -126,76 +147,30 @@ class MBartGQAttention(nn.Module):
             # if encoder bi-directional self-attention `past_key_value` is always `None`
             past_key_value = (key_states, value_states)
 
-        proj_shape = (bsz * self.num_heads, -1, self.head_dim)
-        query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
+        query_states = self._shape(query_states, tgt_len, bsz)
 
         # Expand kv heads, then match query shape
         key_states = repeat_kv(key_states, self.num_kv_groups)
         value_states = repeat_kv(value_states, self.num_kv_groups)
-        key_states = key_states.reshape(*proj_shape)
-        value_states = value_states.reshape(*proj_shape)
 
-        src_len = key_states.size(1)
-        attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query_states,
+            key_states,
+            value_states,
+            attn_mask=attention_mask,
+            dropout_p=self.dropout if self.training else 0.0,
+            scale=1, # Original attn implementation had no scaling
+        )
 
-        if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz * self.num_heads, tgt_len, src_len)}, but is"
-                f" {attn_weights.size()}"
-            )
-
-        if attention_mask is not None:
-            if attention_mask.size() != (bsz, 1, tgt_len, src_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, tgt_len, src_len)}, but is {attention_mask.size()}"
-                )
-            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-
-        if layer_head_mask is not None:
-            if layer_head_mask.size() != (self.num_heads,):
-                raise ValueError(
-                    f"Head mask for a single layer should be of size {(self.num_heads,)}, but is"
-                    f" {layer_head_mask.size()}"
-                )
-            attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
-        if output_attentions:
-            # this operation is a bit awkward, but it's required to
-            # make sure that attn_weights keeps its gradient.
-            # In order to do so, attn_weights have to be reshaped
-            # twice and have to be reused in the following
-            attn_weights_reshaped = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights_reshaped.view(bsz * self.num_heads, tgt_len, src_len)
-        else:
-            attn_weights_reshaped = None
-
-        attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
-
-        attn_output = torch.bmm(attn_probs, value_states)
-
-        if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
-            raise ValueError(
-                f"`attn_output` should be of size {(bsz * self.num_heads, tgt_len, self.head_dim)}, but is"
-                f" {attn_output.size()}"
-            )
-
-        attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
-        attn_output = attn_output.transpose(1, 2)
-
-        # Use the `embed_dim` from the config (stored in the class) rather than `hidden_state` because `attn_output` can be
-        # partitioned across GPUs when using tensor-parallelism.
-        attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.view(bsz, tgt_len, self.embed_dim)
 
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights_reshaped, past_key_value
+        return attn_output, None, past_key_value
 
 
-class MBartOrderDecoderLayer(MBartDecoderLayer):
+class MBartOrderDecoderLayer(nn.Module):
     def __init__(self, config: MBartConfig):
         nn.Module.__init__(self)
         self.embed_dim = config.d_model
@@ -226,6 +201,77 @@ class MBartOrderDecoderLayer(MBartDecoderLayer):
         self.fc1 = nn.Linear(self.embed_dim, config.decoder_ffn_dim)
         self.fc2 = nn.Linear(config.decoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = nn.LayerNorm(self.embed_dim)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
+        layer_head_mask: Optional[torch.Tensor] = None,
+        cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = False,
+        use_cache: Optional[bool] = True,
+    ) -> torch.Tensor:
+        residual = hidden_states
+        hidden_states = self.self_attn_layer_norm(hidden_states)
+
+        # Self Attention
+        # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
+        self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
+        # add present self-attn cache to positions 1,2 of present_key_value tuple
+        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states=hidden_states,
+            past_key_value=self_attn_past_key_value,
+            attention_mask=attention_mask,
+            layer_head_mask=layer_head_mask,
+            output_attentions=output_attentions,
+        )
+        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        hidden_states = residual + hidden_states
+
+        # Cross-Attention Block
+        cross_attn_present_key_value = None
+        cross_attn_weights = None
+        if encoder_hidden_states is not None:
+            residual = hidden_states
+            hidden_states = self.encoder_attn_layer_norm(hidden_states)
+
+            # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
+            cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
+            hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+                hidden_states=hidden_states,
+                key_value_states=encoder_hidden_states,
+                attention_mask=encoder_attention_mask,
+                layer_head_mask=cross_attn_layer_head_mask,
+                past_key_value=cross_attn_past_key_value,
+                output_attentions=output_attentions,
+            )
+            hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
+
+            # add cross-attn to positions 3,4 of present_key_value tuple
+            present_key_value = present_key_value + cross_attn_present_key_value
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.final_layer_norm(hidden_states)
+        hidden_states = self.activation_fn(self.fc1(hidden_states))
+        hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+        hidden_states = self.fc2(hidden_states)
+        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        hidden_states = residual + hidden_states
+
+        outputs = (hidden_states,)
+
+        if output_attentions:
+            outputs += (self_attn_weights, cross_attn_weights)
+
+        if use_cache:
+            outputs += (present_key_value,)
+
+        return outputs
 
 
 class BboxEmbedding(nn.Module):
@@ -266,7 +312,37 @@ class BboxEmbedding(nn.Module):
         return embedded
 
 
-class MBartOrderDecoder(MBartDecoder):
+class MBartPreTrainedModel(PreTrainedModel):
+    config_class = MBartConfig
+    base_model_prefix = "model"
+    supports_gradient_checkpointing = True
+    _no_split_modules = ["MBartDecoderLayer", "MBartAttention"]
+    _supports_flash_attn_2 = True
+    _supports_sdpa = True
+
+    def _init_weights(self, module):
+        std = self.config.init_std
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+
+    @property
+    def dummy_inputs(self):
+        pad_token = self.config.pad_token_id
+        input_ids = torch.tensor([[0, 6, 10, 4, 2], [0, 8, 12, 2, pad_token]], device=self.device)
+        dummy_inputs = {
+            "attention_mask": input_ids.ne(pad_token),
+            "input_ids": input_ids,
+        }
+        return dummy_inputs
+
+
+class MBartOrderDecoder(MBartPreTrainedModel):
     def __init__(self, config: MBartConfig, embed_tokens: Optional[nn.Embedding] = None):
         MBartPreTrainedModel.__init__(self, config)
         self.dropout = config.dropout
@@ -293,6 +369,12 @@ class MBartOrderDecoder(MBartDecoder):
         self.gradient_checkpointing = False
         # Initialize weights and apply final processing
         self.post_init()
+
+    def get_input_embeddings(self):
+        return self.embed_tokens
+
+    def set_input_embeddings(self, value):
+        self.embed_tokens = value
 
     def forward(
         self,
@@ -464,10 +546,12 @@ class MBartOrderDecoder(MBartDecoder):
 
 
 class MBartOrderDecoderWrapper(MBartPreTrainedModel):
-    """
-    This wrapper class is a helper class to correctly load pretrained checkpoints when the causal language model is
-    used in combination with the [`EncoderDecoderModel`] framework.
-    """
+    config_class = MBartConfig
+    base_model_prefix = "model"
+    supports_gradient_checkpointing = True
+    _no_split_modules = ["MBartDecoderLayer", "MBartAttention"]
+    _supports_flash_attn_2 = True
+    _supports_sdpa = True
 
     def __init__(self, config):
         super().__init__(config)
@@ -477,7 +561,7 @@ class MBartOrderDecoderWrapper(MBartPreTrainedModel):
         return self.decoder(*args, **kwargs)
 
 
-class MBartOrder(MBartForCausalLM):
+class MBartOrder(MBartPreTrainedModel, GenerationMixin):
     config_class = MBartOrderConfig
     _tied_weights_keys = []
 
@@ -492,6 +576,24 @@ class MBartOrder(MBartForCausalLM):
 
         # Initialize weights and apply final processing
         self.post_init()
+
+    def get_input_embeddings(self):
+        return self.model.decoder.embed_tokens
+
+    def set_input_embeddings(self, value):
+        self.model.decoder.embed_tokens = value
+
+    def get_output_embeddings(self):
+        return self.lm_head
+
+    def set_output_embeddings(self, new_embeddings):
+        self.lm_head = new_embeddings
+
+    def set_decoder(self, decoder):
+        self.model.decoder = decoder
+
+    def get_decoder(self):
+        return self.model.decoder
 
     def forward(
         self,

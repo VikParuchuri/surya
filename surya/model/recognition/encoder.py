@@ -78,10 +78,15 @@ class DonutSwinEmbeddings(nn.Module):
         self.patch_grid = self.patch_embeddings.grid_size
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.embed_dim)) if use_mask_token else None
 
+        self.position_embeddings = None
+        self.row_embeddings = None
+        self.column_embeddings = None
         if config.use_absolute_embeddings:
             self.position_embeddings = nn.Parameter(torch.zeros(1, num_patches + 1, config.embed_dim))
-        else:
-            self.position_embeddings = None
+
+        if hasattr(config, "use_2d_embeddings") and config.use_2d_embeddings:
+            self.row_embeddings = nn.Parameter(torch.zeros(1, self.patch_grid[0] + 1, config.embed_dim))
+            self.column_embeddings = nn.Parameter(torch.zeros(1, self.patch_grid[1] + 1, config.embed_dim))
 
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -140,6 +145,13 @@ class DonutSwinEmbeddings(nn.Module):
                 embeddings = embeddings + self.interpolate_pos_encoding(embeddings, height, width)
             else:
                 embeddings = embeddings + self.position_embeddings[:, :seq_len]
+
+        if self.row_embeddings is not None and self.column_embeddings is not None:
+            # Repeat the x position embeddings across the y axis like 0, 1, 2, 3, 0, 1, 2, 3, ...
+            row_embeddings = self.row_embeddings[:, :output_dimensions[0], :].repeat_interleave(output_dimensions[1], dim=1)
+            column_embeddings = self.column_embeddings[:, :output_dimensions[1], :].repeat(1, output_dimensions[0], 1)
+
+            embeddings = embeddings + row_embeddings + column_embeddings
 
         embeddings = self.dropout(embeddings)
 
@@ -661,7 +673,7 @@ class DonutSwinEncoder(nn.Module):
                     input_resolution=(grid_size[0] // (2**i_layer), grid_size[1] // (2**i_layer)),
                     depth=config.depths[i_layer],
                     num_heads=config.num_heads[i_layer],
-                    num_kv_heads=config.num_kv_heads[i_layer],
+                    num_kv_heads=config.num_kv_heads[i_layer] if hasattr(config, "num_kv_heads") else config.num_heads[i_layer],
                     drop_path=dpr[sum(config.depths[:i_layer]) : sum(config.depths[: i_layer + 1])],
                     downsample=DonutSwinPatchMerging if (i_layer < self.num_layers - 1) else None,
                 )
@@ -785,7 +797,9 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
         self.embeddings = DonutSwinEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = DonutSwinEncoder(config, self.embeddings.patch_grid)
 
-        self.position_embeddings = nn.Parameter(torch.zeros(1, config.encoder_length, config.hidden_size))
+        self.position_embeddings = None
+        if hasattr(config, "encoder_length"):
+            self.position_embeddings = nn.Parameter(torch.zeros(1, config.encoder_length, config.hidden_size))
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -845,7 +859,9 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
         )
 
         last_hidden_state = encoder_outputs[0]
-        last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
+
+        if self.position_embeddings:
+            last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
 
         return DonutSwinModelOutput(
             last_hidden_state=last_hidden_state,

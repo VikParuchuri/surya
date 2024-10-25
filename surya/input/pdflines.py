@@ -4,10 +4,12 @@ from surya.postprocessing.text import sort_text_lines
 from surya.schema import PolygonBox
 import numpy as np
 
+from surya.settings import settings
 
-def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list) -> list:
+
+def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list, flatten_pdf: bool = settings.FLATTEN_PDF) -> list:
     assert len(page_idxs) == len(out_sizes)
-    pages_text = dictionary_output(filepath, sort=False, page_range=page_idxs, keep_chars=True)
+    pages_text = dictionary_output(filepath, sort=False, page_range=page_idxs, keep_chars=True, flatten_pdf=flatten_pdf)
     for full_text, out_size in zip(pages_text, out_sizes):
         width = full_text["width"]
         height = full_text["height"]

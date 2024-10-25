@@ -1,9 +1,8 @@
-import contextlib
-import multiprocessing
-import threading
+import torch
+torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
+
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from queue import Queue
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -12,7 +11,6 @@ from surya.detection import batch_detection
 from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
 from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
 from surya.settings import settings
-from surya.util.parallel import FakeParallel
 
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[np.ndarray], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:

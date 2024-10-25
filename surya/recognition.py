@@ -1,5 +1,7 @@
-from typing import List
 import torch
+torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
+
+from typing import List
 from PIL import Image
 
 from surya.postprocessing.math.latex import fix_math, contains_math
