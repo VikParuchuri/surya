@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     IMAGE_DPI_HIGHRES: int = 192  # Used for OCR, table rec
     IN_STREAMLIT: bool = False # Whether we're running in streamlit
     ENABLE_EFFICIENT_ATTENTION: bool = True # Usually keep True, but if you get CUDA errors, setting to False can help
+    ENABLE_CUDNN_ATTENTION: bool = False # Causes issues on many systems when set to True, but can improve performance on certain GPUs
+    FLATTEN_PDF: bool = True # Flatten PDFs by merging form fields before processing
 
     # Paths
     DATA_DIR: str = "data"

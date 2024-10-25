@@ -13,10 +13,11 @@ from surya.model.recognition.encoder import DonutSwinModel
 from surya.model.recognition.decoder import SuryaOCRDecoder, SuryaOCRTextEncoder
 from surya.settings import settings
 
+torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)
 if not settings.ENABLE_EFFICIENT_ATTENTION:
     print("Efficient attention is disabled. This will use significantly more VRAM.")
     torch.backends.cuda.enable_mem_efficient_sdp(False)
-    torch.backends.cuda.enable_flash_sdp(True)
+    torch.backends.cuda.enable_flash_sdp(False)
     torch.backends.cuda.enable_math_sdp(True)
 
 

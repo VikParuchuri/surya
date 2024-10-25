@@ -1,10 +1,6 @@
-import contextlib
-import multiprocessing
-import threading
-from queue import Queue
+import torch
 from typing import List, Tuple, Generator
 
-import torch
 import numpy as np
 from PIL import Image
 
@@ -17,8 +13,6 @@ from surya.settings import settings
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 import torch.nn.functional as F
-
-from surya.util.parallel import FakeParallel
 
 
 def get_batch_size():
@@ -126,7 +120,6 @@ def parallel_get_lines(preds, orig_sizes):
         image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
     )
     return result
-
 
 
 def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:

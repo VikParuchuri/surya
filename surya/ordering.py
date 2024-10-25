@@ -3,7 +3,6 @@ from typing import List
 import torch
 from PIL import Image
 
-from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
 from surya.schema import OrderBox, OrderResult
 from surya.settings import settings

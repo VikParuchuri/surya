@@ -1,5 +1,5 @@
-from typing import List
 import torch
+from typing import List
 from PIL import Image
 
 from surya.postprocessing.math.latex import fix_math, contains_math
