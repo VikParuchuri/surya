@@ -1,6 +1,4 @@
 import torch
-torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
-
 from typing import List, Tuple, Generator
 
 import numpy as np

@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
+from torch.nn.attention import sdpa_kernel, SDPBackend
 from transformers.utils import ModelOutput
 
 from surya.model.table_rec.config import SuryaTableRecDecoderConfig, SuryaTableRecTextEncoderConfig

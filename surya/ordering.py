@@ -1,12 +1,8 @@
-import torch
-torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
-
 from copy import deepcopy
 from typing import List
 import torch
 from PIL import Image
 
-from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
 from surya.schema import OrderBox, OrderResult
 from surya.settings import settings

@@ -860,7 +860,7 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
 
         last_hidden_state = encoder_outputs[0]
 
-        if self.position_embeddings:
+        if self.position_embeddings is not None:
             last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
 
         return DonutSwinModelOutput(

@@ -1,7 +1,7 @@
 from typing import Optional, Union, Tuple, List
 
 import torch
-from transformers import VisionEncoderDecoderModel, GenerationMixin, PreTrainedModel, PretrainedConfig
+from transformers import GenerationMixin, PreTrainedModel, PretrainedConfig
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 
 from surya.model.ordering.decoder import MBartOrder
@@ -13,8 +13,7 @@ class OrderVisionEncoderDecoderModel(PreTrainedModel, GenerationMixin):
         self,
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
-        decoder: Optional[PreTrainedModel] = None,
-        text_encoder: Optional[PreTrainedModel] = None,
+        decoder: Optional[PreTrainedModel] = None
     ):
         # initialize with config
         # make sure input & output embeddings is not tied

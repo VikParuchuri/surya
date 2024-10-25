@@ -1,6 +1,3 @@
-import torch
-torch.backends.cuda.cudnn_sdp_enabled = False # Issues with cudnn attention on non-H100s
-
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional

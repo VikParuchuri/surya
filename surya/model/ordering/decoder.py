@@ -1,6 +1,8 @@
+import contextlib
 import copy
 from typing import Optional, List, Union, Tuple
 
+from torch.nn.attention import sdpa_kernel, SDPBackend
 from transformers import MBartForCausalLM, MBartConfig, GenerationMixin, PreTrainedModel
 from torch import nn
 from transformers.activations import ACT2FN
@@ -153,14 +155,16 @@ class MBartGQAttention(nn.Module):
         key_states = repeat_kv(key_states, self.num_kv_groups)
         value_states = repeat_kv(value_states, self.num_kv_groups)
 
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_states,
-            key_states,
-            value_states,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout if self.training else 0.0,
-            scale=1, # Original attn implementation had no scaling
-        )
+        # Very slow when used with efficient attention.  Maybe due to odd scaling + attn mask in self?  Haven't investigated.
+        with sdpa_kernel([SDPBackend.MATH]) if not is_cross_attention else contextlib.nullcontext():
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query_states,
+                key_states,
+                value_states,
+                attn_mask=attention_mask,
+                dropout_p=self.dropout if self.training else 0.0,
+                scale=1, # Original attn implementation here had no scaling
+            )
 
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(bsz, tgt_len, self.embed_dim)
