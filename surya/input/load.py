@@ -13,7 +13,7 @@ def get_name_from_path(path):
     return os.path.basename(path).split(".")[0]
 
 
-def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
+def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False, flatten_pdf=settings.FLATTEN_PDF):
     doc = open_pdf(pdf_path)
     last_page = len(doc)
 
@@ -34,7 +34,8 @@ def load_pdf(pdf_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, 
         text_lines = get_page_text_lines(
             pdf_path,
             page_indices,
-            [i.size for i in images]
+            [i.size for i in images],
+            flatten_pdf=flatten_pdf
         )
     doc.close()
     names = [get_name_from_path(pdf_path) for _ in page_indices]
@@ -47,15 +48,15 @@ def load_image(image_path):
     return [image], [name], [None]
 
 
-def load_from_file(input_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
+def load_from_file(input_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False, flatten_pdf=settings.FLATTEN_PDF):
     input_type = filetype.guess(input_path)
     if input_type.extension == "pdf":
-        return load_pdf(input_path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines)
+        return load_pdf(input_path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines, flatten_pdf=flatten_pdf)
     else:
         return load_image(input_path)
 
 
-def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False):
+def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False, flatten_pdf=settings.FLATTEN_PDF):
     image_paths = [os.path.join(folder_path, image_name) for image_name in os.listdir(folder_path) if not image_name.startswith(".")]
     image_paths = [ip for ip in image_paths if not os.path.isdir(ip)]
 
@@ -65,7 +66,7 @@ def load_from_folder(folder_path, max_pages=None, start_page=None, dpi=settings.
     for path in image_paths:
         extension = filetype.guess(path)
         if extension and extension.extension == "pdf":
-            image, name, text_line = load_pdf(path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines)
+            image, name, text_line = load_pdf(path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines, flatten_pdf=flatten_pdf)
             images.extend(image)
             names.extend(name)
             text_lines.extend(text_line)

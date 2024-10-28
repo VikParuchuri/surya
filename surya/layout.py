@@ -1,3 +1,4 @@
+import contextlib
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Optional
@@ -8,6 +9,7 @@ from surya.detection import batch_detection
 from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
 from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
 from surya.settings import settings
+from surya.util.parallel import FakeParallel
 
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[np.ndarray], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
@@ -190,40 +192,26 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
     layout_generator = batch_detection(images, model, processor, batch_size=batch_size)
     id2label = model.config.id2label
 
-    results = []
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-
-    if parallelize:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            img_idx = 0
-            for preds, orig_sizes in layout_generator:
-                futures = []
-                for pred, orig_size in zip(preds, orig_sizes):
-                    future = executor.submit(
-                        parallel_get_regions,
-                        pred,
-                        orig_size,
-                        id2label,
-                        detection_results[img_idx] if detection_results else None
-                    )
-
-                    futures.append(future)
-                    img_idx += 1
-
-                for future in futures:
-                    results.append(future.result())
-    else:
+    postprocessing_futures = []
+    with ProcessPoolExecutor(
+            max_workers=max_workers,
+    ) if parallelize else contextlib.nullcontext() as executor:
         img_idx = 0
+        func = executor.submit if parallelize else FakeParallel
+
         for preds, orig_sizes in layout_generator:
             for pred, orig_size in zip(preds, orig_sizes):
-                results.append(parallel_get_regions(
+                future = func(
+                    parallel_get_regions,
                     pred,
                     orig_size,
                     id2label,
                     detection_results[img_idx] if detection_results else None
-                ))
+                )
 
+                postprocessing_futures.append(future)
                 img_idx += 1
 
-    return results
+    return [future.result() for future in postprocessing_futures]
