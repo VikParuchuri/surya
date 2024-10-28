@@ -1,3 +1,5 @@
+import time
+
 import pypdfium2 # Causes a warning if not the top import
 import argparse
 import copy
@@ -34,11 +36,14 @@ def main():
         images, names, _ = load_from_file(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
+    start = time.time()
     line_predictions = batch_text_detection(images, det_model, det_processor)
 
     layout_predictions = batch_layout_detection(images, model, processor, line_predictions)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
+    if args.debug:
+        print(f"Layout took {time.time() - start} seconds")
 
     if args.images:
         for idx, (image, layout_pred, name) in enumerate(zip(images, layout_predictions, names)):
