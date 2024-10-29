@@ -1,6 +1,6 @@
 import contextlib
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from PIL import Image
 import numpy as np
@@ -9,7 +9,7 @@ from surya.detection import batch_detection
 from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
 from surya.schema import LayoutResult, LayoutBox, TextDetectionResult
 from surya.settings import settings
-from surya.util.parallel import FakeParallel
+from surya.util.parallel import FakeExecutor
 
 
 def get_regions_from_detection_result(detection_result: TextDetectionResult, heatmaps: List[np.ndarray], orig_size, id2label, segment_assignment, vertical_line_width=20) -> List[LayoutBox]:
@@ -167,7 +167,7 @@ def get_regions(heatmaps: List[np.ndarray], orig_size, id2label, segment_assignm
     return bboxes
 
 
-def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None) -> LayoutResult:
+def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None, include_heatmaps=True, include_segmentation_map=True) -> LayoutResult:
     logits = np.stack(heatmaps, axis=0)
     segment_assignment = logits.argmax(axis=0)
     if detection_results is not None:
@@ -176,39 +176,40 @@ def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detect
     else:
         bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
 
-    segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
+    segmentation_img = None
+    if include_segmentation_map:
+        segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
 
     result = LayoutResult(
         bboxes=bboxes,
         segmentation_map=segmentation_img,
-        heatmaps=heatmaps,
+        heatmaps=heatmaps if include_heatmaps else None,
         image_bbox=[0, 0, orig_size[0], orig_size[1]]
     )
 
     return result
 
 
-def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None) -> List[LayoutResult]:
+def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_heatmaps=True, include_segmentation_map=True) -> List[LayoutResult]:
     layout_generator = batch_detection(images, model, processor, batch_size=batch_size)
     id2label = model.config.id2label
 
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
     postprocessing_futures = []
-    with ProcessPoolExecutor(
-            max_workers=max_workers,
-    ) if parallelize else contextlib.nullcontext() as executor:
+    executor = ThreadPoolExecutor if parallelize else FakeExecutor
+    with executor(max_workers=max_workers) as e:
         img_idx = 0
-        func = executor.submit if parallelize else FakeParallel
-
         for preds, orig_sizes in layout_generator:
             for pred, orig_size in zip(preds, orig_sizes):
-                future = func(
+                future = e.submit(
                     parallel_get_regions,
                     pred,
                     orig_size,
                     id2label,
-                    detection_results[img_idx] if detection_results else None
+                    detection_results[img_idx] if detection_results else None,
+                    include_heatmaps,
+                    include_segmentation_map
                 )
 
                 postprocessing_futures.append(future)

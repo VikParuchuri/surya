@@ -13,10 +13,10 @@ from surya.input.processing import prepare_image_detection, split_image, get_tot
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import torch.nn.functional as F
 
-from surya.util.parallel import FakeParallel
+from surya.util.parallel import FakeExecutor
 
 
 def get_batch_size():
@@ -107,10 +107,13 @@ def batch_detection(
         yield preds, [orig_sizes[j] for j in batch_image_idxs]
 
 
-def parallel_get_lines(preds, orig_sizes):
+def parallel_get_lines(preds, orig_sizes, include_heatmap=True, include_affinity_map=True):
     heatmap, affinity_map = preds
-    heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
-    aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
+    heat_img, aff_img = None, None
+    if include_heatmap:
+        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
+    if include_affinity_map:    
+        aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
     affinity_size = list(reversed(affinity_map.shape))
     heatmap_size = list(reversed(heatmap.shape))
     bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
@@ -126,19 +129,16 @@ def parallel_get_lines(preds, orig_sizes):
     return result
 
 
-def batch_text_detection(images: List, model, processor, batch_size=None) -> List[TextDetectionResult]:
+def batch_text_detection(images: List, model, processor, batch_size=None, include_heatmap=True, include_affinity_map=True) -> List[TextDetectionResult]:
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
     postprocessing_futures = []
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
     parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-
-    with ProcessPoolExecutor(
-            max_workers=max_workers,
-    ) if parallelize else contextlib.nullcontext() as executor:
-        func = executor.submit if parallelize else FakeParallel
+    executor = ThreadPoolExecutor if parallelize else FakeExecutor
+    with executor(max_workers=max_workers) as e:
         for preds, orig_sizes in detection_generator:
             for pred, orig_size in zip(preds, orig_sizes):
-                postprocessing_futures.append(func(parallel_get_lines, pred, orig_size))
+                postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_heatmap, include_affinity_map))
 
     return [future.result() for future in postprocessing_futures]

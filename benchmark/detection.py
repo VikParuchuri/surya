@@ -55,7 +55,7 @@ def main():
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
     start = time.time()
-    predictions = batch_text_detection(images, model, processor)
+    predictions = batch_text_detection(images, model, processor, include_heatmap=False, include_affinity_map=False)
     surya_time = time.time() - start
 
     if args.tesseract:
