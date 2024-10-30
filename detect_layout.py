@@ -39,7 +39,7 @@ def main():
     start = time.time()
     line_predictions = batch_text_detection(images, det_model, det_processor)
 
-    layout_predictions = batch_layout_detection(images, model, processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, model, processor, line_predictions, include_maps=args.debug)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
     if args.debug:
