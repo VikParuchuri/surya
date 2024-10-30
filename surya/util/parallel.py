@@ -1,16 +1,19 @@
-from concurrent.futures import Future, Executor
-
-class FakeFuture(Future):
+class FakeFuture:
     def __init__(self, func, *args, **kwargs):
-        super().__init__()
-        try:
-            self.set_result(func(*args, **kwargs))
-        except Exception as e:
-            self.set_exception(e)
+        self._result = func(*args, **kwargs)
 
-class FakeExecutor(Executor):
-    def __init__(self, max_workers=None):
-        super().__init__()
+    def result(self):
+        return self._result
+
+class FakeExecutor:
+    def __init__(self, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *excinfo):
+        pass
 
     def submit(self, fn, *args, **kwargs):
         return FakeFuture(fn, *args, **kwargs)
