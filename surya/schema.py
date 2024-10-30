@@ -163,14 +163,15 @@ class OCRResult(BaseModel):
 class TextDetectionResult(BaseModel):
     bboxes: List[PolygonBox]
     vertical_lines: List[ColumnLine]
-    heatmap: Any
-    affinity_map: Any
+    heatmap: Optional[Any]
+    affinity_map: Optional[Any]
     image_bbox: List[float]
 
 
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
-    segmentation_map: Any
+    segmentation_map: Optional[Any]
+    heatmaps: Optional[Any]
     image_bbox: List[float]
 
 

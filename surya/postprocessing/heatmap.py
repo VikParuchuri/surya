@@ -105,8 +105,7 @@ def detect_boxes(linemap, text_threshold, low_text):
         ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
         mask = (labels[sy:ey, sx:ex] == k)
-        selected_linemap = linemap[sy:ey, sx:ex][mask]
-        line_max = np.max(selected_linemap)
+        line_max = np.max(linemap[sy:ey, sx:ex][mask])
 
         # thresholding
         if line_max < text_threshold:
@@ -115,13 +114,13 @@ def detect_boxes(linemap, text_threshold, low_text):
         segmap = mask.astype(np.uint8)
 
         ksize = buffer + niter
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(ksize, ksize))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ksize, ksize))
         selected_segmap = cv2.dilate(segmap, kernel)
 
         # make box
-        indices = np.nonzero(selected_segmap)
-        x_inds = indices[1] + sx
-        y_inds = indices[0] + sy
+        y_inds, x_inds = np.nonzero(selected_segmap)
+        x_inds += sx
+        y_inds += sy
         np_contours = np.column_stack((x_inds, y_inds))
         rectangle = cv2.minAreaRect(np_contours)
         box = cv2.boxPoints(rectangle)
@@ -130,19 +129,17 @@ def detect_boxes(linemap, text_threshold, low_text):
         w, h = np.linalg.norm(box[0] - box[1]), np.linalg.norm(box[1] - box[2])
         box_ratio = max(w, h) / (min(w, h) + 1e-5)
         if abs(1 - box_ratio) <= 0.1:
-            l, r = min(np_contours[:, 0]), max(np_contours[:, 0])
-            t, b = min(np_contours[:, 1]), max(np_contours[:, 1])
+            l, r = np_contours[:, 0].min(), np_contours[:, 0].max()
+            t, b = np_contours[:, 1].min(), np_contours[:, 1].max()
             box = np.array([[l, t], [r, t], [r, b], [l, b]], dtype=np.float32)
 
         # make clock-wise order
         startidx = box.sum(axis=1).argmin()
-        box = np.roll(box, 4-startidx, 0)
-        box = np.array(box)
+        box = np.roll(box, 4 - startidx, 0)
 
-        confidence = line_max
         max_confidence = max(max_confidence, line_max)
 
-        confidences.append(confidence)
+        confidences.append(line_max)
         det.append(box)
 
     if max_confidence > 0:
@@ -150,19 +147,18 @@ def detect_boxes(linemap, text_threshold, low_text):
     return det, confidences
 
 
-def get_detected_boxes(textmap, text_threshold=None,  low_text=None) -> List[PolygonBox]:
+def get_detected_boxes(textmap, text_threshold=None, low_text=None) -> List[PolygonBox]:
     if text_threshold is None:
         text_threshold = settings.DETECTOR_TEXT_THRESHOLD
-
     if low_text is None:
         low_text = settings.DETECTOR_BLANK_THRESHOLD
 
-    textmap = textmap.copy()
-    textmap = textmap.astype(np.float32)
+    if textmap.dtype != np.float32:
+        textmap = textmap.astype(np.float32)
+
     boxes, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    boxes = [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
-    return boxes
+    return [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
 
 
 def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None, low_text=None) -> List[PolygonBox]:
@@ -175,8 +171,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
     return bboxes
 
 
-
-def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: str | list='red'):
+def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: str | list = 'red'):
     polys = []
     for bb in bboxes:
         # Clockwise polygon
@@ -191,7 +186,7 @@ def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: 
     return draw_polys_on_image(polys, image, labels, label_font_size=label_font_size, color=color)
 
 
-def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10, color: str | list='red'):
+def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offset=1, label_font_size=10, color: str | list = 'red'):
     draw = ImageDraw.Draw(image)
     font_path = get_font_path()
     label_font = ImageFont.truetype(font_path, label_font_size)
@@ -223,5 +218,3 @@ def draw_polys_on_image(corners, image, labels=None, box_padding=-1, label_offse
             )
 
     return image
-
-
