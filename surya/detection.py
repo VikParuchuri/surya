@@ -107,12 +107,11 @@ def batch_detection(
         yield preds, [orig_sizes[j] for j in batch_image_idxs]
 
 
-def parallel_get_lines(preds, orig_sizes, include_heatmap=True, include_affinity_map=True):
+def parallel_get_lines(preds, orig_sizes, include_maps=True):
     heatmap, affinity_map = preds
     heat_img, aff_img = None, None
-    if include_heatmap:
+    if include_maps:
         heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
-    if include_affinity_map:    
         aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
     affinity_size = list(reversed(affinity_map.shape))
     heatmap_size = list(reversed(heatmap.shape))
@@ -129,7 +128,7 @@ def parallel_get_lines(preds, orig_sizes, include_heatmap=True, include_affinity
     return result
 
 
-def batch_text_detection(images: List, model, processor, batch_size=None, include_heatmap=True, include_affinity_map=True) -> List[TextDetectionResult]:
+def batch_text_detection(images: List, model, processor, batch_size=None, include_maps=True) -> List[TextDetectionResult]:
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
     postprocessing_futures = []
@@ -139,6 +138,6 @@ def batch_text_detection(images: List, model, processor, batch_size=None, includ
     with executor(max_workers=max_workers) as e:
         for preds, orig_sizes in detection_generator:
             for pred, orig_size in zip(preds, orig_sizes):
-                postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_heatmap, include_affinity_map))
+                postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
 
     return [future.result() for future in postprocessing_futures]

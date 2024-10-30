@@ -167,7 +167,7 @@ def get_regions(heatmaps: List[np.ndarray], orig_size, id2label, segment_assignm
     return bboxes
 
 
-def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None, include_heatmaps=True, include_segmentation_map=True) -> LayoutResult:
+def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None, include_maps=True) -> LayoutResult:
     logits = np.stack(heatmaps, axis=0)
     segment_assignment = logits.argmax(axis=0)
     if detection_results is not None:
@@ -177,20 +177,20 @@ def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detect
         bboxes = get_regions(heatmaps, orig_size, id2label, segment_assignment)
 
     segmentation_img = None
-    if include_segmentation_map:
+    if include_maps:
         segmentation_img = Image.fromarray(segment_assignment.astype(np.uint8))
 
     result = LayoutResult(
         bboxes=bboxes,
         segmentation_map=segmentation_img,
-        heatmaps=heatmaps if include_heatmaps else None,
+        heatmaps=heatmaps if include_maps else None,
         image_bbox=[0, 0, orig_size[0], orig_size[1]]
     )
 
     return result
 
 
-def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_heatmaps=True, include_segmentation_map=True) -> List[LayoutResult]:
+def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_maps=True) -> List[LayoutResult]:
     layout_generator = batch_detection(images, model, processor, batch_size=batch_size)
     id2label = model.config.id2label
 
@@ -208,8 +208,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
                     orig_size,
                     id2label,
                     detection_results[img_idx] if detection_results else None,
-                    include_heatmaps,
-                    include_segmentation_map
+                    include_maps
                 )
 
                 postprocessing_futures.append(future)

@@ -171,6 +171,7 @@ class TextDetectionResult(BaseModel):
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
     segmentation_map: Optional[Any]
+    heatmaps: Optional[Any]
     image_bbox: List[float]
 
 
