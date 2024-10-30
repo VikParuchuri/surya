@@ -35,7 +35,7 @@ def main():
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     start = time.time()
-    predictions = batch_text_detection(images, model, processor)
+    predictions = batch_text_detection(images, model, processor, include_maps=args.debug)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
     end = time.time()

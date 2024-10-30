@@ -107,7 +107,7 @@ def batch_detection(
         yield preds, [orig_sizes[j] for j in batch_image_idxs]
 
 
-def parallel_get_lines(preds, orig_sizes, include_maps=True):
+def parallel_get_lines(preds, orig_sizes, include_maps=False):
     heatmap, affinity_map = preds
     heat_img, aff_img = None, None
     if include_maps:
@@ -128,7 +128,7 @@ def parallel_get_lines(preds, orig_sizes, include_maps=True):
     return result
 
 
-def batch_text_detection(images: List, model, processor, batch_size=None, include_maps=True) -> List[TextDetectionResult]:
+def batch_text_detection(images: List, model, processor, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
     detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
 
     postprocessing_futures = []

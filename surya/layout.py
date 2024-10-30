@@ -167,7 +167,7 @@ def get_regions(heatmaps: List[np.ndarray], orig_size, id2label, segment_assignm
     return bboxes
 
 
-def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None, include_maps=True) -> LayoutResult:
+def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detection_results=None, include_maps=False) -> LayoutResult:
     logits = np.stack(heatmaps, axis=0)
     segment_assignment = logits.argmax(axis=0)
     if detection_results is not None:
@@ -190,7 +190,7 @@ def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detect
     return result
 
 
-def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_maps=True) -> List[LayoutResult]:
+def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_maps=False) -> List[LayoutResult]:
     layout_generator = batch_detection(images, model, processor, batch_size=batch_size)
     id2label = model.config.id2label
 
