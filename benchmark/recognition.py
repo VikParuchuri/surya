@@ -12,11 +12,21 @@ from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
 from surya.languages import CODE_TO_LANGUAGE
 from surya.benchmark.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
+from surya.model.recognition.model import OCREncoderDecoderModel
 import os
 import datasets
 import json
 import time
 from tabulate import tabulate
+from typing import cast
+import torchao
+import pickle
+import torch_tensorrt
+from torch_tensorrt.dynamo._defaults import TIMING_CACHE_PATH
+from torchao.quantization.autoquant import AUTOQUANT_CACHE
+from torchao.quantization import DEFAULT_INT4_AUTOQUANT_CLASS_LIST
+
+torch.set_float32_matmul_precision('high')
 
 KEY_LANGUAGES = ["Chinese", "Spanish", "English", "Arabic", "Hindi", "Bengali", "Russian", "Japanese"]
 
@@ -33,17 +43,17 @@ def main():
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
-    if args.compile:
-        assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
+    # if args.compile:
+    #     assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
 
-    rec_model = load_recognition_model()
+    rec_model = cast(OCREncoderDecoderModel, load_recognition_model())
     rec_processor = load_recognition_processor()
 
     split = "train"
     if args.max:
         split = f"train[:{args.max}]"
 
-    dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split)
+    dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split).select(range(50))
 
     if args.langs:
         langs = args.langs.split(",")
@@ -66,12 +76,44 @@ def main():
     n_list = [None] * len(images)
 
     if args.compile:
-        torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 64
-        rec_model.decoder.model = torch.compile(rec_model.decoder.model)
-        # Run through one batch to compile the model
-        run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
+        # with open("quantization-cache.pkl", "rb") as f:
+        #     AUTOQUANT_CACHE.update(pickle.load(f))
 
+        # torch.jit.set_fusion_strategy([("STATIC", 0)])
+
+        rec_model.encoder = torch.compile(rec_model.encoder)
+        rec_model.decoder = torch.compile(rec_model.decoder)
+        rec_model.text_encoder = torch.compile(rec_model.text_encoder)
+        
+        # encoder embeddings
+        # rec_model.encoder.embeddings = torch.quantization.quantize_dynamic(rec_model.encoder.embeddings, dtype=torch.qint8)
+        # rec_model.encoder.embeddings =  torch.compile(rec_model.encoder.embeddings, backend="torch_tensorrt", dynamic=False, options={"max_workspace_size": 1 << 30})
+        # rec_model.encoder.embeddings = torchao.autoquant(rec_model.encoder.embeddings)
+        # rec_model.encoder.embeddings = torch.jit.optimize_for_inference(torch.jit.script(rec_model.encoder.embeddings))
+        
+        # encoder swin encoder
+        # rec_model.encoder.encoder =  torch.compile(rec_model.encoder.encoder, backend="torch_tensorrt", dynamic=False, options={"max_workspace_size": 1 << 30})
+        # rec_model.encoder.encoder = torchao.autoquant(rec_model.encoder.encoder)
+        # rec_model.encoder.encoder = torch.jit.optimize_for_inference(torch.jit.script(rec_model.encoder.encoder))
+
+        # rec_model.decoder = torch.compile(rec_model.decoder, backend="tensorrt", dynamic=False) 
+        # decoder
+        # rec_model.decoder.model = torch.compile(rec_model.decoder.model)
+        # rec_model.decoder.model = torchao.autoquant(rec_model.decoder.model)
+        
+        # text encoder
+        # rec_model.text_encoder.model = torch.compile(rec_model.text_encoder.model)
+        # rec_model.text_encoder.model = torchao.autoquant(rec_model.text_encoder.model)
+        
+        
+    # Run through one batch to compile the model
+    torch.compiler.cudagraph_mark_step_begin()
+    run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
+
+    # if args.compile:
+    #     with open("quantization-cache.pkl", "wb") as f:
+    #         pickle.dump(AUTOQUANT_CACHE, f)
+        
     start = time.time()
     predictions_by_image = run_recognition(images, lang_list if args.specify_language else n_list, rec_model, rec_processor, bboxes=bboxes)
     surya_time = time.time() - start

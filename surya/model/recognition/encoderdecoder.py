@@ -37,9 +37,9 @@ class OCREncoderDecoderModel(PreTrainedModel):
         if text_encoder is None:
             text_encoder = SuryaOCRTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)
 
-        self.encoder = encoder
-        self.decoder = decoder
-        self.text_encoder = text_encoder
+        self.encoder: DonutSwinModel = encoder
+        self.decoder: SuryaOCRDecoder = decoder
+        self.text_encoder: SuryaOCRTextEncoder = text_encoder
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
