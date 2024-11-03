@@ -2,20 +2,26 @@ import argparse
 import collections
 import copy
 import json
+import os
+import pickle
+import time
+
+import datasets
+import torch
+import torch_tensorrt
+import torchao
+from tabulate import tabulate
+from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
-from surya.model.detection.model import load_model, load_processor
-from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.detection import batch_text_detection
+from surya.input.processing import convert_if_not_rgb, get_page_images, open_pdf
+from surya.model.detection.model import EfficientViTForSemanticSegmentation, load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
-import os
-import time
-from tabulate import tabulate
-import datasets
 
 
 def main():
@@ -25,9 +31,11 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
+    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
+    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
+    model: EfficientViTForSemanticSegmentation = load_model()
     processor = load_processor()
 
     if args.pdf_path is not None:
@@ -45,7 +53,7 @@ def main():
     else:
         pathname = "det_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
-        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]").select(range(50))
         images = list(dataset["image"])
         images = convert_if_not_rgb(images)
         correct_boxes = []
@@ -53,6 +61,25 @@ def main():
             img_size = images[i].size
             # 1000,1000 is bbox size for doclaynet
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
+
+    if args.compile:
+        torch._dynamo.config.cache_size_limit = 64
+
+        model = torch.compile(model)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "rb") as f:
+            AUTOQUANT_CACHE.update(pickle.load(f))
+        
+        model = torchao.autoquant(model)
+
+    # Run through one batch to compile the model
+    torch.compiler.cudagraph_mark_step_begin()
+    batch_text_detection(images[:1], model, processor)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "wb") as f:
+            pickle.dump(AUTOQUANT_CACHE, f)
 
     start = time.time()
     predictions = batch_text_detection(images, model, processor)

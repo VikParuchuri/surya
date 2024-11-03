@@ -29,6 +29,7 @@ def get_batch_size():
             batch_size = 36
     return batch_size
 
+fake_image = Image.new("RGB", (1200, 1200), color=(255, 255, 255))
 
 def batch_detection(
     images: List,
@@ -72,6 +73,9 @@ def batch_detection(
             split_index.extend([image_idx] * len(image_parts))
             split_heights.extend(split_height)
 
+        if len(image_splits) < batch_size:
+            pad_size = batch_size - len(image_splits)
+            image_splits += [fake_image] * pad_size
         image_splits = [prepare_image_detection(image, processor) for image in image_splits]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
