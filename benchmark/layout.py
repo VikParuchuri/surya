@@ -129,10 +129,10 @@ def main():
     table_headers = ["Layout Type", ] + metric_types
     table_data = []
     for layout_type in layout_types:
-        table_data.append([layout_type, ] + [f"{mean_metrics[layout_type][m]:.2f}" for m in metric_types])
+        table_data.append([layout_type, ] + [f"{mean_metrics[layout_type][m]:.5f}" for m in metric_types])
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
-    print(f"Took {surya_time / len(images):.2f} seconds per image, and {surya_time:.1f} seconds total.")
+    print(f"Took {surya_time / len(images):.5f} seconds per image, and {surya_time:.5f} seconds total.")
     print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.")
     print(f"Wrote results to {result_path}")
 
