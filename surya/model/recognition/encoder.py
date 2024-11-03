@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 import torch
-import torch_tensorrt
 import torch.utils.checkpoint
 from torch import nn
 
