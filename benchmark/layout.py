@@ -2,38 +2,65 @@ import argparse
 import collections
 import copy
 import json
+import os
+import pickle
+import time
+
+import datasets
+import torch
+import torch_tensorrt
+import torchao
+from tabulate import tabulate
+from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
 from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model, load_processor
-from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
+from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
-from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
-from surya.postprocessing.util import rescale_bbox
+from surya.model.detection.model import (EfficientViTForSemanticSegmentation,
+                                         load_model, load_processor)
+from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
-import os
-import time
-from tabulate import tabulate
-import datasets
 
+torch.set_float32_matmul_precision('high')
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark surya layout model.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
+    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
+    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    model: EfficientViTForSemanticSegmentation = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model()
+    det_model: EfficientViTForSemanticSegmentation = load_model()
     det_processor = load_processor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
-    dataset = datasets.load_dataset(settings.LAYOUT_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+    dataset = datasets.load_dataset(settings.LAYOUT_BENCH_DATASET_NAME, split=f"train[:{args.max}]").select(range(50))
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
+
+    if args.compile:
+        torch._dynamo.config.cache_size_limit = 64
+        model = torch.compile(model)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "rb") as f:
+            AUTOQUANT_CACHE.update(pickle.load(f))
+        model = torchao.autoquant(model)
+
+    # Run through one batch to compile the model
+    torch.compiler.cudagraph_mark_step_begin()
+    line_prediction = batch_text_detection(images[:1], det_model, det_processor)
+    batch_layout_detection(images[:1], model, processor, line_prediction)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "wb") as f:
+            pickle.dump(AUTOQUANT_CACHE, f)
 
     start = time.time()
     line_predictions = batch_text_detection(images, det_model, det_processor)

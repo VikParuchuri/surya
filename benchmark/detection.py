@@ -23,6 +23,7 @@ from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 
+torch.set_float32_matmul_precision('high')
 
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
