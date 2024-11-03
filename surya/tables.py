@@ -18,7 +18,7 @@ def get_batch_size():
         if settings.TORCH_DEVICE_MODEL == "mps":
             batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 64
+            batch_size = 128
     return batch_size
 
 
@@ -38,6 +38,7 @@ def sort_bboxes(bboxes, tolerance=1):
 
     return sorted_page_blocks
 
+fake_image = Image.new("RGB", (640, 640), color=(255, 255, 255))
 
 def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
@@ -53,6 +54,12 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
+
+        if len(batch_images) < batch_size:
+            pad_size = batch_size - len(batch_images)
+            batch_images += [fake_image] * pad_size
+            batch_list_bboxes += [[[0, 0, 0, 0]]] * pad_size
+
         current_batch_size = len(batch_images)
 
         orig_sizes = [image.size for image in batch_images]

@@ -2,29 +2,37 @@ import argparse
 import collections
 import copy
 import json
-
-from tabulate import tabulate
-
-from surya.input.processing import convert_if_not_rgb
-from surya.model.table_rec.model import load_model
-from surya.model.table_rec.processor import load_processor
-from surya.tables import batch_table_recognition, get_batch_size
-from surya.settings import settings
-from surya.benchmark.metrics import rank_accuracy, penalized_iou_score
-from surya.benchmark.tatr import load_tatr, batch_inference_tatr
 import os
+import pickle
 import time
-import datasets
 
+import datasets
+import torch
+import torch_tensorrt
+import torchao
+from tabulate import tabulate
+from torchao.quantization.autoquant import AUTOQUANT_CACHE
+
+from surya.benchmark.metrics import penalized_iou_score, rank_accuracy
+from surya.benchmark.tatr import batch_inference_tatr, load_tatr
+from surya.input.processing import convert_if_not_rgb
+from surya.model.table_rec.model import TableRecEncoderDecoderModel, load_model
+from surya.model.table_rec.processor import load_processor
+from surya.settings import settings
+from surya.tables import batch_table_recognition, get_batch_size
+
+torch.set_float32_matmul_precision('high')
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark surya table recognition model.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
     parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
+    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
+    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
+    model: TableRecEncoderDecoderModel = load_model()
     processor = load_processor()
 
     pathname = "table_rec_bench"
@@ -32,13 +40,37 @@ def main():
     split = "train"
     if args.max is not None:
         split = f"train[:{args.max}]"
-    dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split)
+    dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split).select(range(1000))
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
     bboxes = list(dataset["bboxes"])
+    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
+
+    if args.compile:
+        torch._dynamo.config.cache_size_limit = 64
+
+        model.encoder = torch.compile(model.encoder)
+        model.decoder = torch.compile(model.decoder)
+        model.text_encoder = torch.compile(model.text_encoder)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "rb") as f:
+            AUTOQUANT_CACHE.update(pickle.load(f))
+        
+        model.encoder = torchao.autoquant(model.encoder)
+        model.decoder = torchao.autoquant(model.decoder)
+        model.text_encoder = torchao.autoquant(model.text_encoder)
+
+
+    # Run through one batch to compile the model
+    torch.compiler.cudagraph_mark_step_begin()
+    batch_table_recognition(images[:1], bboxes[:1], model, processor)
+
+    if args.quantize:
+        with open("quantization-cache.pkl", "wb") as f:
+            pickle.dump(AUTOQUANT_CACHE, f)
 
     start = time.time()
-    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
     table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)
     surya_time = time.time() - start
 
@@ -124,13 +156,13 @@ def main():
 
     table = [
         ["Model", "Row Intersection", "Col Intersection", "Time Per Image"],
-        ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.2f}",
-         f"{surya_time / len(images):.2f}"],
+        ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.5f}",
+         f"{surya_time / len(images):.5f}"],
     ]
 
     if args.tatr:
-        table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.2f}",
-         f"{tatr_time / len(images):.2f}"])
+        table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.5f}",
+         f"{tatr_time / len(images):.5f}"])
 
     print(tabulate(table, headers="firstrow", tablefmt="github"))
 
