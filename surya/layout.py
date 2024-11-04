@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from PIL import Image
 import numpy as np
+import copy
 
 from surya.detection import batch_detection
 from surya.postprocessing.heatmap import keep_largest_boxes, get_and_clean_boxes, get_detected_boxes
@@ -207,7 +208,7 @@ def batch_layout_detection(images: List, model, processor, detection_results: Op
                     pred,
                     orig_size,
                     id2label,
-                    detection_results[img_idx] if detection_results else None,
+                    copy.deepcopy(detection_results[img_idx]) if detection_results else None,
                     include_maps
                 )
 
