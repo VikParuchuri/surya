@@ -1,19 +1,19 @@
 import argparse
 import collections
 import json
-import os
-import time
 
-import datasets
 from tabulate import tabulate
 
-from surya.benchmark.metrics import penalized_iou_score
-from surya.benchmark.tatr import batch_inference_tatr, load_tatr
 from surya.input.processing import convert_if_not_rgb
 from surya.model.table_rec.model import load_model
 from surya.model.table_rec.processor import load_processor
-from surya.settings import settings
 from surya.tables import batch_table_recognition
+from surya.settings import settings
+from surya.benchmark.metrics import penalized_iou_score
+from surya.benchmark.tatr import load_tatr, batch_inference_tatr
+import os
+import time
+import datasets
 
 
 def main():

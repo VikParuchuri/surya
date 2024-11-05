@@ -2,19 +2,18 @@ import argparse
 import collections
 import copy
 import json
-import os
-import time
-
-import datasets
-from tabulate import tabulate
 
 from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
+from surya.model.detection.model import load_model, load_processor
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
+import os
+import time
+from tabulate import tabulate
+import datasets
 
 
 def main():
