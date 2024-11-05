@@ -5,8 +5,10 @@ from surya.model.table_rec.decoder import SuryaTableRecDecoder, SuryaTableRecTex
 from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
 from surya.settings import settings
 
+import torch
 
-def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> TableRecEncoderDecoderModel:
+
+def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE, compile=False) -> TableRecEncoderDecoderModel:
 
     config = SuryaTableRecConfig.from_pretrained(checkpoint)
     decoder_config = config.decoder
@@ -29,6 +31,14 @@ def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.T
 
     model = model.to(device)
     model = model.eval()
+    
+    if compile:
+        assert settings.TABLE_REC_STATIC_CACHE, "You must set TABLE_REC_STATIC_CACHE to compile the model."
+        torch.set_float32_matmul_precision('high')
+        torch._dynamo.config.cache_size_limit = 64
+        model.encoder = torch.compile(model.encoder)
+        model.decoder = torch.compile(model.decoder)
+        model.text_encoder = torch.compile(model.text_encoder)
 
     print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

@@ -1,14 +1,10 @@
 import argparse
 import json
 import os
-import pickle
 import time
 from collections import defaultdict
-from typing import cast
 
 import datasets
-import torch
-import torch_tensorrt
 from tabulate import tabulate
 
 from benchmark.scoring import overlap_score
@@ -20,8 +16,6 @@ from surya.model.recognition.processor import load_processor as load_recognition
 from surya.ocr import run_recognition
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
-
-torch.set_float32_matmul_precision('high')
 
 KEY_LANGUAGES = ["Chinese", "Spanish", "English", "Arabic", "Hindi", "Bengali", "Russian", "Japanese"]
 
@@ -38,10 +32,7 @@ def main():
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
-    if args.compile:
-        assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
-
-    rec_model = load_recognition_model()
+    rec_model = load_recognition_model(compile=args.compile)
     rec_processor = load_recognition_processor()
 
     split = "train"
@@ -71,15 +62,8 @@ def main():
     n_list = [None] * len(images)
 
     if args.compile:
-        torch._dynamo.config.cache_size_limit = 64
-
-        rec_model.encoder = torch.compile(rec_model.encoder)
-        rec_model.decoder = torch.compile(rec_model.decoder)
-        rec_model.text_encoder = torch.compile(rec_model.text_encoder)
-
-    # Run through one batch to compile the model
-    torch.compiler.cudagraph_mark_step_begin()
-    run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
+        # Run through one batch to compile the model
+        run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 
     start = time.time()
     predictions_by_image = run_recognition(images, lang_list if args.specify_language else n_list, rec_model, rec_processor, bboxes=bboxes)

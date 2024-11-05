@@ -1,14 +1,10 @@
 import argparse
 import collections
-import copy
 import json
 import os
-import pickle
 import time
 
 import datasets
-import torch
-import torch_tensorrt
 from tabulate import tabulate
 
 from surya.benchmark.metrics import penalized_iou_score
@@ -17,9 +13,7 @@ from surya.input.processing import convert_if_not_rgb
 from surya.model.table_rec.model import load_model
 from surya.model.table_rec.processor import load_processor
 from surya.settings import settings
-from surya.tables import batch_table_recognition, get_batch_size
-
-torch.set_float32_matmul_precision('high')
+from surya.tables import batch_table_recognition
 
 
 def main():
@@ -30,7 +24,7 @@ def main():
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
+    model = load_model(compile=args.compile)
     processor = load_processor()
 
     pathname = "table_rec_bench"
@@ -45,15 +39,8 @@ def main():
     bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
 
     if args.compile:
-        torch._dynamo.config.cache_size_limit = 64
-
-        model.encoder = torch.compile(model.encoder)
-        model.decoder = torch.compile(model.decoder)
-        model.text_encoder = torch.compile(model.text_encoder)
-
-    # Run through one batch to compile the model
-    torch.compiler.cudagraph_mark_step_begin()
-    batch_table_recognition(images[:1], bboxes[:1], model, processor)
+        # Run through one batch to compile the model
+        batch_table_recognition(images[:1], bboxes[:1], model, processor)
 
     start = time.time()
     table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)

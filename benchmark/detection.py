@@ -3,12 +3,9 @@ import collections
 import copy
 import json
 import os
-import pickle
 import time
 
 import datasets
-import torch
-import torch_tensorrt
 from tabulate import tabulate
 
 from surya.benchmark.bbox import get_pdf_lines
@@ -21,8 +18,6 @@ from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
 
-torch.set_float32_matmul_precision('high')
-
 
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
@@ -34,7 +29,7 @@ def main():
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
+    model = load_model(compile=args.compile)
     processor = load_processor()
 
     if args.pdf_path is not None:
@@ -62,13 +57,8 @@ def main():
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
     if args.compile:
-        torch._dynamo.config.cache_size_limit = 64
-
-        model = torch.compile(model)
-
-    # Run through one batch to compile the model
-    torch.compiler.cudagraph_mark_step_begin()
-    batch_text_detection(images[:1], model, processor)
+        # Run through one batch to compile the model
+        batch_text_detection(images[:1], model, processor)
 
     start = time.time()
     predictions = batch_text_detection(images, model, processor)

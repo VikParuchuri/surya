@@ -4318,54 +4318,6 @@ doc = ["reno", "sphinx"]
 test = ["pytest", "tornado (>=4.5)", "typeguard"]
 
 [[package]]
-name = "tensorrt-cu12"
-version = "10.3.0"
-description = "A high performance deep learning inference library"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "tensorrt-cu12-10.3.0.tar.gz", hash = "sha256:14f0e60f40713a658f9634fffb1a5a665c35feb019be48b2f49e25ac12d2d084"},
-]
-
-[package.extras]
-numpy = ["numpy"]
-
-[[package]]
-name = "tensorrt-cu12-bindings"
-version = "10.3.0"
-description = "A high performance deep learning inference library"
-optional = false
-python-versions = "*"
-files = [
-    {file = "tensorrt_cu12_bindings-10.3.0-cp310-none-manylinux_2_17_x86_64.whl", hash = "sha256:1d6e4cf08ef1f54f6fd44a33cf6b253050af2fc6e9a1d92e40e1436a1d858eb0"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp310-none-win_amd64.whl", hash = "sha256:39aa0c2ee3dd20757f9d53e759092868a18155552a32f785844c5f66a2a6d3ba"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp311-none-manylinux_2_17_x86_64.whl", hash = "sha256:59ace22d7f2ca1e9dcde2cb0cb5916912cb3cd5a9d72dd7852be0160d9b3a0ee"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp311-none-win_amd64.whl", hash = "sha256:5582ece5578572a4a7aa3db69ba4cb2e2dcf1127570de1c334bba0182baec604"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp312-none-manylinux_2_17_x86_64.whl", hash = "sha256:f5c2582aeaa7f5628d2c4d4148a701ebe97be78f7ff3b46a617f0ee0cb5460f2"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp312-none-win_amd64.whl", hash = "sha256:c4e8f2f5c7dd23b671fc6a456dbd3a0cdd13bca54d280f1b340dfcb8f73190f7"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp38-none-manylinux_2_17_x86_64.whl", hash = "sha256:e157eb8b71fe172420d85519f7e7cf929c4975ca385df3a5506464cad73dac72"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp38-none-win_amd64.whl", hash = "sha256:e2209f4692f535bb367a193f5a0a028b8702504385280d58cb63f4a386b12a05"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp39-none-manylinux_2_17_x86_64.whl", hash = "sha256:db337018c55043502eff993f165160044b4bebb935f01c8f8f93e4ee71481dc4"},
-    {file = "tensorrt_cu12_bindings-10.3.0-cp39-none-win_amd64.whl", hash = "sha256:ad629fd7a4c483af500d4ec4863f1a048f0fd0893b5449b48c832a11be7c72f6"},
-]
-
-[package.extras]
-numpy = ["numpy"]
-
-[[package]]
-name = "tensorrt-cu12-libs"
-version = "10.3.0"
-description = "TensorRT Libraries"
-optional = false
-python-versions = "*"
-files = [
-    {file = "tensorrt_cu12_libs-10.3.0.tar.gz", hash = "sha256:d2f36838e2762b5ceb62f614157ba4764de2fa1f4fe5661c6cfc07e07e6e71da"},
-]
-
-[package.dependencies]
-nvidia-cuda-runtime-cu12 = "*"
-
-[[package]]
 name = "terminado"
 version = "0.18.1"
 description = "Tornado websocket backend for the Xterm.js Javascript terminal emulator library."
@@ -4606,38 +4558,6 @@ typing-extensions = ">=4.8.0"
 [package.extras]
 opt-einsum = ["opt-einsum (>=3.3)"]
 optree = ["optree (>=0.12.0)"]
-
-[[package]]
-name = "torch-tensorrt"
-version = "2.5.0"
-description = "Torch-TensorRT is a package which allows users to automatically compile PyTorch and TorchScript modules to TensorRT while remaining in PyTorch"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "torch_tensorrt-2.5.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_34_x86_64.whl", hash = "sha256:3b059b1e024e1ae0f37ab2da32f15077e53a18294368f74c8d92ebc24fb1c5f3"},
-    {file = "torch_tensorrt-2.5.0-cp310-cp310-win_amd64.whl", hash = "sha256:fca7984736394cfc4685460cdde5a3b0e697bd23a7aeba91e66daa0619c91170"},
-    {file = "torch_tensorrt-2.5.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_34_x86_64.whl", hash = "sha256:1b408fe06ba0e855cb6a142a2ac27815ab45f43c05d3e3880c8602429cddb27f"},
-    {file = "torch_tensorrt-2.5.0-cp311-cp311-win_amd64.whl", hash = "sha256:a893b933d6432c8a07ce0bf9b394c5b200ba3d620250bef4d89b0a734189cd84"},
-    {file = "torch_tensorrt-2.5.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_34_x86_64.whl", hash = "sha256:d317a244284f5fe2f57b78ec895ff6da0b23ff7b208a5f3001a61a77f3b9ec35"},
-    {file = "torch_tensorrt-2.5.0-cp312-cp312-win_amd64.whl", hash = "sha256:b9e7ee1510e644106e9fb6f194a227a1394d8646fea049e5dba572f99dc38b24"},
-    {file = "torch_tensorrt-2.5.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_34_x86_64.whl", hash = "sha256:6076cac847127bfea3cce3bb50aa7a7465510c0bf3eb085bd49dbfde1998471a"},
-    {file = "torch_tensorrt-2.5.0-cp39-cp39-win_amd64.whl", hash = "sha256:b0a2ed43fb047ed7294c3213c52367676d6581483f6fae045d744ce2549d7781"},
-]
-
-[package.dependencies]
-numpy = "*"
-packaging = ">=23"
-tensorrt-cu12 = "10.3.0"
-tensorrt-cu12-bindings = "10.3.0"
-tensorrt-cu12-libs = "10.3.0"
-torch = ">=2.5.0,<2.6.0"
-typing-extensions = ">=4.7.0"
-
-[package.extras]
-jupyter = ["rich[jupyter] (>=13.7.1)"]
-monitoring-tools = ["rich (>=13.7.1)"]
-quantization = ["nvidia-modelopt[deploy,hf,torch] (>=0.17.0,<0.18.0)"]
-torchvision = ["torchvision (>=0.20.0,<0.21.0)"]
 
 [[package]]
 name = "torchvision"
@@ -5220,4 +5140,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "6bb2d689e548e9d7ced158ae5c7ed185212a59406ba2b0ae019c080da666b5f1"
+content-hash = "f76dd93f3e6327e9648c0975c2297849714ebab2749f6f37517ff7a6ae140628"

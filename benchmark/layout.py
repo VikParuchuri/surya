@@ -3,12 +3,9 @@ import collections
 import copy
 import json
 import os
-import pickle
 import time
 
 import datasets
-import torch
-import torch_tensorrt
 from tabulate import tabulate
 
 from surya.benchmark.metrics import precision_recall
@@ -19,8 +16,6 @@ from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 
-torch.set_float32_matmul_precision('high')
-
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark surya layout model.")
@@ -30,9 +25,9 @@ def main():
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, compile=args.compile)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model()
+    det_model = load_model(compile=args.compile)
     det_processor = load_processor()
 
     pathname = "layout_bench"
@@ -42,13 +37,8 @@ def main():
     images = convert_if_not_rgb(images)
 
     if args.compile:
-        torch._dynamo.config.cache_size_limit = 64
-        model = torch.compile(model)
-
-    # Run through one batch to compile the model
-    torch.compiler.cudagraph_mark_step_begin()
-    line_prediction = batch_text_detection(images[:1], det_model, det_processor)
-    batch_layout_detection(images[:1], model, processor, line_prediction)
+        line_prediction = batch_text_detection(images[:1], det_model, det_processor)
+        batch_layout_detection(images[:1], model, processor, line_prediction)
 
     start = time.time()
     line_predictions = batch_text_detection(images, det_model, det_processor)
