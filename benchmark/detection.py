@@ -54,7 +54,7 @@ def main():
     else:
         pathname = "det_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
-        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]").select(range(50))
+        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
         images = list(dataset["image"])
         images = convert_if_not_rgb(images)
         correct_boxes = []

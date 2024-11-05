@@ -593,7 +593,7 @@ class DonutSwinLayer(nn.Module):
         layer_output = self.intermediate(layer_output)
         layer_output = hidden_states + self.output(layer_output)
 
-        layer_outputs = (layer_output,)
+        layer_outputs = (layer_output, attention_outputs[1]) if output_attentions else (layer_output,)
         return layer_outputs
 
 
@@ -635,8 +635,10 @@ class DonutSwinStage(nn.Module):
     ) -> Tuple[torch.Tensor]:
         height, width = input_dimensions
         for i, layer_module in enumerate(self.blocks):
+            layer_head_mask = head_mask[i] if head_mask is not None else None
+
             layer_outputs = layer_module(
-                hidden_states, input_dimensions, None, output_attentions, always_partition
+                hidden_states, input_dimensions, layer_head_mask, output_attentions, always_partition
             )
 
             hidden_states = layer_outputs[0]
@@ -651,6 +653,8 @@ class DonutSwinStage(nn.Module):
 
         stage_outputs = (hidden_states, hidden_states_before_downsampling, output_dimensions)
 
+        if output_attentions:
+            stage_outputs += layer_outputs[1:]
         return stage_outputs
 
 
@@ -677,6 +681,8 @@ class DonutSwinEncoder(nn.Module):
             ]
         )
 
+        self.gradient_checkpointing = False
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -688,21 +694,70 @@ class DonutSwinEncoder(nn.Module):
         always_partition: Optional[bool] = False,
         return_dict: Optional[bool] = True,
     ) -> Union[Tuple, DonutSwinEncoderOutput]:
+        all_hidden_states = () if output_hidden_states else None
+        all_reshaped_hidden_states = () if output_hidden_states else None
+        all_self_attentions = () if output_attentions else None
+
+        if output_hidden_states:
+            batch_size, _, hidden_size = hidden_states.shape
+            # rearrange b (h w) c -> b c h w
+            reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
+            reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
+            all_hidden_states += (hidden_states,)
+            all_reshaped_hidden_states += (reshaped_hidden_state,)
+
         for i, layer_module in enumerate(self.layers):
-            layer_outputs = layer_module(
-                hidden_states, input_dimensions, None, output_attentions, always_partition
-            )
+            layer_head_mask = head_mask[i] if head_mask is not None else None
+
+            if self.gradient_checkpointing and self.training:
+                layer_outputs = self._gradient_checkpointing_func(
+                    layer_module.__call__,
+                    hidden_states,
+                    input_dimensions,
+                    layer_head_mask,
+                    output_attentions,
+                    always_partition,
+                )
+            else:
+                layer_outputs = layer_module(
+                    hidden_states, input_dimensions, layer_head_mask, output_attentions, always_partition
+                )
 
             hidden_states = layer_outputs[0]
+            hidden_states_before_downsampling = layer_outputs[1]
             output_dimensions = layer_outputs[2]
 
             input_dimensions = (output_dimensions[-2], output_dimensions[-1])
 
+            if output_hidden_states and output_hidden_states_before_downsampling:
+                batch_size, _, hidden_size = hidden_states_before_downsampling.shape
+                # rearrange b (h w) c -> b c h w
+                # here we use the original (not downsampled) height and width
+                reshaped_hidden_state = hidden_states_before_downsampling.view(
+                    batch_size, *(output_dimensions[0], output_dimensions[1]), hidden_size
+                )
+                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
+                all_hidden_states += (hidden_states_before_downsampling,)
+                all_reshaped_hidden_states += (reshaped_hidden_state,)
+            elif output_hidden_states and not output_hidden_states_before_downsampling:
+                batch_size, _, hidden_size = hidden_states.shape
+                # rearrange b (h w) c -> b c h w
+                reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
+                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
+                all_hidden_states += (hidden_states,)
+                all_reshaped_hidden_states += (reshaped_hidden_state,)
+
+            if output_attentions:
+                all_self_attentions += layer_outputs[3:]
+
+        if not return_dict:
+            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
+
         return DonutSwinEncoderOutput(
             last_hidden_state=hidden_states,
-            hidden_states=None,
-            attentions=None,
-            reshaped_hidden_states=None,
+            hidden_states=all_hidden_states,
+            attentions=all_self_attentions,
+            reshaped_hidden_states=all_reshaped_hidden_states,
         )
 
 

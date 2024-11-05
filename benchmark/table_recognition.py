@@ -40,7 +40,7 @@ def main():
     split = "train"
     if args.max is not None:
         split = f"train[:{args.max}]"
-    dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split).select(range(1000))
+    dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split)
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
     bboxes = list(dataset["bboxes"])
