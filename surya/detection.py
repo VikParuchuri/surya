@@ -84,7 +84,7 @@ def batch_detection(
         image_splits = [prepare_image_detection(image, processor) for image in image_splits]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
-        if settings.DETECTOR_STATIC_CACHE or settings.LAYOUT_STATIC_CACHE:
+        if settings.DETECTOR_STATIC_CACHE:
             batch = pad_to_batch_size(batch, batch_size)
 
         with torch.inference_mode():
