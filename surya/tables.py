@@ -92,7 +92,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
             batch_bboxes = pad_to_batch_size(batch_bboxes, batch_size)
             batch_bbox_mask = pad_to_batch_size(batch_bbox_mask, batch_size)
             batch_bbox_counts = pad_to_batch_size(batch_bbox_counts, batch_size)
-            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         max_tokens = min(batch_bbox_counts[:, 1].max().item(), settings.TABLE_REC_MAX_BOXES)
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
@@ -114,6 +113,10 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
             ).hidden_states
             del encoder_hidden_states
 
+            if settings.TABLE_REC_STATIC_CACHE:
+                text_encoder_hidden_states = pad_to_batch_size(text_encoder_hidden_states, batch_size)
+                batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
+
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
 
@@ -128,8 +131,8 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 )
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
-                box_logits = return_dict["bbox_logits"][:current_batch_size][:, -1, :].detach()
-                rowcol_logits = return_dict["class_logits"][:current_batch_size][:, -1, :].detach()
+                box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
+                rowcol_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
                 rowcol_preds = torch.argmax(rowcol_logits, dim=-1)
                 box_preds = torch.argmax(box_logits, dim=-1)
