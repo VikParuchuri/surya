@@ -284,7 +284,7 @@ class SuryaTableRecDecoderSdpaAttention(nn.Module):
         self.key_states = None
 
         if settings.TABLE_REC_STATIC_CACHE:
-            cache_shape = (batch_size, self.num_key_value_heads, settings.RECOGNITION_MAX_TOKENS, self.head_dim)
+            cache_shape = (batch_size, self.num_key_value_heads, settings.TABLE_REC_MAX_BOXES, self.head_dim)
             self.value_states = torch.zeros(cache_shape, dtype=dtype, device=device)
             self.key_states = torch.zeros(cache_shape, dtype=dtype, device=device)
 
