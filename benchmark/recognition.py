@@ -43,8 +43,8 @@ def main():
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
-    # if args.compile:
-    #     assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
+    if args.compile:
+        assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
 
     rec_model = cast(OCREncoderDecoderModel, load_recognition_model())
     rec_processor = load_recognition_processor()
@@ -53,7 +53,7 @@ def main():
     if args.max:
         split = f"train[:{args.max}]"
 
-    dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split).select(range(50))
+    dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split)
 
     if args.langs:
         langs = args.langs.split(",")

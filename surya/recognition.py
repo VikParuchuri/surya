@@ -31,8 +31,6 @@ def pad_to_batch_size(tensor, batch_size):
 
     return F.pad(tensor, padding, mode='constant', value=0)
 
-fake_image = Image.new("RGB", (settings.RECOGNITION_IMAGE_SIZE["width"], settings.RECOGNITION_IMAGE_SIZE["height"]), color=(255, 255, 255))
-
 def batch_recognition(images: List[Image.Image], languages: List[List[str] | None], model, processor, batch_size=None):
     assert all(isinstance(image, Image.Image) for image in images)
     assert len(images) == len(languages)
@@ -53,15 +51,8 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
     confidences = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
         batch_images = images[i:i+batch_size]
-        batch_images = [image.convert("RGB") for image in batch_images]
         real_batch_size = len(batch_images)
-        if real_batch_size < batch_size:
-            pad_size = batch_size - real_batch_size
-            batch_images += [fake_image] * pad_size
-            batch_langs = languages[i:i+real_batch_size] + [None] * pad_size
-        else:
-            batch_langs = languages[i:i+batch_size]
-        assert len(batch_images) == batch_size
+        batch_langs = languages[i:i+real_batch_size]
         has_math = [lang and "_math" in lang for lang in batch_langs]
 
         processed_batch = processor(text=[""] * len(batch_images), images=batch_images, langs=batch_langs)
@@ -80,6 +71,9 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
 
         batch_pixel_values = torch.tensor(np.stack(batch_pixel_values, axis=0), dtype=model.dtype, device=model.device)
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
+        if settings.RECOGNITION_STATIC_CACHE:
+            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
+            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         token_count = 0
         inference_token_count = batch_decoder_input.shape[-1]
@@ -177,8 +171,8 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
         # Convert sequence_scores to list for the current batch
         batch_confidences = sequence_scores.tolist()
 
-        # Exclude fake image results
-        if real_batch_size < batch_size:
+        # Exclude padded results if real batch size is less than batch size
+        if settings.RECOGNITION_STATIC_CACHE:
             detected_text = detected_text[:real_batch_size]
             batch_confidences = batch_confidences[:real_batch_size]
 
