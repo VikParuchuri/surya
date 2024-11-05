@@ -18,7 +18,7 @@ from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
 from surya.detection import batch_text_detection
 from surya.input.processing import convert_if_not_rgb, get_page_images, open_pdf
-from surya.model.detection.model import EfficientViTForSemanticSegmentation, load_model, load_processor
+from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model: EfficientViTForSemanticSegmentation = load_model()
+    model = load_model()
     processor = load_processor()
 
     if args.pdf_path is not None:

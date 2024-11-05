@@ -6,7 +6,7 @@ from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> TableRecEncoderDecoderModel:
 
     config = SuryaTableRecConfig.from_pretrained(checkpoint)
     decoder_config = config.decoder

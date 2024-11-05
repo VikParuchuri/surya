@@ -21,7 +21,7 @@ if not settings.ENABLE_EFFICIENT_ATTENTION:
     torch.backends.cuda.enable_math_sdp(True)
 
 
-def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> OCREncoderDecoderModel:
 
     config = SuryaOCRConfig.from_pretrained(checkpoint)
     decoder_config = config.decoder

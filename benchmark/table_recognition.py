@@ -13,10 +13,10 @@ import torchao
 from tabulate import tabulate
 from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
-from surya.benchmark.metrics import penalized_iou_score, rank_accuracy
+from surya.benchmark.metrics import penalized_iou_score
 from surya.benchmark.tatr import batch_inference_tatr, load_tatr
 from surya.input.processing import convert_if_not_rgb
-from surya.model.table_rec.model import TableRecEncoderDecoderModel, load_model
+from surya.model.table_rec.model import load_model
 from surya.model.table_rec.processor import load_processor
 from surya.settings import settings
 from surya.tables import batch_table_recognition, get_batch_size
@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model: TableRecEncoderDecoderModel = load_model()
+    model = load_model()
     processor = load_processor()
 
     pathname = "table_rec_bench"

@@ -17,10 +17,8 @@ from benchmark.scoring import overlap_score
 from surya.benchmark.tesseract import TESS_CODE_TO_LANGUAGE, surya_lang_to_tesseract, tesseract_ocr_parallel
 from surya.input.processing import convert_if_not_rgb
 from surya.languages import CODE_TO_LANGUAGE
-from surya.model.recognition.model import OCREncoderDecoderModel
 from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import \
-    load_processor as load_recognition_processor
+from surya.model.recognition.processor import load_processor as load_recognition_processor
 from surya.ocr import run_recognition
 from surya.postprocessing.text import draw_text_on_image
 from surya.settings import settings
@@ -46,7 +44,7 @@ def main():
     if args.compile:
         assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
 
-    rec_model = cast(OCREncoderDecoderModel, load_recognition_model())
+    rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
 
     split = "train"

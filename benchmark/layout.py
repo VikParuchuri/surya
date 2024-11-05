@@ -17,8 +17,7 @@ from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import (EfficientViTForSemanticSegmentation,
-                                         load_model, load_processor)
+from surya.model.detection.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 
@@ -33,9 +32,9 @@ def main():
     parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
-    model: EfficientViTForSemanticSegmentation = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model: EfficientViTForSemanticSegmentation = load_model()
+    det_model = load_model()
     det_processor = load_processor()
 
     pathname = "layout_bench"
