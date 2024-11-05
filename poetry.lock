@@ -2480,10 +2480,10 @@ files = [
 
 [package.dependencies]
 numpy = [
+    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+    {version = ">=1.23.5", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
     {version = ">=1.21.4", markers = "python_version >= \"3.10\" and platform_system == \"Darwin\" and python_version < \"3.11\""},
     {version = ">=1.21.2", markers = "platform_system != \"Darwin\" and python_version >= \"3.10\" and python_version < \"3.11\""},
-    {version = ">=1.23.5", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
-    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
 ]
 
 [[package]]
@@ -2561,9 +2561,9 @@ files = [
 
 [package.dependencies]
 numpy = [
-    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
-    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -3074,8 +3074,8 @@ files = [
 annotated-types = ">=0.6.0"
 pydantic-core = "2.23.4"
 typing-extensions = [
-    {version = ">=4.6.1", markers = "python_version < \"3.13\""},
     {version = ">=4.12.2", markers = "python_version >= \"3.13\""},
+    {version = ">=4.6.1", markers = "python_version < \"3.13\""},
 ]
 
 [package.extras]
@@ -4640,26 +4640,6 @@ quantization = ["nvidia-modelopt[deploy,hf,torch] (>=0.17.0,<0.18.0)"]
 torchvision = ["torchvision (>=0.20.0,<0.21.0)"]
 
 [[package]]
-name = "torchao"
-version = "0.6.1"
-description = "Package for applying ao techniques to GPU models"
-optional = false
-python-versions = "*"
-files = [
-    {file = "torchao-0.6.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:51823f7c993e53fbf36a0e365cfd8ab2493a1d419783b663ef0954d763cea4a3"},
-    {file = "torchao-0.6.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:188fb6fb63595fe90f7b96aff93536e8e0bd131c8cfa39258da790d52affd805"},
-    {file = "torchao-0.6.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ec420a0853314044f1895b0f513c37001ea2f685f5db5b4b375a4aa56342bd7e"},
-    {file = "torchao-0.6.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ffe91fa7e4a5a9dda226f25d54519f28c0b56344801a01df8859cbc91821650f"},
-    {file = "torchao-0.6.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:11382b798686eae4260278187ea882ba03a977376a4eee16fca3e73a0f7654ba"},
-    {file = "torchao-0.6.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c9522762a7da4cd1fc92b3fcc4c1283b0443c287829077ee7854bbeca00f38b8"},
-    {file = "torchao-0.6.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:b5125488512c600de629bd6c81171a85fbd834bab979c4286da5e3c23363939b"},
-    {file = "torchao-0.6.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8dfef48b95a790127cd467e4ea823a1c85702ff197f405e59bb860c4b85324c7"},
-]
-
-[package.extras]
-dev = ["bitsandbytes", "expecttest", "fire", "hypothesis", "matplotlib", "ninja", "packaging", "pandas", "parameterized", "pre-commit", "pytest (==7.4.0)", "ruff (==0.6.8)", "sentencepiece", "tabulate", "transformers", "unittest-xml-reporting"]
-
-[[package]]
 name = "torchvision"
 version = "0.20.1"
 description = "image and video datasets and models for torch deep learning"
@@ -5240,4 +5220,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "2780881e5cf06321b11ee58bd07160db04d3560db7bd9c3011c11da55c6986ef"
+content-hash = "6bb2d689e548e9d7ced158ae5c7ed185212a59406ba2b0ae019c080da666b5f1"

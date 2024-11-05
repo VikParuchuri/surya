@@ -9,9 +9,7 @@ from typing import cast
 import datasets
 import torch
 import torch_tensorrt
-import torchao
 from tabulate import tabulate
-from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
 from benchmark.scoring import overlap_score
 from surya.benchmark.tesseract import TESS_CODE_TO_LANGUAGE, surya_lang_to_tesseract, tesseract_ocr_parallel
@@ -37,7 +35,6 @@ def main():
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
-    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
@@ -80,22 +77,10 @@ def main():
         rec_model.decoder = torch.compile(rec_model.decoder)
         rec_model.text_encoder = torch.compile(rec_model.text_encoder)
 
-    if args.quantize:
-        with open("quantization-cache.pkl", "rb") as f:
-            AUTOQUANT_CACHE.update(pickle.load(f))
-        
-        rec_model.encoder = torchao.autoquant(rec_model.encoder)
-        rec_model.decoder = torchao.autoquant(rec_model.decoder)
-        rec_model.text_encoder = torchao.autoquant(rec_model.text_encoder)
-
     # Run through one batch to compile the model
     torch.compiler.cudagraph_mark_step_begin()
     run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 
-    if args.quantize:
-        with open("quantization-cache.pkl", "wb") as f:
-            pickle.dump(AUTOQUANT_CACHE, f)
-        
     start = time.time()
     predictions_by_image = run_recognition(images, lang_list if args.specify_language else n_list, rec_model, rec_processor, bboxes=bboxes)
     surya_time = time.time() - start

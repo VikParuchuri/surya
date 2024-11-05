@@ -9,9 +9,7 @@ import time
 import datasets
 import torch
 import torch_tensorrt
-import torchao
 from tabulate import tabulate
-from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
 from surya.benchmark.metrics import penalized_iou_score
 from surya.benchmark.tatr import batch_inference_tatr, load_tatr
@@ -23,13 +21,13 @@ from surya.tables import batch_table_recognition, get_batch_size
 
 torch.set_float32_matmul_precision('high')
 
+
 def main():
     parser = argparse.ArgumentParser(description="Benchmark surya table recognition model.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
     parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
-    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
     model = load_model()
@@ -53,22 +51,9 @@ def main():
         model.decoder = torch.compile(model.decoder)
         model.text_encoder = torch.compile(model.text_encoder)
 
-    if args.quantize:
-        with open("quantization-cache.pkl", "rb") as f:
-            AUTOQUANT_CACHE.update(pickle.load(f))
-        
-        model.encoder = torchao.autoquant(model.encoder)
-        model.decoder = torchao.autoquant(model.decoder)
-        model.text_encoder = torchao.autoquant(model.text_encoder)
-
-
     # Run through one batch to compile the model
     torch.compiler.cudagraph_mark_step_begin()
     batch_table_recognition(images[:1], bboxes[:1], model, processor)
-
-    if args.quantize:
-        with open("quantization-cache.pkl", "wb") as f:
-            pickle.dump(AUTOQUANT_CACHE, f)
 
     start = time.time()
     table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)
@@ -149,7 +134,6 @@ def main():
             "mean_col_iou": mean_col_iou,
             "page_metrics": page_metrics
         }
-
 
     with open(os.path.join(result_path, "results.json"), "w+") as f:
         json.dump(out_data, f, indent=4)

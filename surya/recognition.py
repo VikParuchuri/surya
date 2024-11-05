@@ -51,6 +51,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
     confidences = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
         batch_images = images[i:i+batch_size]
+        batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
         real_batch_size = len(batch_images)
         batch_langs = languages[i:i+real_batch_size]
         has_math = [lang and "_math" in lang for lang in batch_langs]

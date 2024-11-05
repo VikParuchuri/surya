@@ -9,9 +9,7 @@ import time
 import datasets
 import torch
 import torch_tensorrt
-import torchao
 from tabulate import tabulate
-from torchao.quantization.autoquant import AUTOQUANT_CACHE
 
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
@@ -25,6 +23,7 @@ from surya.settings import settings
 
 torch.set_float32_matmul_precision('high')
 
+
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
     parser.add_argument("--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None)
@@ -33,7 +32,6 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
     parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
-    parser.add_argument("--quantize", action="store_true", help="Quantize the model.", default=False)
     args = parser.parse_args()
 
     model = load_model()
@@ -68,19 +66,9 @@ def main():
 
         model = torch.compile(model)
 
-    if args.quantize:
-        with open("quantization-cache.pkl", "rb") as f:
-            AUTOQUANT_CACHE.update(pickle.load(f))
-        
-        model = torchao.autoquant(model)
-
     # Run through one batch to compile the model
     torch.compiler.cudagraph_mark_step_begin()
     batch_text_detection(images[:1], model, processor)
-
-    if args.quantize:
-        with open("quantization-cache.pkl", "wb") as f:
-            pickle.dump(AUTOQUANT_CACHE, f)
 
     start = time.time()
     predictions = batch_text_detection(images, model, processor)
