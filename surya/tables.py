@@ -194,4 +194,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
             output_order.append(result)
 
+        del text_encoder_hidden_states
+
     return output_order
