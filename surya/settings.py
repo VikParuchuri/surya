@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
+    DETECTOR_STATIC_CACHE: bool = False
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2"
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
+    LAYOUT_STATIC_CACHE: bool = False
 
     # Ordering
     ORDER_MODEL_CHECKPOINT: str = "vikp/surya_order"
@@ -81,6 +83,7 @@ class Settings(BaseSettings):
     TABLE_REC_MAX_ROWS: int = 384
     TABLE_REC_BATCH_SIZE: Optional[int] = None
     TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
+    TABLE_REC_STATIC_CACHE: bool = False
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None

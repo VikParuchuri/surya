@@ -55,7 +55,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
 
-        if len(batch_images) < batch_size:
+        if settings.TABLE_REC_STATIC_CACHE and len(batch_images) < batch_size:
             pad_size = batch_size - len(batch_images)
             batch_images += [fake_image] * pad_size
             batch_list_bboxes += [[[0, 0, 0, 0]]] * pad_size
@@ -98,6 +98,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 encoder_attention_mask=None,
                 use_cache=False
             ).hidden_states
+            del encoder_hidden_states
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
@@ -134,6 +135,10 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
+
+        if settings.TABLE_REC_STATIC_CACHE:
+            batch_predictions = batch_predictions[:current_batch_size]
+            batch_table_cells = batch_table_cells[:current_batch_size]
 
         for j, (preds, input_cells, orig_size) in enumerate(zip(batch_predictions, batch_table_cells, orig_sizes)):
             img_w, img_h = orig_size
