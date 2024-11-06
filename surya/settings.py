@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
+    LAYOUT_STATIC_CACHE: bool = False
 
     # Ordering
     ORDER_MODEL_CHECKPOINT: str = "vikp/surya_order"

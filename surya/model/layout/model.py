@@ -12,7 +12,7 @@ def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TO
     model = model.eval()
 
     if compile:
-        assert settings.DETECTOR_STATIC_CACHE, "You must set DETECTOR_STATIC_CACHE to compile the model."
+        assert settings.LAYOUT_STATIC_CACHE, "You must set LAYOUT_STATIC_CACHE to compile the model."
         torch.set_float32_matmul_precision('high')
         torch._dynamo.config.cache_size_limit = 64
         model = torch.compile(model)
