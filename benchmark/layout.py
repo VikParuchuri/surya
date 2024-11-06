@@ -24,8 +24,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    model = load_model()
+    processor = load_processor()
     det_model = load_det_model()
     det_processor = load_det_processor()
 

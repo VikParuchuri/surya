@@ -31,7 +31,8 @@ def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TO
 
     if settings.DETECTOR_STATIC_CACHE:
         torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 64
+        torch._dynamo.config.cache_size_limit = 1
+        torch._dynamo.config.suppress_errors = False
 
         print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
         model = torch.compile(model)

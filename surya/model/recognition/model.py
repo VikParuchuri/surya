@@ -47,7 +47,9 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
 
     if settings.RECOGNITION_STATIC_CACHE:
         torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 64
+        torch._dynamo.config.cache_size_limit = 16
+        torch._dynamo.config.suppress_errors = False
+
 
         print(f"Compiling recognition model {checkpoint} on device {device} with dtype {dtype}")
         model.encoder = torch.compile(model.encoder)

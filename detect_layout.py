@@ -9,7 +9,8 @@ from collections import defaultdict
 from surya.detection import batch_text_detection
 from surya.input.load import load_from_folder, load_from_file
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.layout.model import load_model, load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os
@@ -24,10 +25,10 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model()
-    det_processor = load_processor()
+    model = load_model()
+    processor = load_processor()
+    det_model = load_det_model()
+    det_processor = load_det_processor()
 
     if os.path.isdir(args.input_path):
         images, names, _ = load_from_folder(args.input_path, args.max)

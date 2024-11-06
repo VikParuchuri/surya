@@ -34,12 +34,14 @@ def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.T
     
     if settings.TABLE_REC_STATIC_CACHE:
         torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 64
+        torch._dynamo.config.cache_size_limit = 16
+        torch._dynamo.config.suppress_errors = False
+
         
         print(f"Compiling table recognition model {checkpoint} on device {device} with dtype {dtype}")
         model.encoder = torch.compile(model.encoder)
         model.decoder = torch.compile(model.decoder)
         model.text_encoder = torch.compile(model.text_encoder)
 
-    print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
+    print(f"Loaded table recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

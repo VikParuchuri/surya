@@ -230,12 +230,12 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.model.layout.model import load_model, load_processor
 from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
-model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+model = load_model()
+processor = load_processor()
 det_model = load_model()
 det_processor = load_processor()
 
