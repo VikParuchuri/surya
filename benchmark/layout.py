@@ -5,7 +5,8 @@ import json
 
 from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.layout.model import load_model, load_processor
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
 from surya.postprocessing.heatmap import draw_bboxes_on_image
@@ -26,8 +27,8 @@ def main():
 
     model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, compile=args.compile)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model(compile=args.compile)
-    det_processor = load_processor()
+    det_model = load_det_model(compile=args.compile)
+    det_processor = load_det_processor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine

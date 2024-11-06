@@ -773,3 +773,34 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
             logits=logits,
             hidden_states=encoder_hidden_states
         )
+
+
+class EfficientViTForSemanticLayoutSegmentation(EfficientViTPreTrainedModel):
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        self.vit = EfficientVitLarge(config)
+        self.decode_head = DecodeHead(config)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def forward(
+        self,
+        pixel_values: torch.FloatTensor
+    ) -> Union[Tuple, SemanticSegmenterOutput]:
+
+        # Pixel values should be B,C,H,W
+        encoder_hidden_states = self.vit(
+            pixel_values,
+        )
+
+        logits = self.decode_head(encoder_hidden_states)
+
+        # Apply sigmoid to get 0-1 output
+        logits = torch.special.expit(logits)
+
+        return SemanticSegmenterOutput(
+            loss=None,
+            logits=logits,
+            hidden_states=encoder_hidden_states
+        )
