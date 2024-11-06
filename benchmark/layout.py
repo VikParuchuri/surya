@@ -22,12 +22,11 @@ def main():
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
-    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, compile=args.compile)
+    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_det_model(compile=args.compile)
+    det_model = load_det_model()
     det_processor = load_det_processor()
 
     pathname = "layout_bench"
@@ -36,7 +35,7 @@ def main():
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
 
-    if args.compile:
+    if settings.LAYOUT_STATIC_CACHE:
         line_prediction = batch_text_detection(images[:1], det_model, det_processor)
         batch_layout_detection(images[:1], model, processor, line_prediction)
 

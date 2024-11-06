@@ -25,10 +25,9 @@ def main():
     parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=100)
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
-    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model(compile=args.compile)
+    model = load_model()
     processor = load_processor()
 
     if args.pdf_path is not None:
@@ -55,7 +54,7 @@ def main():
             # 1000,1000 is bbox size for doclaynet
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
-    if args.compile:
+    if settings.DETECTOR_STATIC_CACHE:
         # Run through one batch to compile the model
         batch_text_detection(images[:1], model, processor)
 

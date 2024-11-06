@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
-    DETECTOR_STATIC_CACHE: bool = False
+    COMPILE_DETECTOR: bool = False
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2"
@@ -61,13 +61,13 @@ class Settings(BaseSettings):
     RECOGNITION_FONT_DL_BASE: str = "https://github.com/satbyy/go-noto-universal/releases/download/v7.0"
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
-    RECOGNITION_STATIC_CACHE: bool = False # Static cache for torch compile
+    COMPILE_RECOGNITION: bool = False # Static cache for torch compile
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
-    LAYOUT_STATIC_CACHE: bool = False
+    COMPILE_LAYOUT: bool = False
 
     # Ordering
     ORDER_MODEL_CHECKPOINT: str = "vikp/surya_order"
@@ -83,10 +83,28 @@ class Settings(BaseSettings):
     TABLE_REC_MAX_ROWS: int = 384
     TABLE_REC_BATCH_SIZE: Optional[int] = None
     TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
-    TABLE_REC_STATIC_CACHE: bool = False
+    COMPILE_TABLE_REC: bool = False
 
     # Tesseract (for benchmarks only)
     TESSDATA_PREFIX: Optional[str] = None
+    
+    COMPILE_ALL: bool = False
+
+    @computed_field
+    def DETECTOR_STATIC_CACHE(self) -> bool:
+        return self.COMPILE_ALL or self.COMPILE_DETECTOR
+
+    @computed_field
+    def RECOGNITION_STATIC_CACHE(self) -> bool:
+        return self.COMPILE_ALL or self.COMPILE_RECOGNITION
+
+    @computed_field
+    def LAYOUT_STATIC_CACHE(self) -> bool:
+        return self.COMPILE_ALL or self.COMPILE_LAYOUT
+
+    @computed_field
+    def TABLE_REC_STATIC_CACHE(self) -> bool:
+        return self.COMPILE_ALL or self.COMPILE_TABLE_REC
 
     @computed_field
     @property

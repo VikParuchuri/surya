@@ -27,11 +27,10 @@ def main():
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
-    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
-    rec_model = load_recognition_model(compile=args.compile)
+    rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
 
     split = "train"
@@ -60,7 +59,7 @@ def main():
             lang_list.append(l)
     n_list = [None] * len(images)
 
-    if args.compile:
+    if settings.RECOGNITION_STATIC_CACHE:
         # Run through one batch to compile the model
         run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 

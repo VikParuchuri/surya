@@ -21,10 +21,9 @@ def main():
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
     parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
-    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     args = parser.parse_args()
 
-    model = load_model(compile=args.compile)
+    model = load_model()
     processor = load_processor()
 
     pathname = "table_rec_bench"
@@ -38,7 +37,7 @@ def main():
     bboxes = list(dataset["bboxes"])
     bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
 
-    if args.compile:
+    if settings.TABLE_REC_STATIC_CACHE:
         # Run through one batch to compile the model
         batch_table_recognition(images[:1], bboxes[:1], model, processor)
 
