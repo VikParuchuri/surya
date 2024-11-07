@@ -1,4 +1,4 @@
-from surya.model.recognition.encoder import DonutSwinModel
+from surya.model.table_rec.encoder import DonutSwinModel
 from surya.model.table_rec.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig, \
     SuryaTableRecTextEncoderConfig
 from surya.model.table_rec.decoder import SuryaTableRecDecoder, SuryaTableRecTextEncoder
