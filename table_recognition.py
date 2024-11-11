@@ -10,6 +10,7 @@ from surya.input.load import load_from_folder, load_from_file
 from surya.input.pdflines import get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.layout.model import load_model as load_layout_model, load_processor as load_layout_processor
 from surya.model.table_rec.model import load_model as load_model
 from surya.model.table_rec.processor import load_processor
 from surya.tables import batch_table_recognition
@@ -31,8 +32,8 @@ def main():
     model = load_model()
     processor = load_processor()
 
-    layout_model = load_det_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    layout_processor = load_det_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    layout_model = load_layout_model()
+    layout_processor = load_layout_processor()
 
     det_model = load_det_model()
     det_processor = load_det_processor()

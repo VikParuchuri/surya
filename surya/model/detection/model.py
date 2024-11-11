@@ -6,8 +6,9 @@ Original paper at https://arxiv.org/abs/2205.14756
 Code adapted from timm, https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
 Original code (that timm adapted from) at https://github.com/mit-han-lab/efficientvit
 """
+from __future__ import annotations
 
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, List, Any
 from functools import partial
 
 import torch
@@ -22,11 +23,20 @@ from surya.model.detection.processor import SegformerImageProcessor
 from surya.settings import settings
 
 
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> EfficientViTForSemanticSegmentation:
     config = EfficientViTConfig.from_pretrained(checkpoint)
     model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
     model = model.to(device)
     model = model.eval()
+
+    if settings.DETECTOR_STATIC_CACHE:
+        torch.set_float32_matmul_precision('high')
+        torch._dynamo.config.cache_size_limit = 1
+        torch._dynamo.config.suppress_errors = False
+
+        print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
+        model = torch.compile(model)
+
     print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
     return model
 
@@ -36,13 +46,13 @@ def load_processor(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT):
     return processor
 
 
-def val2list(x: list or tuple or any, repeat_time=1):
+def val2list(x: Union[List, Tuple, Any], repeat_time=1):
     if isinstance(x, (list, tuple)):
         return list(x)
     return [x for _ in range(repeat_time)]
 
 
-def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
+def val2tuple(x: Union[List, Tuple, Any], min_len: int = 1, idx_repeat: int = -1):
     # repeat elements if necessary
     x = val2list(x)
     if len(x) > 0:
@@ -51,7 +61,7 @@ def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
     return tuple(x)
 
 
-def get_same_padding(kernel_size: int or tuple[int, ...]) -> int or tuple[int, ...]:
+def get_same_padding(kernel_size: Union[int, Tuple[int, ...]]) -> Union[int, Tuple[int, ...]]:
     if isinstance(kernel_size, tuple):
         return tuple([get_same_padding(ks) for ks in kernel_size])
     else:
@@ -291,7 +301,7 @@ class LiteMLA(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        heads: int or None = None,
+        heads: Union[int, None] = None,
         heads_ratio: float = 1.0,
         dim=8,
         use_bias=False,
@@ -737,6 +747,37 @@ class DecodeHead(EfficientViTPreTrainedModel):
 
 
 class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        self.vit = EfficientVitLarge(config)
+        self.decode_head = DecodeHead(config)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def forward(
+        self,
+        pixel_values: torch.FloatTensor
+    ) -> Union[Tuple, SemanticSegmenterOutput]:
+
+        # Pixel values should be B,C,H,W
+        encoder_hidden_states = self.vit(
+            pixel_values,
+        )
+
+        logits = self.decode_head(encoder_hidden_states)
+
+        # Apply sigmoid to get 0-1 output
+        logits = torch.special.expit(logits)
+
+        return SemanticSegmenterOutput(
+            loss=None,
+            logits=logits,
+            hidden_states=encoder_hidden_states
+        )
+
+
+class EfficientViTForSemanticLayoutSegmentation(EfficientViTPreTrainedModel):
     def __init__(self, config, **kwargs):
         super().__init__(config)
         self.vit = EfficientVitLarge(config)

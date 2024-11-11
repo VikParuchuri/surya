@@ -1,6 +1,5 @@
 import argparse
 import collections
-import copy
 import json
 
 from tabulate import tabulate
@@ -8,9 +7,9 @@ from tabulate import tabulate
 from surya.input.processing import convert_if_not_rgb
 from surya.model.table_rec.model import load_model
 from surya.model.table_rec.processor import load_processor
-from surya.tables import batch_table_recognition, get_batch_size
+from surya.tables import batch_table_recognition
 from surya.settings import settings
-from surya.benchmark.metrics import rank_accuracy, penalized_iou_score
+from surya.benchmark.metrics import penalized_iou_score
 from surya.benchmark.tatr import load_tatr, batch_inference_tatr
 import os
 import time
@@ -36,9 +35,13 @@ def main():
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
     bboxes = list(dataset["bboxes"])
+    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
+
+    if settings.TABLE_REC_STATIC_CACHE:
+        # Run through one batch to compile the model
+        batch_table_recognition(images[:1], bboxes[:1], model, processor)
 
     start = time.time()
-    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
     table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)
     surya_time = time.time() - start
 
@@ -118,19 +121,18 @@ def main():
             "page_metrics": page_metrics
         }
 
-
     with open(os.path.join(result_path, "results.json"), "w+") as f:
         json.dump(out_data, f, indent=4)
 
     table = [
         ["Model", "Row Intersection", "Col Intersection", "Time Per Image"],
-        ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.2f}",
-         f"{surya_time / len(images):.2f}"],
+        ["Surya", f"{out_data['surya']['mean_row_iou']:.2f}", f"{out_data['surya']['mean_col_iou']:.5f}",
+         f"{surya_time / len(images):.5f}"],
     ]
 
     if args.tatr:
-        table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.2f}",
-         f"{tatr_time / len(images):.2f}"])
+        table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.5f}",
+         f"{tatr_time / len(images):.5f}"])
 
     print(tabulate(table, headers="firstrow", tablefmt="github"))
 

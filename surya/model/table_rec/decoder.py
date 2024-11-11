@@ -253,8 +253,8 @@ class SuryaTableRecDecoderSdpaAttention(nn.Module):
         if attention_mask is not None:
             # Mask is batch, head, seq_len, kv_len
             causal_mask = causal_mask[:, :, :, :key_states.shape[-2]]
-            current_cache_position = cache_position[-1].item() if cache_position is not None else None
-            if current_cache_position and settings.RECOGNITION_STATIC_CACHE:
+            current_cache_position = cache_position[-1] if cache_position is not None else torch.tensor(0, dtype=torch.long, device=causal_mask.device)
+            if current_cache_position and settings.TABLE_REC_STATIC_CACHE:
                 # Mask out future cache positions
                 position_mask = torch.ones_like(causal_mask, dtype=torch.bool, device=causal_mask.device)
                 position_mask[:, :, :, :current_cache_position + 1] = False
@@ -283,8 +283,8 @@ class SuryaTableRecDecoderSdpaAttention(nn.Module):
         self.value_states = None
         self.key_states = None
 
-        if settings.RECOGNITION_STATIC_CACHE:
-            cache_shape = (batch_size, self.num_key_value_heads, settings.RECOGNITION_MAX_TOKENS, self.head_dim)
+        if settings.TABLE_REC_STATIC_CACHE:
+            cache_shape = (batch_size, self.num_key_value_heads, settings.TABLE_REC_MAX_BOXES, self.head_dim)
             self.value_states = torch.zeros(cache_shape, dtype=dtype, device=device)
             self.key_states = torch.zeros(cache_shape, dtype=dtype, device=device)
 
@@ -312,7 +312,7 @@ class SuryaTableRecDecoderSdpaAttention(nn.Module):
 
     @torch.no_grad()
     def _update_cache(self, key_states, value_states, **cache_kwargs):
-        if settings.RECOGNITION_STATIC_CACHE:
+        if settings.TABLE_REC_STATIC_CACHE:
             return self._update_static_cache(key_states, value_states, **cache_kwargs)
 
         return self._update_dynamic_cache(key_states, value_states, **cache_kwargs)

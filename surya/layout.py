@@ -191,7 +191,7 @@ def parallel_get_regions(heatmaps: List[np.ndarray], orig_size, id2label, detect
 
 
 def batch_layout_detection(images: List, model, processor, detection_results: Optional[List[TextDetectionResult]] = None, batch_size=None, include_maps=False) -> List[LayoutResult]:
-    layout_generator = batch_detection(images, model, processor, batch_size=batch_size)
+    layout_generator = batch_detection(images, model, processor, batch_size=batch_size, static_cache=settings.LAYOUT_STATIC_CACHE)
     id2label = model.config.id2label
 
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))

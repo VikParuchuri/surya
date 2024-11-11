@@ -9,6 +9,7 @@ from surya.detection import batch_text_detection
 from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
+from surya.model.layout.model import load_model as load_layout_model, load_processor as load_layout_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.ordering.processor import load_processor as load_order_processor
@@ -30,8 +31,7 @@ from surya.postprocessing.util import rescale_bboxes, rescale_bbox
 
 @st.cache_resource()
 def load_det_cached():
-    checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
-    return load_model(checkpoint=checkpoint), load_processor(checkpoint=checkpoint)
+    return load_model(), load_processor()
 
 
 @st.cache_resource()
@@ -41,7 +41,7 @@ def load_rec_cached():
 
 @st.cache_resource()
 def load_layout_cached():
-    return load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT), load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    return load_layout_model(), load_layout_processor()
 
 @st.cache_resource()
 def load_order_cached():

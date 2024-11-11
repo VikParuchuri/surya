@@ -9,7 +9,7 @@ from transformers import PreTrainedModel, VisionEncoderDecoderConfig, Pretrained
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 from transformers.models.vision_encoder_decoder.modeling_vision_encoder_decoder import shift_tokens_right
 from surya.model.table_rec.decoder import SuryaTableRecTextEncoder, SuryaTableRecDecoder
-from surya.model.recognition.encoder import DonutSwinModel
+from surya.model.table_rec.encoder import DonutSwinModel
 import torch.nn.functional as F
 from transformers.utils import ModelOutput
 

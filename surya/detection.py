@@ -29,12 +29,22 @@ def get_batch_size():
             batch_size = 36
     return batch_size
 
+def pad_to_batch_size(tensor, batch_size):
+    current_batch_size = tensor.shape[0]
+    if current_batch_size >= batch_size:
+        return tensor
+
+    pad_size = batch_size - current_batch_size
+    padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
+
+    return F.pad(tensor, padding, mode='constant', value=0)
 
 def batch_detection(
     images: List,
     model: EfficientViTForSemanticSegmentation,
     processor,
-    batch_size=None
+    batch_size=None,
+    static_cache=False
 ) -> Generator[Tuple[List[List[np.ndarray]], List[Tuple[int, int]]], None, None]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
@@ -75,6 +85,8 @@ def batch_detection(
         image_splits = [prepare_image_detection(image, processor) for image in image_splits]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
+        if static_cache:
+            batch = pad_to_batch_size(batch, batch_size)
 
         with torch.inference_mode():
             pred = model(pixel_values=batch)
@@ -129,7 +141,7 @@ def parallel_get_lines(preds, orig_sizes, include_maps=False):
 
 
 def batch_text_detection(images: List, model, processor, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
-    detection_generator = batch_detection(images, model, processor, batch_size=batch_size)
+    detection_generator = batch_detection(images, model, processor, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
 
     postprocessing_futures = []
     max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))

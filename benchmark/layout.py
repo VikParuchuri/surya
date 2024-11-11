@@ -5,11 +5,11 @@ import json
 
 from surya.benchmark.metrics import precision_recall
 from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model, load_processor
-from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.layout.model import load_model, load_processor
+from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
-from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
-from surya.postprocessing.util import rescale_bbox
+from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 import os
 import time
@@ -24,16 +24,20 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    det_model = load_model()
-    det_processor = load_processor()
+    model = load_model()
+    processor = load_processor()
+    det_model = load_det_model()
+    det_processor = load_det_processor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
     dataset = datasets.load_dataset(settings.LAYOUT_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
+
+    if settings.LAYOUT_STATIC_CACHE:
+        line_prediction = batch_text_detection(images[:1], det_model, det_processor)
+        batch_layout_detection(images[:1], model, processor, line_prediction)
 
     start = time.time()
     line_predictions = batch_text_detection(images, det_model, det_processor)
@@ -102,10 +106,10 @@ def main():
     table_headers = ["Layout Type", ] + metric_types
     table_data = []
     for layout_type in layout_types:
-        table_data.append([layout_type, ] + [f"{mean_metrics[layout_type][m]:.2f}" for m in metric_types])
+        table_data.append([layout_type, ] + [f"{mean_metrics[layout_type][m]:.5f}" for m in metric_types])
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
-    print(f"Took {surya_time / len(images):.2f} seconds per image, and {surya_time:.1f} seconds total.")
+    print(f"Took {surya_time / len(images):.5f} seconds per image, and {surya_time:.5f} seconds total.")
     print("Precision and recall are over the mutual coverage of the detected boxes and the ground truth boxes at a .5 threshold.")
     print(f"Wrote results to {result_path}")
 

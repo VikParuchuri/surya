@@ -136,13 +136,24 @@ predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec
 
 ### Compilation
 
-The OCR model can be compiled to get an ~15% speedup in total inference time.  The first run will be slow while it compiles, though. First set `RECOGNITION_STATIC_CACHE=true`, then:
+The following models have support for compilation. You will need to set the following environment variables to enable compilation:
 
-```python
-import torch
+- Recognition: `COMPILE_RECOGNITION=true`
+- Detection: `COMPILE_DETECTOR=true`
+- Layout: `COMPILE_LAYOUT=true`
+- Table recognition: `COMPILE_TABLE_REC=true`
 
-rec_model.decoder.model = torch.compile(rec_model.decoder.model)
-```
+Alternatively, you can also set `COMPILE_ALL=true` which will compile all models.
+
+Here are the speedups on an A10 GPU:
+
+| Model             | Time per page (s) | Compiled time per page (s) | Speedup (%) |
+| ----------------- | ----------------- | -------------------------- | ----------- |
+| Recognition       | 0.657556          | 0.56265                    | 14.43314334 |
+| Detection         | 0.108808          | 0.10521                    | 3.306742151 |
+| Layout            | 0.27319           | 0.27063                    | 0.93707676  |
+| Table recognition | 0.0219            | 0.01938                    | 11.50684932 |
+
 
 ## Text line detection
 
@@ -219,12 +230,12 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.model.layout.model import load_model, load_processor
 from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
-model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+model = load_model()
+processor = load_processor()
 det_model = load_model()
 det_processor = load_processor()
 

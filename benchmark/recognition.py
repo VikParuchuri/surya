@@ -1,8 +1,6 @@
 import argparse
 from collections import defaultdict
 
-import torch
-
 from benchmark.scoring import overlap_score
 from surya.input.processing import convert_if_not_rgb
 from surya.model.recognition.model import load_model as load_recognition_model
@@ -29,12 +27,8 @@ def main():
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract instead of surya.", default=False)
     parser.add_argument("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
     parser.add_argument("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
-    parser.add_argument("--compile", action="store_true", help="Compile the model.", default=False)
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
-
-    if args.compile:
-        assert settings.RECOGNITION_STATIC_CACHE, "You must set RECOGNITION_STATIC_CACHE to compile the model."
 
     rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
@@ -65,10 +59,7 @@ def main():
             lang_list.append(l)
     n_list = [None] * len(images)
 
-    if args.compile:
-        torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 64
-        rec_model.decoder.model = torch.compile(rec_model.decoder.model)
+    if settings.RECOGNITION_STATIC_CACHE:
         # Run through one batch to compile the model
         run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
 

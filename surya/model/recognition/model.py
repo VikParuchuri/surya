@@ -21,7 +21,7 @@ if not settings.ENABLE_EFFICIENT_ATTENTION:
     torch.backends.cuda.enable_math_sdp(True)
 
 
-def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE):
+def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> OCREncoderDecoderModel:
 
     config = SuryaOCRConfig.from_pretrained(checkpoint)
     decoder_config = config.decoder
@@ -44,6 +44,17 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
 
     model = model.to(device)
     model = model.eval()
+
+    if settings.RECOGNITION_STATIC_CACHE:
+        torch.set_float32_matmul_precision('high')
+        torch._dynamo.config.cache_size_limit = 16
+        torch._dynamo.config.suppress_errors = False
+
+
+        print(f"Compiling recognition model {checkpoint} on device {device} with dtype {dtype}")
+        model.encoder = torch.compile(model.encoder)
+        model.decoder = torch.compile(model.decoder)
+        model.text_encoder = torch.compile(model.text_encoder)
 
     print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

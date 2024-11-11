@@ -18,7 +18,7 @@ def get_batch_size():
         if settings.TORCH_DEVICE_MODEL == "mps":
             batch_size = 8
         if settings.TORCH_DEVICE_MODEL == "cuda":
-            batch_size = 64
+            batch_size = 128
     return batch_size
 
 
@@ -39,6 +39,19 @@ def sort_bboxes(bboxes, tolerance=1):
     return sorted_page_blocks
 
 
+def pad_to_batch_size(tensor: torch.Tensor, batch_size: int) -> torch.Tensor:
+    current_batch_size = tensor.shape[0]
+    if current_batch_size >= batch_size:
+        return tensor
+
+    pad_size = batch_size - current_batch_size
+    repeats = (pad_size + current_batch_size - 1) // current_batch_size
+    repeated_rows = tensor.repeat((repeats, *[1] * (tensor.dim() - 1)))
+    pad_tensor = repeated_rows[:pad_size]
+
+    return torch.cat([tensor, pad_tensor], dim=0)
+
+
 def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(table_cells)
@@ -53,6 +66,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
+
         current_batch_size = len(batch_images)
 
         orig_sizes = [image.size for image in batch_images]
@@ -73,6 +87,12 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
 
+        if settings.TABLE_REC_STATIC_CACHE:
+            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
+            batch_bboxes = pad_to_batch_size(batch_bboxes, batch_size)
+            batch_bbox_mask = pad_to_batch_size(batch_bbox_mask, batch_size)
+            batch_bbox_counts = pad_to_batch_size(batch_bbox_counts, batch_size)
+
         max_tokens = min(batch_bbox_counts[:, 1].max().item(), settings.TABLE_REC_MAX_BOXES)
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
@@ -91,6 +111,11 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 encoder_attention_mask=None,
                 use_cache=False
             ).hidden_states
+            del encoder_hidden_states
+
+            if settings.TABLE_REC_STATIC_CACHE:
+                text_encoder_hidden_states = pad_to_batch_size(text_encoder_hidden_states, batch_size)
+                batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
@@ -106,8 +131,8 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 )
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
-                box_logits = return_dict["bbox_logits"][:, -1, :].detach()
-                rowcol_logits = return_dict["class_logits"][:, -1, :].detach()
+                box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
+                rowcol_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
                 rowcol_preds = torch.argmax(rowcol_logits, dim=-1)
                 box_preds = torch.argmax(box_logits, dim=-1)
@@ -127,6 +152,13 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
+                
+                if settings.TABLE_REC_STATIC_CACHE:
+                    batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
+
+        if settings.TABLE_REC_STATIC_CACHE:
+            batch_predictions = batch_predictions[:current_batch_size]
+            batch_table_cells = batch_table_cells[:current_batch_size]
 
         for j, (preds, input_cells, orig_size) in enumerate(zip(batch_predictions, batch_table_cells, orig_sizes)):
             img_w, img_h = orig_size
@@ -181,5 +213,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
             )
 
             output_order.append(result)
+
+        del text_encoder_hidden_states
 
     return output_order

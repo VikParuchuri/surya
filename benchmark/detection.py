@@ -54,6 +54,10 @@ def main():
             # 1000,1000 is bbox size for doclaynet
             correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
 
+    if settings.DETECTOR_STATIC_CACHE:
+        # Run through one batch to compile the model
+        batch_text_detection(images[:1], model, processor)
+
     start = time.time()
     predictions = batch_text_detection(images, model, processor)
     surya_time = time.time() - start
