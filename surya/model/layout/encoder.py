@@ -1,10 +1,7 @@
-
 from typing import Optional, Tuple, Union
-
-import torch
-import torch.utils.checkpoint
-from torch import nn
 from surya.model.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
+import torch
+from torch import nn
 
 
 class DonutSwinModel(DonutSwinPreTrainedModel):
@@ -17,9 +14,7 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
         self.embeddings = DonutSwinEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = DonutSwinEncoder(config, self.embeddings.patch_grid)
 
-        self.position_embeddings = None
-        if hasattr(config, "encoder_length"):
-            self.position_embeddings = nn.Parameter(torch.zeros(1, config.encoder_length, config.hidden_size))
+        self.position_embeddings = nn.Parameter(torch.zeros(1, config.encoder_length, config.hidden_size))
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -79,9 +74,7 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
         )
 
         last_hidden_state = encoder_outputs[0]
-
-        if self.position_embeddings is not None:
-            last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
+        last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
 
         return DonutSwinModelOutput(
             last_hidden_state=last_hidden_state,
