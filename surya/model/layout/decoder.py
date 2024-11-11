@@ -111,7 +111,7 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
         )
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.label_count, bias=False)
-        self.bbox_head = nn.Linear(config.hidden_size, 6 * config.bbox_size, bias=True)
+        self.bbox_head = nn.Linear(config.hidden_size, 6, bias=True)
 
         self.bbox_size = config.bbox_size
         self.label_count = config.label_count
@@ -156,8 +156,7 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
 
         hidden_states = outputs[0]
         class_logits = self.lm_head(hidden_states)
-        bbox_logits = self.bbox_head(hidden_states)
-        bbox_logits = bbox_logits.reshape(-1, input_boxes.size(1), 6, self.bbox_size)
+        bbox_logits = F.sigmoid(self.bbox_head(hidden_states))
 
         return LayoutModelOutput(
             bbox_logits=bbox_logits,

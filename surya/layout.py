@@ -26,7 +26,7 @@ def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler):
     w_scale = img_size[0] / bbox_scaler
     h_scale = img_size[1] / bbox_scaler
 
-    boxes = pred #* bbox_scaler
+    boxes = pred
     cx = boxes[:, 0]
     cy = boxes[:, 1]
     width = boxes[:, 2]
@@ -35,8 +35,8 @@ def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler):
     y1 = cy - height / 2
     x2 = cx + width / 2
     y2 = cy + height / 2
-    skew_x = (boxes[:, 4] - skew_scaler) / 2
-    skew_y = (boxes[:, 5] - skew_scaler) / 2
+    skew_x = torch.floor((boxes[:, 4] - skew_scaler) / 2)
+    skew_y = torch.floor((boxes[:, 5] - skew_scaler) / 2)
     polygon = torch.stack(
         [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y],
         dim=-1)
@@ -116,7 +116,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
                 class_preds = class_logits.argmax(-1)
-                box_preds = box_logits.argmax(-1)
+                box_preds = box_logits * model.config.decoder.bbox_size
 
                 done = (class_preds == model.decoder.config.eos_token_id) | (class_preds == model.decoder.config.pad_token_id)
 
@@ -129,10 +129,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                     if not status:
-                        batch_predictions[j].append(pred[0])
+                        batch_predictions[j].append(pred[0].detach().clone())
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
+                batch_decoder_input = batch_decoder_input.to(torch.long)
 
         for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
             stacked_preds = torch.stack(preds, dim=0)

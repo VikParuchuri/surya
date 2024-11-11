@@ -98,7 +98,7 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         qkv_bias=True,
         hidden_dropout_prob=0.0,
         attention_probs_dropout_prob=0.0,
-        drop_path_rate=0.1,
+        drop_path_rate=0,
         hidden_act="gelu",
         use_absolute_embeddings=True,
         initializer_range=0.02,

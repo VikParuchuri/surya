@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout_order"
+    LAYOUT_MODEL_CHECKPOINT: str = "vikp/layout_order_r"
     LAYOUT_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
     LAYOUT_BATCH_SIZE: Optional[int] = None
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
