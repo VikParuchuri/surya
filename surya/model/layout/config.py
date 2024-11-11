@@ -4,12 +4,12 @@ import torch
 from transformers import PretrainedConfig
 from transformers.modeling_outputs import CausalLMOutput
 from transformers.utils import ModelOutput
+from surya.settings import settings
 
-MAX_SIZE = {"height": 1024, "width": 1024}
 SPECIAL_TOKENS = 3
 QUERY_TOKENS = 192
 IMG_SIZE_BUCKET = 100
-BBOX_SIZE = MAX_SIZE["height"] + SPECIAL_TOKENS + 1
+BBOX_SIZE = settings.LAYOUT_IMAGE_SIZE["height"] + SPECIAL_TOKENS + 1
 
 
 ID_TO_LABEL = {
@@ -86,7 +86,7 @@ class DonutSwinOCRConfig(PretrainedConfig):
 
     def __init__(
         self,
-        image_size=(MAX_SIZE["height"], MAX_SIZE["width"]),
+        image_size=(settings.LAYOUT_IMAGE_SIZE["height"], settings.LAYOUT_IMAGE_SIZE["width"]),
         patch_size=4,
         num_channels=3,
         embed_dim=64,
@@ -218,7 +218,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
 
 
 class SuryaLayoutTextEncoderConfig(PretrainedConfig):
-    model_type = "recurrent_gemma"
+    model_type = "surya_layout_text_encoder"
 
     def __init__(
         self,
@@ -237,6 +237,8 @@ class SuryaLayoutTextEncoderConfig(PretrainedConfig):
         pad_token_id=0,
         eos_token_id=1,
         bos_token_id=1,
+        size_token_id=2,
+        img_size_bucket=100,
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
@@ -287,6 +289,8 @@ class SuryaLayoutTextEncoderConfig(PretrainedConfig):
         self.iteration_count = iteration_count
         self.causal = causal
         self.query_token_count = query_token_count
+        self.size_token_id = size_token_id
+        self.img_size_bucket = img_size_bucket
 
         super().__init__(
             pad_token_id=pad_token_id,

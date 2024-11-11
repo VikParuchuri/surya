@@ -138,7 +138,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 box_preds = torch.argmax(box_logits, dim=-1)
 
                 done = (rowcol_preds == processor.tokenizer.eos_id) | (rowcol_preds == processor.tokenizer.pad_id)
-                done = done
                 all_done = all_done | done
 
                 if all_done.all():

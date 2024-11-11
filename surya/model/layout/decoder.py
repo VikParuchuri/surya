@@ -156,7 +156,7 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
 
         hidden_states = outputs[0]
         class_logits = self.lm_head(hidden_states)
-        bbox_logits = F.sigmoid(self.bbox_head(hidden_states))
+        bbox_logits = torch.sigmoid(self.bbox_head(hidden_states))
 
         return LayoutModelOutput(
             bbox_logits=bbox_logits,
