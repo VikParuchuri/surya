@@ -5,7 +5,7 @@ from typing import Optional, Union, Tuple
 import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
-from surya.model.layout.encoder import DonutSwinModel
+from surya.model.layout.encoder import DonutSwinLayoutModel
 from surya.model.layout.decoder import SuryaLayoutTextEncoder, SuryaLayoutDecoder
 from transformers.utils import ModelOutput
 
@@ -38,7 +38,7 @@ class SuryaLayoutModel(PreTrainedModel):
         super().__init__(config)
 
         if encoder is None:
-            encoder = DonutSwinModel(config.encoder)
+            encoder = DonutSwinLayoutModel(config.encoder)
 
         if text_encoder is None:
             text_encoder = SuryaLayoutTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)

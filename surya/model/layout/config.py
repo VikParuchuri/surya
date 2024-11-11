@@ -76,7 +76,7 @@ class LayoutModelOutput(ModelOutput):
     hidden_states: torch.Tensor | None = None
 
 
-class DonutSwinOCRConfig(PretrainedConfig):
+class DonutSwinLayoutConfig(PretrainedConfig):
     model_type = "donut-swin"
 
     attribute_map = {
@@ -141,6 +141,8 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         vocab_size=BBOX_SIZE, # Plus one because if max_size is 1024, you actually need 1025 tokens
         bbox_size=BBOX_SIZE, # Special tokens for padding, bos, eos, (bos, eos are the same)
         label_count=LABEL_COUNT + SPECIAL_TOKENS, # 2 for special tokens
+        skew_scaler=settings.LAYOUT_IMAGE_SIZE["height"] // 2,
+        special_token_count=SPECIAL_TOKENS,
         hidden_size=512,
         intermediate_size=4 * 512,
         encoder_hidden_size=512,
@@ -154,6 +156,8 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         pad_token_id=0,
         eos_token_id=1,
         bos_token_id=1,
+        size_token_id=2,
+        img_size_bucket=100,
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
@@ -204,6 +208,10 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         self.encoder_cross_attn_layers = encoder_cross_attn_layers
         self.bbox_size = bbox_size
         self.label_count = label_count
+        self.skew_scaler = skew_scaler
+        self.size_token_id = size_token_id
+        self.img_size_bucket = img_size_bucket
+        self.special_token_count = special_token_count
 
         super().__init__(
             pad_token_id=pad_token_id,
@@ -237,8 +245,6 @@ class SuryaLayoutTextEncoderConfig(PretrainedConfig):
         pad_token_id=0,
         eos_token_id=1,
         bos_token_id=1,
-        size_token_id=2,
-        img_size_bucket=100,
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
@@ -289,8 +295,6 @@ class SuryaLayoutTextEncoderConfig(PretrainedConfig):
         self.iteration_count = iteration_count
         self.causal = causal
         self.query_token_count = query_token_count
-        self.size_token_id = size_token_id
-        self.img_size_bucket = img_size_bucket
 
         super().__init__(
             pad_token_id=pad_token_id,

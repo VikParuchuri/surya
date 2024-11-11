@@ -4,9 +4,8 @@ import copy
 import json
 
 from surya.benchmark.metrics import precision_recall
-from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model, load_processor
+from surya.model.layout.model import load_model
+from surya.model.layout.processor import load_processor
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import batch_layout_detection
 from surya.postprocessing.heatmap import draw_bboxes_on_image
@@ -26,8 +25,6 @@ def main():
 
     model = load_model()
     processor = load_processor()
-    det_model = load_det_model()
-    det_processor = load_det_processor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
@@ -36,12 +33,10 @@ def main():
     images = convert_if_not_rgb(images)
 
     if settings.LAYOUT_STATIC_CACHE:
-        line_prediction = batch_text_detection(images[:1], det_model, det_processor)
-        batch_layout_detection(images[:1], model, processor, line_prediction)
+        batch_layout_detection(images[:1], model, processor)
 
     start = time.time()
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-    layout_predictions = batch_layout_detection(images, model, processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, model, processor)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]
@@ -49,10 +44,10 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     label_alignment = { # First is publaynet, second is surya
-        "Image": [["Figure"], ["Picture", "Figure"]],
-        "Table": [["Table"], ["Table"]],
-        "Text": [["Text", "List"], ["Text", "Formula", "Footnote", "Caption", "List-item"]],
-        "Title": [["Title"], ["Section-header", "Title"]]
+        "Image": [["Figure"], ["Picture", "Figure", "Handwriting"]],
+        "Table": [["Table"], ["Table", "Form", "Table-of-contents"]],
+        "Text": [["Text", "List"], ["Text", "Formula", "Footnote", "Caption", "List-item", "Text-inline-math", "Code", "Page-footer"]],
+        "Title": [["Title"], ["Section-header", "Title", "Page-header"]]
     }
 
     page_metrics = collections.OrderedDict()

@@ -57,8 +57,7 @@ def main():
 
         prev_name = name
 
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-    layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, layout_model, layout_processor)
     table_cells = []
 
     table_imgs = []

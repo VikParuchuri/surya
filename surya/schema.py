@@ -136,8 +136,10 @@ class Bbox(BaseModel):
         intersection = x_overlap * y_overlap
         return intersection / self.area
 
+
 class LayoutBox(PolygonBox):
     label: str
+    position: int
 
 
 class OrderBox(Bbox):
@@ -170,8 +172,6 @@ class TextDetectionResult(BaseModel):
 
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
-    segmentation_map: Optional[Any]
-    heatmaps: Optional[Any]
     image_bbox: List[float]
 
 

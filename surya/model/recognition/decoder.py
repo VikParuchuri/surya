@@ -26,7 +26,7 @@ class SuryaOCRDecoder(SuryaADETRDecoderPreTrainedModel):
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
-        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, config.pad_token_id)
         self.model = SuryaADETRDecoderModel(
             config,
             embedder=embed_tokens,
@@ -106,7 +106,7 @@ class SuryaOCRTextEncoder(SuryaADETRDecoderPreTrainedModel):
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
-        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, config.pad_token_id)
         self.model = SuryaADETRDecoderModel(
             config,
             embedder=embed_tokens,

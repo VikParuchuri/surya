@@ -9,7 +9,8 @@ from surya.detection import batch_text_detection
 from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
-from surya.model.layout.model import load_model as load_layout_model, load_processor as load_layout_processor
+from surya.model.layout.model import load_model as load_layout_model
+from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.ordering.processor import load_processor as load_order_processor
@@ -61,8 +62,7 @@ def text_detection(img) -> (Image.Image, TextDetectionResult):
 
 
 def layout_detection(img) -> (Image.Image, LayoutResult):
-    _, det_pred = text_detection(img)
-    pred = batch_layout_detection([img], layout_model, layout_processor, [det_pred])[0]
+    pred = batch_layout_detection([img], layout_model, layout_processor)[0]
     polygons = [p.polygon for p in pred.bboxes]
     labels = [p.label for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)

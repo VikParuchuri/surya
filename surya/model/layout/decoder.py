@@ -44,7 +44,7 @@ class SuryaLayoutTextEncoder(SuryaADETRDecoderPreTrainedModel):
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
-        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, config.pad_token_id)
         self.model = SuryaADETRDecoderModel(
             config,
             embedder=embed_tokens,
@@ -111,7 +111,7 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
         )
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.label_count, bias=False)
-        self.bbox_head = nn.Linear(config.hidden_size, 6, bias=True)
+        self.bbox_head = nn.Linear(config.hidden_size, 6 * config.bbox_size, bias=True)
 
         self.bbox_size = config.bbox_size
         self.label_count = config.label_count
@@ -143,7 +143,7 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
         **kwargs
     ) -> Union[Tuple, CausalLMOutput]:
         outputs = self.model(
-            input_boxes=input_boxes,
+            input_ids=input_boxes,
             input_boxes_counts=input_boxes_counts,
             cache_position=cache_position,
             attention_mask=attention_mask,
@@ -156,7 +156,8 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
 
         hidden_states = outputs[0]
         class_logits = self.lm_head(hidden_states)
-        bbox_logits = torch.sigmoid(self.bbox_head(hidden_states))
+        bbox_logits = self.bbox_head(hidden_states)
+        bbox_logits = bbox_logits.reshape(-1, input_boxes.size(1), 6, self.bbox_size)
 
         return LayoutModelOutput(
             bbox_logits=bbox_logits,

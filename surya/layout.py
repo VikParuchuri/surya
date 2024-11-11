@@ -1,17 +1,14 @@
-from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import numpy as np
 import torch
 from PIL import Image
-import copy
 
 from tqdm import tqdm
 
-from surya.detection import batch_detection
-from surya.schema import LayoutResult
+from surya.model.layout.config import ID_TO_LABEL
+from surya.schema import LayoutResult, LayoutBox
 from surya.settings import settings
-from surya.util.parallel import FakeExecutor
 
 
 def get_batch_size():
@@ -25,11 +22,35 @@ def get_batch_size():
     return batch_size
 
 
+def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler):
+    w_scale = img_size[0] / bbox_scaler
+    h_scale = img_size[1] / bbox_scaler
+
+    boxes = pred #* bbox_scaler
+    cx = boxes[:, 0]
+    cy = boxes[:, 1]
+    width = boxes[:, 2]
+    height = boxes[:, 3]
+    x1 = cx - width / 2
+    y1 = cy - height / 2
+    x2 = cx + width / 2
+    y2 = cy + height / 2
+    skew_x = (boxes[:, 4] - skew_scaler) / 2
+    skew_y = (boxes[:, 5] - skew_scaler) / 2
+    polygon = torch.stack(
+        [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y],
+        dim=-1)
+    polygon = polygon * torch.tensor([w_scale, h_scale, w_scale, h_scale, w_scale, h_scale, w_scale, h_scale],
+                                      dtype=polygon.dtype, device=polygon.device)
+    return polygon
+
+
 def batch_layout_detection(images: List, model, processor, batch_size=None) -> List[LayoutResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
 
+    results = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing layout"):
         batch_images = images[i:i+batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the image
@@ -95,19 +116,45 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
                 class_preds = class_logits.argmax(-1)
+                box_preds = box_logits.argmax(-1)
 
-                done = (class_preds == model.decoder.config.eos_token_id) | (class_preds == processor.tokenizer.pad_token_id)
+                done = (class_preds == model.decoder.config.eos_token_id) | (class_preds == model.decoder.config.pad_token_id)
 
                 all_done = all_done | done
 
                 if all_done.all():
                     break
 
-                batch_decoder_input = torch.cat([box_logits.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
+                batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                     if not status:
-                        batch_predictions[j].append(pred[0].tolist())
+                        batch_predictions[j].append(pred[0])
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
+
+        for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
+            stacked_preds = torch.stack(preds, dim=0)
+            polygons = prediction_to_polygon(stacked_preds, orig_size, model.config.decoder.bbox_size, model.config.decoder.skew_scaler)
+            labels = stacked_preds[:, 6] - model.decoder.config.special_token_count
+
+            boxes = []
+            for z, (polygon, label) in enumerate(zip(polygons, labels)):
+                poly = polygon.tolist()
+                poly = [
+                    (poly[2 * i], poly[2 * i + 1])
+                    for i in range(4)
+                ]
+                lb = LayoutBox(
+                    polygon=poly,
+                    label=ID_TO_LABEL[label.item()],
+                    position=z
+                )
+                boxes.append(lb)
+            result = LayoutResult(
+                bboxes=boxes,
+                image_bbox=[0, 0, orig_size[0], orig_size[1]]
+            )
+            results.append(result)
+    return results

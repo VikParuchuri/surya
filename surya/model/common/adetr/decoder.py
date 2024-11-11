@@ -485,6 +485,7 @@ class SuryaADETRDecoderModel(SuryaADETRDecoderPreTrainedModel):
         self,
         input_ids: torch.LongTensor = None,
         input_boxes_counts: torch.LongTensor = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,

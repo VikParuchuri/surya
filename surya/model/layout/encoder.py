@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 
-class DonutSwinModel(DonutSwinPreTrainedModel):
+class DonutSwinLayoutModel(DonutSwinPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config

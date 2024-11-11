@@ -4,10 +4,8 @@ import copy
 import json
 from collections import defaultdict
 
-from surya.detection import batch_text_detection
 from surya.input.load import load_from_folder, load_from_file
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
 from surya.model.layout.model import load_model as load_layout_model, load_processor as load_layout_processor
 from surya.model.ordering.model import load_model
 from surya.model.ordering.processor import load_processor
@@ -30,9 +28,6 @@ def main():
     layout_model = load_layout_model()
     layout_processor = load_layout_processor()
 
-    det_model = load_det_model()
-    det_processor = load_det_processor()
-
     if os.path.isdir(args.input_path):
         images, names, _ = load_from_folder(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path)
@@ -40,8 +35,7 @@ def main():
         images, names, _ = load_from_file(args.input_path, args.max)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-    layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, layout_model, layout_processor)
     bboxes = []
     for layout_pred in layout_predictions:
         bbox = [l.bbox for l in layout_pred.bboxes]
