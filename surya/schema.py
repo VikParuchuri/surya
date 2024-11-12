@@ -142,10 +142,6 @@ class LayoutBox(PolygonBox):
     position: int
 
 
-class OrderBox(Bbox):
-    position: int
-
-
 class ColumnLine(Bbox):
     vertical: bool
     horizontal: bool
@@ -172,11 +168,6 @@ class TextDetectionResult(BaseModel):
 
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
-    image_bbox: List[float]
-
-
-class OrderResult(BaseModel):
-    bboxes: List[OrderBox]
     image_bbox: List[float]
 
 

@@ -13,18 +13,15 @@ from surya.model.layout.model import load_model as load_layout_model
 from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
-from surya.model.ordering.processor import load_processor as load_order_processor
-from surya.model.ordering.model import load_model as load_order_model
 from surya.model.table_rec.model import load_model as load_table_model
 from surya.model.table_rec.processor import load_processor as load_table_processor
-from surya.ordering import batch_ordering
 from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
 from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.languages import CODE_TO_LANGUAGE
 from surya.input.langs import replace_lang_with_code
-from surya.schema import OCRResult, TextDetectionResult, LayoutResult, OrderResult, TableResult
+from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResult
 from surya.settings import settings
 from surya.tables import batch_table_recognition
 from surya.postprocessing.util import rescale_bboxes, rescale_bbox
@@ -43,10 +40,6 @@ def load_rec_cached():
 @st.cache_resource()
 def load_layout_cached():
     return load_layout_model(), load_layout_processor()
-
-@st.cache_resource()
-def load_order_cached():
-    return load_order_model(), load_order_processor()
 
 
 @st.cache_resource()
@@ -67,16 +60,6 @@ def layout_detection(img) -> (Image.Image, LayoutResult):
     labels = [f"{p.label}-{p.position}" for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
     return layout_img, pred
-
-
-def order_detection(img) -> (Image.Image, OrderResult):
-    _, layout_pred = layout_detection(img)
-    bboxes = [l.bbox for l in layout_pred.bboxes]
-    pred = batch_ordering([img], [bboxes], order_model, order_processor)[0]
-    polys = [l.polygon for l in pred.bboxes]
-    positions = [str(l.position) for l in pred.bboxes]
-    order_img = draw_polys_on_image(polys, img.copy(), labels=positions, label_font_size=18)
-    return order_img, pred
 
 
 def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
@@ -171,7 +154,6 @@ col1, col2 = st.columns([.5, .5])
 det_model, det_processor = load_det_cached()
 rec_model, rec_processor = load_rec_cached()
 layout_model, layout_processor = load_layout_cached()
-order_model, order_processor = load_order_cached()
 table_model, table_processor = load_table_cached()
 
 
@@ -211,7 +193,6 @@ else:
 text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
 layout_det = st.sidebar.button("Run Layout Analysis")
-order_det = st.sidebar.button("Run Reading Order")
 table_rec = st.sidebar.button("Run Table Rec")
 use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
@@ -244,12 +225,6 @@ if text_rec:
             st.json(pred.model_dump(), expanded=True)
         with text_tab:
             st.text("\n".join([p.text for p in pred.text_lines]))
-
-if order_det:
-    order_img, pred = order_detection(pil_image)
-    with col1:
-        st.image(order_img, caption="Reading Order", use_column_width=True)
-        st.json(pred.model_dump(), expanded=True)
 
 
 if table_rec:

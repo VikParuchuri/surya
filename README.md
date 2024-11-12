@@ -199,7 +199,7 @@ predictions = batch_text_detection([image], model, processor)
 
 ## Layout analysis
 
-This command will write out a json file with the detected layout.
+This command will write out a json file with the detected layout and reading order.
 
 ```shell
 surya_layout DATA_PATH
@@ -215,8 +215,8 @@ The `results.json` file will contain a json dictionary where the keys are the in
 - `bboxes` - detected bounding boxes for text
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
-  - `confidence` - the confidence of the model in the detected text (0-1).  This is currently not very reliable.
-  - `label` - the label for the bbox.  One of `Caption`, `Footnote`, `Formula`, `List-item`, `Page-footer`, `Page-header`, `Picture`, `Figure`, `Section-header`, `Table`, `Text`, `Title`.
+  - `position` - the reading order of the box.
+  - `label` - the label for the bbox.  One of `Caption`, `Footnote`, `Formula`, `List-item`, `Page-footer`, `Page-header`, `Picture`, `Figure`, `Section-header`, `Table`, `Form`, `Table-of-contents`, `Handwriting`, `Text`, `Text-inline-math`.
 - `page` - the page number in the file
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
@@ -242,52 +242,6 @@ det_processor = load_processor()
 # layout_predictions is a list of dicts, one per image
 line_predictions = batch_text_detection([image], det_model, det_processor)
 layout_predictions = batch_layout_detection([image], model, processor, line_predictions)
-```
-
-## Reading order
-
-This command will write out a json file with the detected reading order and layout.
-
-```shell
-surya_order DATA_PATH
-```
-
-- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
-- `--images` will save images of the pages and detected text lines (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
-
-The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
-
-- `bboxes` - detected bounding boxes for text
-  - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-  - `position` - the position in the reading order of the bbox, starting from 0.
-  - `label` - the label for the bbox.  See the layout section of the documentation for a list of potential labels.
-- `page` - the page number in the file
-- `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
-
-**Performance tips**
-
-Setting the `ORDER_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `360MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 11GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `4`.
-
-### From python
-
-```python
-from PIL import Image
-from surya.ordering import batch_ordering
-from surya.model.ordering.processor import load_processor
-from surya.model.ordering.model import load_model
-
-image = Image.open(IMAGE_PATH)
-# bboxes should be a list of lists with layout bboxes for the image in [x1,y1,x2,y2] format
-# You can get this from the layout model, see above for usage
-bboxes = [bbox1, bbox2, ...]
-
-model = load_model()
-processor = load_processor()
-
-# order_predictions will be a list of dicts, one per image
-order_predictions = batch_ordering([image], [bboxes], model, processor)
 ```
 
 ## Table Recognition

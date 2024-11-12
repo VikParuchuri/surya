@@ -89,10 +89,10 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         image_size=(settings.LAYOUT_IMAGE_SIZE["height"], settings.LAYOUT_IMAGE_SIZE["width"]),
         patch_size=4,
         num_channels=3,
-        embed_dim=64,
-        depths=[2, 2, 2, 14, 2],
-        num_heads=[2, 4, 8, 16, 32],
-        num_kv_heads=[2, 4, 8, 16, 32],
+        embed_dim=128,
+        depths=[2, 2, 16, 2],
+        num_heads=[4, 8, 16, 32],
+        num_kv_heads=[4, 8, 16, 32],
         window_size=8,
         mlp_ratio=4.0,
         qkv_bias=True,
@@ -103,7 +103,7 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         use_absolute_embeddings=True,
         initializer_range=0.02,
         layer_norm_eps=1e-5,
-        encoder_length=256,
+        encoder_length=768,
         **kwargs,
     ):
         super().__init__(**kwargs)

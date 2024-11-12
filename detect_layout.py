@@ -50,7 +50,7 @@ def main():
 
     predictions_by_page = defaultdict(list)
     for idx, (pred, name, image) in enumerate(zip(layout_predictions, names, images)):
-        out_pred = pred.model_dump(exclude=["segmentation_map"])
+        out_pred = pred.model_dump()
         out_pred["page"] = len(predictions_by_page[name]) + 1
         predictions_by_page[name].append(out_pred)
 
