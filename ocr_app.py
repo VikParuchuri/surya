@@ -64,7 +64,7 @@ def text_detection(img) -> (Image.Image, TextDetectionResult):
 def layout_detection(img) -> (Image.Image, LayoutResult):
     pred = batch_layout_detection([img], layout_model, layout_processor)[0]
     polygons = [p.polygon for p in pred.bboxes]
-    labels = [p.label for p in pred.bboxes]
+    labels = [f"{p.label}-{p.position}" for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
     return layout_img, pred
 

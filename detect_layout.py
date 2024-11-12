@@ -44,7 +44,7 @@ def main():
     if args.images:
         for idx, (image, layout_pred, name) in enumerate(zip(images, layout_predictions, names)):
             polygons = [p.polygon for p in layout_pred.bboxes]
-            labels = [p.label for p in layout_pred.bboxes]
+            labels = [f"{p.label}-{p.position}" for p in layout_pred.bboxes]
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image), labels=labels)
             bbox_image.save(os.path.join(result_path, f"{name}_{idx}_layout.png"))
 
