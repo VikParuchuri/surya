@@ -65,11 +65,11 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/layout_order_rl"
+    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/layout_order_nt2"
     LAYOUT_IMAGE_SIZE: Dict = {"height": 704, "width": 704}
     LAYOUT_BATCH_SIZE: Optional[int] = None
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
-    LAYOUT_MAX_BOXES: int = 192
+    LAYOUT_MAX_BOXES: int = 75
     COMPILE_LAYOUT: bool = False
 
     # Table Rec

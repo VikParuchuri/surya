@@ -1,8 +1,7 @@
 import torch
 
 from surya.model.layout.encoderdecoder import SuryaLayoutModel
-from surya.model.layout.config import SuryaLayoutConfig, SuryaLayoutDecoderConfig, DonutSwinLayoutConfig, \
-    SuryaLayoutTextEncoderConfig
+from surya.model.layout.config import SuryaLayoutConfig, SuryaLayoutDecoderConfig, DonutSwinLayoutConfig
 from surya.settings import settings
 
 
@@ -16,10 +15,6 @@ def load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, device=settings.TORC
     encoder = DonutSwinLayoutConfig(**encoder_config)
     config.encoder = encoder
 
-    text_encoder_config = config.text_encoder
-    text_encoder = SuryaLayoutTextEncoderConfig(**text_encoder_config)
-    config.text_encoder = text_encoder
-
     model = SuryaLayoutModel.from_pretrained(checkpoint, config=config, torch_dtype=dtype)
     model = model.to(device)
     model = model.eval()
@@ -32,7 +27,6 @@ def load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, device=settings.TORC
         print(f"Compiling layout model {checkpoint} on device {device} with dtype {dtype}")
         model.encoder = torch.compile(model.encoder)
         model.decoder = torch.compile(model.decoder)
-        model.text_encoder = torch.compile(model.text_encoder)
 
     print(f"Loaded layout model {checkpoint} on device {device} with dtype {dtype}")
     return model

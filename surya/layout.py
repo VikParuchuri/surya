@@ -73,30 +73,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
-        model.text_encoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         batch_predictions = [[] for _ in range(len(images))]
 
         with torch.inference_mode():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values)[0]
-
-            text_encoder_input_ids = torch.arange(
-                model.text_encoder.config.query_token_count,
-                device=model.device,
-                dtype=torch.long
-            ).unsqueeze(0).expand(encoder_hidden_states.size(0), -1)
-
-            # Encode text
-            text_encoder_outputs = model.text_encoder(
-                input_ids=text_encoder_input_ids,
-                inputs_embeds=None,
-                cache_position=None,
-                attention_mask=None,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=None,
-                use_cache=False
-            ).hidden_states
-            del encoder_hidden_states
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
@@ -105,7 +86,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 is_prefill = token_count == 0
                 return_dict = model.decoder(
                     input_boxes=batch_decoder_input,
-                    encoder_hidden_states=text_encoder_outputs,
+                    encoder_hidden_states=encoder_hidden_states,
                     cache_position=decoder_position_ids,
                     use_cache=True,
                     prefill=is_prefill
@@ -136,23 +117,29 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 batch_decoder_input = batch_decoder_input.to(torch.long)
 
         for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
-            stacked_preds = torch.stack(preds, dim=0)
-            polygons = prediction_to_polygon(stacked_preds, orig_size, model.config.decoder.bbox_size, model.config.decoder.skew_scaler)
-            labels = stacked_preds[:, 6] - model.decoder.config.special_token_count
-
             boxes = []
-            for z, (polygon, label) in enumerate(zip(polygons, labels)):
-                poly = polygon.tolist()
-                poly = [
-                    (poly[2 * i], poly[2 * i + 1])
-                    for i in range(4)
-                ]
-                lb = LayoutBox(
-                    polygon=poly,
-                    label=ID_TO_LABEL[label.item()],
-                    position=z
+            if len(preds) > 0:
+                stacked_preds = torch.stack(preds, dim=0)
+                polygons = prediction_to_polygon(
+                    stacked_preds,
+                    orig_size,
+                    model.config.decoder.bbox_size,
+                    model.config.decoder.skew_scaler
                 )
-                boxes.append(lb)
+                labels = stacked_preds[:, 6] - model.decoder.config.special_token_count
+
+                for z, (polygon, label) in enumerate(zip(polygons, labels)):
+                    poly = polygon.tolist()
+                    poly = [
+                        (poly[2 * i], poly[2 * i + 1])
+                        for i in range(4)
+                    ]
+                    lb = LayoutBox(
+                        polygon=poly,
+                        label=ID_TO_LABEL[label.item()],
+                        position=z
+                    )
+                    boxes.append(lb)
             result = LayoutResult(
                 bboxes=boxes,
                 image_bbox=[0, 0, orig_size[0], orig_size[1]]

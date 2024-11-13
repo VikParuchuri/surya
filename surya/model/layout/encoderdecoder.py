@@ -5,7 +5,7 @@ import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 from surya.model.layout.encoder import DonutSwinLayoutModel
-from surya.model.layout.decoder import SuryaLayoutTextEncoder, SuryaLayoutDecoder
+from surya.model.layout.decoder import SuryaLayoutDecoder
 from transformers.utils import ModelOutput
 
 @dataclass
@@ -27,7 +27,6 @@ class SuryaLayoutModel(PreTrainedModel):
         self,
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
-        text_encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
     ):
         # initialize with config
@@ -39,21 +38,16 @@ class SuryaLayoutModel(PreTrainedModel):
         if encoder is None:
             encoder = DonutSwinLayoutModel(config.encoder)
 
-        if text_encoder is None:
-            text_encoder = SuryaLayoutTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)
-
         if decoder is None:
             decoder = SuryaLayoutDecoder(config.decoder, attn_implementation=config._attn_implementation)
 
         self.encoder = encoder
         self.decoder = decoder
-        self.text_encoder = text_encoder
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
-        self.text_encoder.config = self.config.text_encoder
 
     def get_encoder(self):
         return self.encoder
@@ -102,20 +96,6 @@ class SuryaLayoutModel(PreTrainedModel):
 
         encoder_hidden_states = encoder_outputs[0]
 
-        text_encoder_input_ids = torch.arange(self.text_encoder.config.query_token_count, device=labels.device, dtype=torch.long).unsqueeze(0).expand(labels.size(0), -1)
-        # Encode text
-        text_encoder_outputs = None
-        for i in range(self.text_encoder.config.iteration_count):
-            text_encoder_outputs = self.text_encoder(
-                input_ids=text_encoder_input_ids,
-                inputs_embeds=text_encoder_outputs,
-                cache_position=None,
-                attention_mask=None,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=None,
-                use_cache=use_cache
-            ).hidden_states
-
         # We need a start token as the first token
         assert decoder_input_boxes[0][0][0] == self.config.decoder_start_token_id
         assert decoder_input_boxes[0][0].shape == (7,)
@@ -125,7 +105,7 @@ class SuryaLayoutModel(PreTrainedModel):
             input_boxes_counts=decoder_input_boxes_counts,
             cache_position=decoder_cache_position,
             attention_mask=decoder_attention_mask,
-            encoder_hidden_states=text_encoder_outputs,
+            encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=None,
             use_cache=use_cache,
             **kwargs_decoder,
