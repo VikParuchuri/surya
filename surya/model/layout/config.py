@@ -16,20 +16,20 @@ PADDED_BBOX_SIZE = BBOX_SIZE + 1
 ID_TO_LABEL = {
     0: 'Blank',
     1: 'Text',
-    2: 'Text-inline-math',
+    2: 'TextInlineMath',
     3: 'Code',
-    4: 'Section-header',
+    4: 'SectionHeader',
     5: 'Caption',
     6: 'Footnote',
     7: 'Equation',
-    8: 'List-item',
-    9: 'Page-footer',
-    10: 'Page-header',
+    8: 'ListItem',
+    9: 'PageFooter',
+    10: 'PageHeader',
     11: 'Picture',
     12: 'Figure',
     13: 'Table',
     14: 'Form',
-    15: 'Table-of-contents',
+    15: 'TableOfContents',
     16: 'Handwriting'
 }
 

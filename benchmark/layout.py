@@ -45,9 +45,9 @@ def main():
 
     label_alignment = { # First is publaynet, second is surya
         "Image": [["Figure"], ["Picture", "Figure", "Handwriting"]],
-        "Table": [["Table"], ["Table", "Form", "Table-of-contents"]],
-        "Text": [["Text", "List"], ["Text", "Formula", "Footnote", "Caption", "List-item", "Text-inline-math", "Code", "Page-footer"]],
-        "Title": [["Title"], ["Section-header", "Title", "Page-header"]]
+        "Table": [["Table"], ["Table", "Form", "TableOfContents"]],
+        "Text": [["Text", "List"], ["Text", "Formula", "Footnote", "Caption", "ListItem", "TextInlineMath", "Code", "PageFooter"]],
+        "Title": [["Title"], ["SectionHeader", "Title", "PageHeader"]]
     }
 
     page_metrics = collections.OrderedDict()
