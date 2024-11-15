@@ -131,7 +131,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
 
     def __init__(
         self,
-        num_hidden_layers=3,
+        num_hidden_layers=5,
         vocab_size=PADDED_BBOX_SIZE, # Plus one because if max_size is 1024, you actually need 1025 tokens
         bbox_size=BBOX_SIZE, # Special tokens for padding, bos, eos, (bos, eos are the same)
         label_count=LABEL_COUNT + SPECIAL_TOKENS, # 2 for special tokens
@@ -155,10 +155,10 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
-        cross_attn_layers=(0, 1, 2),
-        encoder_cross_attn_layers=(0, 1, 2),
-        self_attn_layers=(0, 1, 2),
-        global_attn_layers=(0, 1, 2),
+        cross_attn_layers=(0, 1, 3, 4),
+        encoder_cross_attn_layers=(0, 1, 3, 4),
+        self_attn_layers=(0, 1, 2, 3, 4, 5),
+        global_attn_layers=(0, 1, 2, 3, 4, 5),
         attention_dropout=0.0,
         num_key_value_heads=2,
         attention_bias=False,

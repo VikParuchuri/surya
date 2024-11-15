@@ -22,7 +22,7 @@ def get_batch_size():
     return batch_size
 
 
-def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler):
+def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler, skew_min=.001):
     w_scale = img_size[0] / bbox_scaler
     h_scale = img_size[1] / bbox_scaler
 
@@ -37,11 +37,16 @@ def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler):
     y2 = cy + height / 2
     skew_x = torch.floor((boxes[:, 4] - skew_scaler) / 2)
     skew_y = torch.floor((boxes[:, 5] - skew_scaler) / 2)
+
+    # Ensures we don't get slightly warped boxes
+    # Note that the values are later scaled, so this is in 1/1024 space
+    skew_x[torch.abs(skew_x) < skew_min] = 0
+    skew_y[torch.abs(skew_y) < skew_min] = 0
+
     polygon = torch.stack(
         [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y],
         dim=-1)
-    polygon = polygon * torch.tensor([w_scale, h_scale, w_scale, h_scale, w_scale, h_scale, w_scale, h_scale],
-                                      dtype=polygon.dtype, device=polygon.device)
+    polygon = polygon * torch.tensor([w_scale, h_scale], dtype=polygon.dtype, device=polygon.device).repeat(4)
     return polygon
 
 
