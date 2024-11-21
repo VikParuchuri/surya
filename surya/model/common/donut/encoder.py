@@ -717,7 +717,6 @@ class DonutSwinEncoder(nn.Module):
             hidden_states = layer_outputs[0]
             hidden_states_before_downsampling = layer_outputs[1]
             output_dimensions = layer_outputs[2]
-
             input_dimensions = (output_dimensions[-2], output_dimensions[-1])
 
             if output_hidden_states and output_hidden_states_before_downsampling:
