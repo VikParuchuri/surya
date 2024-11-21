@@ -72,6 +72,7 @@ class DonutSwinTableRecConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-5,
         encoder_length=1024,
+        starting_positional_embeddings=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -98,6 +99,7 @@ class DonutSwinTableRecConfig(PretrainedConfig):
         # this indicates the channel dimension after the last stage of the model
         self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
         self.encoder_length = encoder_length
+        self.starting_positional_embeddings = starting_positional_embeddings
 
 
 class SuryaTableRecDecoderConfig(PretrainedConfig):

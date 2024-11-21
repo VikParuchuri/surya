@@ -67,12 +67,12 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         batch_pixel_values = model_inputs["pixel_values"]
         batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
 
+        pause_token = [model.config.decoder.size_token_id] * 7
+        start_token = [model.config.decoder.bos_token_id] * 7
         batch_decoder_input = [
-        [
-            [model.config.decoder.bos_token_id] * 7,
-            [orig_sizes[j][1] // model.config.decoder.img_size_bucket, orig_sizes[j][0] // model.config.decoder.img_size_bucket] + [model.config.decoder.size_token_id] * 5
-
-        ] for j in range(current_batch_size)]
+            [start_token] + [pause_token] * model.config.decoder.pause_token_count
+            for j in range(current_batch_size)
+        ]
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
 

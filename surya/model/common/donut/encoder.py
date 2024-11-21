@@ -464,7 +464,7 @@ class DonutSwinOutput(nn.Module):
 
 # Copied from transformers.models.swin.modeling_swin.SwinLayer with Swin->DonutSwin
 class DonutSwinLayer(nn.Module):
-    def __init__(self, config, dim, input_resolution, num_heads, num_kv_heads, shift_size=0):
+    def __init__(self, config, drop_path_rate, dim, input_resolution, num_heads, num_kv_heads, shift_size=0):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.shift_size = shift_size
@@ -472,7 +472,7 @@ class DonutSwinLayer(nn.Module):
         self.input_resolution = input_resolution
         self.layernorm_before = nn.LayerNorm(dim, eps=config.layer_norm_eps)
         self.attention = DonutSwinAttention(config, dim, num_heads, num_kv_heads, window_size=self.window_size)
-        self.drop_path = DonutSwinDropPath(config.drop_path_rate) if config.drop_path_rate > 0.0 else nn.Identity()
+        self.drop_path = DonutSwinDropPath(drop_path_rate) if drop_path_rate > 0.0 else nn.Identity()
         self.layernorm_after = nn.LayerNorm(dim, eps=config.layer_norm_eps)
         self.intermediate = DonutSwinIntermediate(config, dim)
         self.output = DonutSwinOutput(config, dim)
@@ -590,7 +590,7 @@ class DonutSwinLayer(nn.Module):
 
 # Copied from transformers.models.swin.modeling_swin.SwinStage with Swin->DonutSwin
 class DonutSwinStage(nn.Module):
-    def __init__(self, config, dim, input_resolution, depth, num_heads, num_kv_heads, drop_path, downsample):
+    def __init__(self, config, layer_num, dim, input_resolution, depth, num_heads, num_kv_heads, drop_path, downsample):
         super().__init__()
         self.config = config
         self.dim = dim
@@ -598,6 +598,7 @@ class DonutSwinStage(nn.Module):
             [
                 DonutSwinLayer(
                     config=config,
+                    drop_path_rate=drop_path[i],
                     dim=dim,
                     input_resolution=input_resolution,
                     num_heads=num_heads,
@@ -616,6 +617,10 @@ class DonutSwinStage(nn.Module):
 
         self.pointing = False
 
+        self.position_embeddings = None
+        if layer_num == 0 and config.starting_positional_embeddings:
+            self.position_embeddings = nn.Parameter(torch.zeros(1, input_resolution[0] * input_resolution[1] + config.encoder_length, dim))
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -633,6 +638,9 @@ class DonutSwinStage(nn.Module):
             )
 
             hidden_states = layer_outputs[0]
+
+        if self.position_embeddings is not None:
+            hidden_states = hidden_states + self.position_embeddings[:, :hidden_states.size(1)]
 
         hidden_states_before_downsampling = hidden_states
         if self.downsample is not None:
@@ -660,6 +668,7 @@ class DonutSwinEncoder(nn.Module):
             [
                 DonutSwinStage(
                     config=config,
+                    layer_num=i_layer,
                     dim=int(config.embed_dim * 2**i_layer),
                     input_resolution=(grid_size[0] // (2**i_layer), grid_size[1] // (2**i_layer)),
                     depth=config.depths[i_layer],

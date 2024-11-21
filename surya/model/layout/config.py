@@ -8,7 +8,6 @@ from surya.settings import settings
 
 SPECIAL_TOKENS = 3
 QUERY_TOKENS = 192
-IMG_SIZE_BUCKET = 100
 BBOX_SIZE = 1024
 PADDED_BBOX_SIZE = BBOX_SIZE + 1
 
@@ -98,6 +97,7 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-5,
         encoder_length=768,
+        starting_positional_embeddings=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -124,6 +124,7 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         # this indicates the channel dimension after the last stage of the model
         self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
         self.encoder_length = encoder_length
+        self.starting_positional_embeddings = starting_positional_embeddings
 
 
 class SuryaLayoutDecoderConfig(PretrainedConfig):
@@ -168,6 +169,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         aux_heads=0, # How many n-token-ahead heads to add
         causal=True,
         layer_norm_eps=1e-5,
+        pause_token_count=5,
         **kwargs,
     ):
         self.num_hidden_layers = num_hidden_layers
@@ -208,6 +210,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         self.img_size_bucket = img_size_bucket
         self.special_token_count = special_token_count
         self.layer_norm_eps = layer_norm_eps
+        self.pause_token_count = pause_token_count
 
         super().__init__(
             pad_token_id=pad_token_id,
