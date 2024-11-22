@@ -617,9 +617,31 @@ class DonutSwinStage(nn.Module):
 
         self.pointing = False
 
-        self.position_embeddings = None
-        if layer_num == 0 and config.starting_positional_embeddings:
-            self.position_embeddings = nn.Parameter(torch.zeros(1, input_resolution[0] * input_resolution[1] + config.encoder_length, dim))
+        self.positional_encoding = None
+        if config.use_positional_embeddings:
+            self.positional_encoding = self.build_2d_sincos_position_embedding(
+                input_resolution[1],
+                input_resolution[0],
+                embed_dim=dim,
+            )
+
+    @staticmethod
+    def build_2d_sincos_position_embedding(
+        width, height, embed_dim=256, temperature=10000.0, device="cpu", dtype=torch.float32
+    ):
+        grid_w = torch.arange(int(width), dtype=dtype, device=device)
+        grid_h = torch.arange(int(height), dtype=dtype, device=device)
+        grid_w, grid_h = torch.meshgrid(grid_w, grid_h, indexing="ij")
+        if embed_dim % 4 != 0:
+            raise ValueError("Embed dimension must be divisible by 4 for 2D sin-cos position embedding")
+        pos_dim = embed_dim // 4
+        omega = torch.arange(pos_dim, dtype=dtype, device=device) / pos_dim
+        omega = 1.0 / (temperature**omega)
+
+        out_w = grid_w.flatten()[..., None] @ omega[None]
+        out_h = grid_h.flatten()[..., None] @ omega[None]
+
+        return torch.concat([out_w.sin(), out_w.cos(), out_h.sin(), out_h.cos()], dim=1)[None, :, :]
 
     def forward(
         self,
@@ -630,6 +652,10 @@ class DonutSwinStage(nn.Module):
         always_partition: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
         height, width = input_dimensions
+
+        if self.positional_encoding is not None:
+            hidden_states = hidden_states + self.positional_encoding.to(hidden_states.dtype).to(hidden_states.device)
+
         for i, layer_module in enumerate(self.blocks):
             layer_head_mask = head_mask[i] if head_mask is not None else None
 
@@ -638,9 +664,6 @@ class DonutSwinStage(nn.Module):
             )
 
             hidden_states = layer_outputs[0]
-
-        if self.position_embeddings is not None:
-            hidden_states = hidden_states + self.position_embeddings[:, :hidden_states.size(1)]
 
         hidden_states_before_downsampling = hidden_states
         if self.downsample is not None:

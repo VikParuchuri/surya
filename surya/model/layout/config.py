@@ -93,11 +93,11 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         attention_probs_dropout_prob=0.0,
         drop_path_rate=0,
         hidden_act="gelu",
-        use_absolute_embeddings=True,
+        use_absolute_embeddings=False,
+        use_positional_embeddings=True,
         initializer_range=0.02,
         layer_norm_eps=1e-5,
         encoder_length=768,
-        starting_positional_embeddings=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -117,14 +117,14 @@ class DonutSwinLayoutConfig(PretrainedConfig):
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.drop_path_rate = drop_path_rate
         self.hidden_act = hidden_act
-        self.use_absolute_embeddings = use_absolute_embeddings
+        self.use_absolute_embeddings = False
         self.layer_norm_eps = layer_norm_eps
         self.initializer_range = initializer_range
         # we set the hidden_size attribute in order to make Swin work with VisionEncoderDecoderModel
         # this indicates the channel dimension after the last stage of the model
         self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
         self.encoder_length = encoder_length
-        self.starting_positional_embeddings = starting_positional_embeddings
+        self.use_positional_embeddings = use_positional_embeddings
 
 
 class SuryaLayoutDecoderConfig(PretrainedConfig):
@@ -151,7 +151,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         pad_token_id=0,
         eos_token_id=1,
         bos_token_id=1,
-        size_token_id=2,
+        pause_token_id=2,
         img_size_bucket=100,
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
@@ -206,7 +206,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         self.bbox_size = bbox_size
         self.label_count = label_count
         self.skew_scaler = skew_scaler
-        self.size_token_id = size_token_id
+        self.pause_token_id = pause_token_id
         self.img_size_bucket = img_size_bucket
         self.special_token_count = special_token_count
         self.layer_norm_eps = layer_norm_eps
