@@ -88,6 +88,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
             paused = [False] * current_batch_size
+            pause_counts = [0] * current_batch_size
 
             while token_count < settings.LAYOUT_MAX_BOXES:
                 is_prefill = token_count == 0
@@ -131,6 +132,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                         # Add a pause token if needed
                         if entropy[j].item() > .75 and not paused[j]:
                             paused[j] = True
+                            pause_counts[j] += 1
                             batch_decoder_input[j, :] = model.decoder.config.pause_token_id
                         else:
                             paused[j] = False
@@ -141,6 +143,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
         for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
             boxes = []
+            print(pause_counts[j])
             if len(preds) > 0:
                 preds = [p for p in preds if p[6] > model.decoder.config.special_token_count] # Remove special tokens, like pause
                 stacked_preds = torch.stack(preds, dim=0)
