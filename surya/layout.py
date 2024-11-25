@@ -7,6 +7,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.model.layout.config import ID_TO_LABEL
+from surya.postprocessing.heatmap import clean_boxes, intersects_other_boxes
 from surya.schema import LayoutResult, LayoutBox
 from surya.settings import settings
 
@@ -27,27 +28,39 @@ def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler, skew_min=.00
     h_scale = img_size[1] / bbox_scaler
 
     boxes = pred
-    cx = boxes[:, 0]
-    cy = boxes[:, 1]
-    width = boxes[:, 2]
-    height = boxes[:, 3]
+    cx = boxes[0]
+    cy = boxes[1]
+    width = boxes[2]
+    height = boxes[3]
     x1 = cx - width / 2
     y1 = cy - height / 2
     x2 = cx + width / 2
     y2 = cy + height / 2
-    skew_x = torch.floor((boxes[:, 4] - skew_scaler) / 2)
-    skew_y = torch.floor((boxes[:, 5] - skew_scaler) / 2)
+    skew_x = torch.floor((boxes[4] - skew_scaler) / 2)
+    skew_y = torch.floor((boxes[5] - skew_scaler) / 2)
 
     # Ensures we don't get slightly warped boxes
     # Note that the values are later scaled, so this is in 1/1024 space
     skew_x[torch.abs(skew_x) < skew_min] = 0
     skew_y[torch.abs(skew_y) < skew_min] = 0
 
-    polygon = torch.stack(
-        [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y],
-        dim=-1)
-    polygon = polygon * torch.tensor([w_scale, h_scale], dtype=polygon.dtype, device=polygon.device).repeat(4)
-    return polygon
+    polygon = [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y]
+    poly = []
+    for i in range(4):
+        poly.append([
+            polygon[2 * i].item() * w_scale,
+            polygon[2 * i + 1].item() * h_scale
+        ])
+    return poly
+
+
+def find_pause_items(preds):
+    pause_sequence = []
+    for p in preds[::-1]:
+        if not p["paused"]:
+            return pause_sequence
+        pause_sequence.insert(0, p)
+    return pause_sequence
 
 
 def batch_layout_detection(images: List, model, processor, batch_size=None) -> List[LayoutResult]:
@@ -80,15 +93,12 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         batch_predictions = [[] for _ in range(len(images))]
-        batch_entropies = [[] for _ in range(len(images))]
 
         with torch.inference_mode():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values)[0]
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
-            paused = [False] * current_batch_size
-            pause_counts = [0] * current_batch_size
 
             while token_count < settings.LAYOUT_MAX_BOXES:
                 is_prefill = token_count == 0
@@ -113,7 +123,6 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 done = (class_preds == model.decoder.config.eos_token_id) | (class_preds == model.decoder.config.pad_token_id)
 
                 all_done = all_done | done
-
                 if all_done.all():
                     break
 
@@ -121,52 +130,60 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                     if not status:
-                        if paused[j]:
-                            if len(batch_entropies[j]) == 0 or entropy[j].item() < batch_entropies[j][-1]:
-                                batch_predictions[j][-1] = pred[0].detach().clone()
-                                batch_entropies[j][-1] = entropy[j].item()
-                        else:
-                            batch_predictions[j].append(pred[0].detach().clone())
-                            batch_entropies[j].append(entropy[j].item())
-
-                        # Add a pause token if needed
-                        if entropy[j].item() > .75 and not paused[j]:
-                            paused[j] = True
-                            pause_counts[j] += 1
+                        last_prediction = batch_predictions[j][-1] if len(batch_predictions[j]) > 0 else None
+                        preds = pred[0].detach().cpu()
+                        prediction = {
+                            "preds": preds,
+                            "token": preds,
+                            "entropy": entropy[j].item(),
+                            "paused": False,
+                            "pause_tokens": 0,
+                            "polygon": prediction_to_polygon(
+                                    preds,
+                                    orig_sizes[j],
+                                    model.config.decoder.bbox_size,
+                                    model.config.decoder.skew_scaler
+                                ),
+                            "label": preds[6].item() - model.decoder.config.special_token_count
+                        }
+                        if last_prediction and last_prediction["paused"]:
+                            pause_sequence = find_pause_items(batch_predictions[j])
+                            entropies = [p["entropy"] for p in pause_sequence]
+                            min_entropy = min(entropies)
+                            max_pause_tokens = last_prediction["pause_tokens"]
+                            if len(pause_sequence) < max_pause_tokens and prediction["entropy"] > min_entropy:
+                                # Continue the pause
+                                prediction["paused"] = True
+                                prediction["pause_tokens"] = last_prediction["pause_tokens"]
+                                prediction["token"].fill_(model.decoder.config.pause_token_id)
+                                batch_decoder_input[j, :] = model.decoder.config.pause_token_id
+                        elif intersects_other_boxes(prediction["polygon"], [p["polygon"] for p in batch_predictions[j]], thresh=.7):
+                            prediction["paused"] = True
+                            prediction["pause_tokens"] = 1
+                            prediction["token"].fill_(model.decoder.config.pause_token_id)
                             batch_decoder_input[j, :] = model.decoder.config.pause_token_id
-                        else:
-                            paused[j] = False
+
+                        batch_predictions[j].append(prediction)
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
                 batch_decoder_input = batch_decoder_input.to(torch.long)
 
-        for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
+        for j, (pred_dict, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
             boxes = []
-            print(pause_counts[j])
+            preds = [p for p in pred_dict if p["token"][6] > model.decoder.config.special_token_count] # Remove special tokens, like pause
             if len(preds) > 0:
-                preds = [p for p in preds if p[6] > model.decoder.config.special_token_count] # Remove special tokens, like pause
-                stacked_preds = torch.stack(preds, dim=0)
-                polygons = prediction_to_polygon(
-                    stacked_preds,
-                    orig_size,
-                    model.config.decoder.bbox_size,
-                    model.config.decoder.skew_scaler
-                )
-                labels = stacked_preds[:, 6] - model.decoder.config.special_token_count
+                polygons = [p["polygon"] for p in preds]
+                labels = [p["label"] for p in preds]
 
-                for z, (polygon, label) in enumerate(zip(polygons, labels)):
-                    poly = polygon.tolist()
-                    poly = [
-                        (poly[2 * i], poly[2 * i + 1])
-                        for i in range(4)
-                    ]
+                for z, (poly, label) in enumerate(zip(polygons, labels)):
                     lb = LayoutBox(
                         polygon=poly,
-                        label=ID_TO_LABEL[label.item()],
+                        label=ID_TO_LABEL[int(label)],
                         position=z
                     )
                     boxes.append(lb)
+            boxes = clean_boxes(boxes)
             result = LayoutResult(
                 bboxes=boxes,
                 image_bbox=[0, 0, orig_size[0], orig_size[1]]
