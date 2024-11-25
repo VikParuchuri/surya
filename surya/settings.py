@@ -69,8 +69,9 @@ class Settings(BaseSettings):
     LAYOUT_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     LAYOUT_BATCH_SIZE: Optional[int] = None
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
-    LAYOUT_MAX_BOXES: int = 150
+    LAYOUT_MAX_BOXES: int = 100
     COMPILE_LAYOUT: bool = False
+    ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
     TABLE_REC_MODEL_CHECKPOINT: str = "vikp/surya_tablerec"

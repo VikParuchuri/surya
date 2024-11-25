@@ -2,19 +2,8 @@ from functools import partial
 from itertools import repeat
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-
-def intersection_area(box1, box2):
-    x_left = max(box1[0], box2[0])
-    y_top = max(box1[1], box2[1])
-    x_right = min(box1[2], box2[2])
-    y_bottom = min(box1[3], box2[3])
-
-    if x_right < x_left or y_bottom < y_top:
-        return 0.0
-
-    return (x_right - x_left) * (y_bottom - y_top)
 
 def box_area(box):
     return (box[2] - box[0]) * (box[3] - box[1])
@@ -109,16 +98,39 @@ def calculate_coverage(box, other_boxes, penalize_double=False):
     return covered_pixels_count / box_area
 
 
+def intersection_area(box1, box2):
+    x_left = max(box1[0], box2[0])
+    y_top = max(box1[1], box2[1])
+    x_right = min(box1[2], box2[2])
+    y_bottom = min(box1[3], box2[3])
+
+    if x_right < x_left or y_bottom < y_top:
+        return 0.0
+
+    return (x_right - x_left) * (y_bottom - y_top)
+
+
 def calculate_coverage_fast(box, other_boxes, penalize_double=False):
+    box = np.array(box)
+    other_boxes = np.array(other_boxes)
+
+    # Calculate box area
     box_area = (box[2] - box[0]) * (box[3] - box[1])
     if box_area == 0:
         return 0
 
-    total_intersect = 0
-    for other_box in other_boxes:
-        total_intersect += intersection_area(box, other_box)
+    x_left = np.maximum(box[0], other_boxes[:, 0])
+    y_top = np.maximum(box[1], other_boxes[:, 1])
+    x_right = np.minimum(box[2], other_boxes[:, 2])
+    y_bottom = np.minimum(box[3], other_boxes[:, 3])
 
-    return min(1, total_intersect / box_area)
+    widths = np.maximum(0, x_right - x_left)
+    heights = np.maximum(0, y_bottom - y_top)
+    intersect_areas = widths * heights
+
+    total_intersect = np.sum(intersect_areas)
+
+    return min(1.0, total_intersect / box_area)
 
 
 def precision_recall(preds, references, threshold=.5, workers=8, penalize_double=True):
@@ -139,7 +151,7 @@ def precision_recall(preds, references, threshold=.5, workers=8, penalize_double
     if penalize_double:
         coverage_func = calculate_coverage
 
-    with ProcessPoolExecutor(max_workers=workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         precision_func = partial(coverage_func, penalize_double=penalize_double)
         precision_iou = executor.map(precision_func, preds, repeat(references))
         reference_iou = executor.map(coverage_func, references, repeat(preds))

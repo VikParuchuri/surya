@@ -222,7 +222,7 @@ The `results.json` file will contain a json dictionary where the keys are the in
 
 **Performance tips**
 
-Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `400MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `36`, which will use about 16GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `6`.
+Setting the `LAYOUT_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `220MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `32`, which will use about 7GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `4`.
 
 ### From python
 
@@ -277,7 +277,6 @@ The `results.json` file will contain a json dictionary where the keys are the in
 **Performance tips**
 
 Setting the `TABLE_REC_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `150MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `64`, which will use about 10GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `8`.
-
 
 # Limitations
 
@@ -364,16 +363,15 @@ Then we calculate precision and recall for the whole dataset.
 
 ## Layout analysis
 
-![Benchmark chart](static/images/benchmark_layout_chart.png)
+| Layout Type   |   precision |   recall |
+|---------------|-------------|----------|
+| Image         |     0.91265 |  0.93976 |
+| List          |     0.80849 |  0.86792 |
+| Table         |     0.84957 |  0.96104 |
+| Text          |     0.93019 |  0.94571 |
+| Title         |     0.92102 |  0.95404 |
 
-| Layout Type | precision | recall |
-| ----------- | --------- | ------ |
-| Image       | 0.97      | 0.96   |
-| Table       | 0.99      | 0.99   |
-| Text        | 0.9       | 0.97   |
-| Title       | 0.94      | 0.88   |
-
-Time per image - .4 seconds on GPU (A10).
+Time per image - .13 seconds on GPU (A10).
 
 **Methodology**
 
@@ -384,7 +382,7 @@ I benchmarked the layout analysis on [Publaynet](https://github.com/ibm-aur-nlp/
 
 ## Reading Order
 
-75% mean accuracy, and .14 seconds per image on an A6000 GPU.  See methodology for notes - this benchmark is not perfect measure of accuracy, and is more useful as a sanity check.
+88% mean accuracy, and .4 seconds per image on an A10 GPU.  See methodology for notes - this benchmark is not perfect measure of accuracy, and is more useful as a sanity check.
 
 **Methodology**
 

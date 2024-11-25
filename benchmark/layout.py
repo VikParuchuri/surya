@@ -44,10 +44,11 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     label_alignment = { # First is publaynet, second is surya
-        "Image": [["Figure"], ["Picture", "Figure", "Handwriting"]],
+        "Image": [["Figure"], ["Picture", "Figure"]],
         "Table": [["Table"], ["Table", "Form", "TableOfContents"]],
-        "Text": [["Text", "List"], ["Text", "Formula", "Footnote", "Caption", "ListItem", "TextInlineMath", "Code", "PageFooter"]],
-        "Title": [["Title"], ["SectionHeader", "Title", "PageHeader"]]
+        "Text": [["Text"], ["Text", "Formula", "Footnote", "Caption", "TextInlineMath", "Code", "Handwriting"]],
+        "List": [["List"], ["ListItem"]],
+        "Title": [["Title"], ["SectionHeader", "Title"]]
     }
 
     page_metrics = collections.OrderedDict()
