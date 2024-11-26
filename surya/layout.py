@@ -6,6 +6,7 @@ from PIL import Image
 
 from tqdm import tqdm
 
+from surya.input.slicing import ImageSlicer
 from surya.model.layout.config import ID_TO_LABEL
 from surya.postprocessing.heatmap import clean_boxes, intersects_other_boxes
 from surya.schema import LayoutResult, LayoutBox
@@ -68,10 +69,31 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
     if batch_size is None:
         batch_size = get_batch_size()
 
+    slicer = ImageSlicer(settings.LAYOUT_SLICE_SIZE)
+
+    batches = []
+    img_counts = [slicer.slice_count(image) for image in images]
+
+    start_idx = 0
+    end_idx = 1
+    while end_idx < len(img_counts):
+        if any([
+            sum(img_counts[start_idx:end_idx]) >= batch_size,
+            sum(img_counts[start_idx:end_idx + 1]) > batch_size,
+            ]):
+            batches.append((start_idx, end_idx))
+            start_idx = end_idx
+        end_idx += 1
+
+    if start_idx < len(img_counts):
+        batches.append((start_idx, len(img_counts)))
+
     results = []
-    for i in tqdm(range(0, len(images), batch_size), desc="Recognizing layout"):
-        batch_images = images[i:i+batch_size]
+    for (start_idx, end_idx) in tqdm(batches, desc="Recognizing layout"):
+        batch_results = []
+        batch_images = images[start_idx:end_idx]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the image
+        batch_images, tile_positions = slicer.slice(batch_images)
         current_batch_size = len(batch_images)
 
         orig_sizes = [image.size for image in batch_images]
@@ -84,7 +106,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         start_token = [model.config.decoder.bos_token_id] * 7
         batch_decoder_input = [
             [start_token] + [pause_token] * model.config.decoder.pause_token_count
-            for j in range(current_batch_size)
+            for _ in range(current_batch_size)
         ]
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
@@ -92,7 +114,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
-        batch_predictions = [[] for _ in range(len(images))]
+        batch_predictions = [[] for _ in range(current_batch_size)]
 
         with torch.inference_mode():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values)[0]
@@ -188,5 +210,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 bboxes=boxes,
                 image_bbox=[0, 0, orig_size[0], orig_size[1]]
             )
-            results.append(result)
+            batch_results.append(result)
+
+        assert len(batch_results) == len(tile_positions)
+        batch_results = slicer.join(batch_results, tile_positions)
+        results.extend(batch_results)
+
+    assert len(results) == len(images)
     return results

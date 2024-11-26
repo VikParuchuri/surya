@@ -72,9 +72,15 @@ class PolygonBox(BaseModel):
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
     def intersection_area(self, other, x_margin=0, y_margin=0):
-        x_overlap = max(0, min(self.bbox[2] + x_margin, other.bbox[2] + x_margin) - max(self.bbox[0] - x_margin, other.bbox[0] - x_margin))
-        y_overlap = max(0, min(self.bbox[3] + y_margin, other.bbox[3] + y_margin) - max(self.bbox[1] - y_margin, other.bbox[1] - y_margin))
+        x_overlap = self.x_overlap(other, x_margin)
+        y_overlap = self.y_overlap(other, y_margin)
         return x_overlap * y_overlap
+
+    def x_overlap(self, other, x_margin=0):
+        return max(0, min(self.bbox[2] + x_margin, other.bbox[2] + x_margin) - max(self.bbox[0] - x_margin, other.bbox[0] - x_margin))
+
+    def y_overlap(self, other, y_margin=0):
+        return max(0, min(self.bbox[3] + y_margin, other.bbox[3] + y_margin) - max(self.bbox[1] - y_margin, other.bbox[1] - y_margin))
 
     def intersection_pct(self, other, x_margin=0, y_margin=0):
         assert 0 <= x_margin <= 1
@@ -89,6 +95,14 @@ class PolygonBox(BaseModel):
 
         intersection = self.intersection_area(other, x_margin, y_margin)
         return intersection / self.area
+
+    def shift(self, x_shift: float | None = None, y_shift: float | None = None):
+        if x_shift is not None:
+            for corner in self.polygon:
+                corner[0] += x_shift
+        if y_shift is not None:
+            for corner in self.polygon:
+                corner[1] += y_shift
 
 
 class Bbox(BaseModel):
