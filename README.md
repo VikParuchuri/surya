@@ -197,7 +197,7 @@ model, processor = load_model(), load_processor()
 predictions = batch_text_detection([image], model, processor)
 ```
 
-## Layout analysis
+## Layout and reading order
 
 This command will write out a json file with the detected layout and reading order.
 
@@ -231,7 +231,6 @@ from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
 from surya.model.layout.model import load_model, load_processor
-from surya.settings import settings
 
 image = Image.open(IMAGE_PATH)
 model = load_model()
@@ -277,6 +276,10 @@ The `results.json` file will contain a json dictionary where the keys are the in
 **Performance tips**
 
 Setting the `TABLE_REC_BATCH_SIZE` env var properly will make a big difference when using a GPU.  Each batch item will use `150MB` of VRAM, so very high batch sizes are possible.  The default is a batch size `64`, which will use about 10GB of VRAM.  Depending on your CPU core count, it might help, too - the default CPU batch size is `8`.
+
+### From python
+
+See `table_recognition.py` for a code sample.  Table recognition depends on extracting cells, so it is a little more involved to setup than other model types.
 
 # Limitations
 
