@@ -12,6 +12,7 @@ SLICES_TYPE = Tuple[List[Image.Image], List[Tuple[int, int, int]]]
 
 class ImageSlicer:
     merge_tolerance = .05
+    merge_margin = .05
 
     def __init__(self, slice_min_dims, max_slices=4):
         self.slice_min_dims = slice_min_dims
@@ -82,43 +83,54 @@ class ImageSlicer:
             new_results.append(current_result)
         return new_results
 
-
     def merge_results(self, res1: LayoutResult, res2: LayoutResult, merge_dir="width") -> LayoutResult:
         new_image_bbox = res1.image_bbox.copy()
         to_remove_idxs = set()
         if merge_dir == "width":
             new_image_bbox[2] += res2.image_bbox[2]
-            max_position = max([box.position for box in res1.bboxes])
+            max_position = max([box.position for box in res1.bboxes]) + 1
             for i, box2 in enumerate(res2.bboxes):
                 box2.shift(x_shift=res1.image_bbox[2])
                 box2.position += max_position
                 for j, box1 in enumerate(res1.bboxes):
                     if all([
-                        box1.intersection_area(box2, x_margin=.1) > self.merge_tolerance,
-                        (
-                                box1.y_overlap(box2, y_margin=.1) > box1.height // 2 or
-                                box2.y_overlap(box1, y_margin=.1) > box2.height // 2
-                        ),
-                        box1.label == box2.label
-                        ]):
+                        any([
+                            box1.intersection_pct(box2, x_margin=self.merge_margin) > self.merge_tolerance,
+                            box2.intersection_pct(box1, x_margin=self.merge_margin) > self.merge_tolerance
+                        ]),
+                        any([
+                            box1.y_overlap(box2) > box1.height // 2,
+                            box2.y_overlap(box1) > box2.height // 2
+                        ]),
+                        any([
+                            box1.label == box2.label,
+                            (box1.label in ["Picture", "Figure"] and box2.label in ["Picture", "Figure"])
+                        ])
+                    ]):
                         box1.merge(box2)
                         to_remove_idxs.add(i)
 
         elif merge_dir == "height":
             new_image_bbox[3] += res2.image_bbox[3]
-            max_position = max([box.position for box in res1.bboxes])
+            max_position = max([box.position for box in res1.bboxes]) + 1
             for i, box2 in enumerate(res2.bboxes):
                 box2.shift(y_shift=res1.image_bbox[3])
                 box2.position += max_position
                 for j, box1 in enumerate(res1.bboxes):
                     if all([
-                        box1.intersection_area(box2, y_margin=.1) > self.merge_tolerance,
-                        (
-                                box1.x_overlap(box2, x_margin=.1) > box1.width // 2 or
-                                box2.x_overlap(box1, x_margin=.1) > box2.width // 2
-                        ),
-                        box1.label == box2.label
-                        ]):
+                        any([
+                            box1.intersection_pct(box2, y_margin=self.merge_margin) > self.merge_tolerance,
+                            box2.intersection_pct(box1, y_margin=self.merge_margin) > self.merge_tolerance
+                        ]),
+                        any([
+                            box1.x_overlap(box2) > box1.width // 2,
+                            box2.x_overlap(box1) > box2.width // 2
+                        ]),
+                        any([
+                            box1.label == box2.label,
+                            (box1.label in ["Picture", "Figure"] and box2.label in ["Picture", "Figure"])
+                        ])
+                    ]):
                         box1.merge(box2)
                         to_remove_idxs.add(i)
 
