@@ -5,7 +5,7 @@ import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 from surya.model.layout.encoder import DonutSwinLayoutModel
-from surya.model.layout.decoder import SuryaLayoutDecoder
+from surya.model.layout.decoder import SuryaLayoutDecoder, SuryaLayoutTextEncoder
 from transformers.utils import ModelOutput
 
 @dataclass
@@ -28,6 +28,7 @@ class SuryaLayoutModel(PreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
+        text_encoder: Optional[PreTrainedModel] = None,
     ):
         # initialize with config
         # make sure input & output embeddings is not tied
@@ -40,6 +41,10 @@ class SuryaLayoutModel(PreTrainedModel):
 
         if decoder is None:
             decoder = SuryaLayoutDecoder(config.decoder, attn_implementation=config._attn_implementation)
+
+        if text_encoder is None and hasattr(config, "text_encoder"):
+            text_encoder = SuryaLayoutTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)
+            self.text_encoder = text_encoder
 
         self.encoder = encoder
         self.decoder = decoder

@@ -91,6 +91,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
+        if hasattr(model, "text_encoder"):
+            model.text_encoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         batch_predictions = [[] for _ in range(len(images))]
 
@@ -99,6 +101,24 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
+
+            if hasattr(model, "text_encoder"):
+                text_encoder_input_ids = torch.arange(
+                    model.text_encoder.config.query_token_count,
+                    device=encoder_hidden_states.device,
+                    dtype=torch.long
+                ).unsqueeze(0).expand(encoder_hidden_states.size(0), -1)
+
+                text_encoder_hidden_states = model.text_encoder(
+                    input_ids=text_encoder_input_ids,
+                    cache_position=None,
+                    attention_mask=None,
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_attention_mask=None,
+                    use_cache=False
+                ).hidden_states
+
+                encoder_hidden_states = torch.cat([encoder_hidden_states, text_encoder_hidden_states], dim=1)
 
             while token_count < settings.LAYOUT_MAX_BOXES:
                 is_prefill = token_count == 0

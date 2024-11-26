@@ -8,7 +8,7 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import functional as F
 
-from surya.model.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel
+from surya.model.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel, WrappedEmbedding
 from surya.model.layout.config import LayoutModelOutput
 from transformers.modeling_outputs import CausalLMOutput
 from surya.settings import settings
@@ -126,4 +126,63 @@ class SuryaLayoutDecoder(SuryaADETRDecoderPreTrainedModel):
             bbox_logits=bbox_logits,
             class_logits=class_logits,
             hidden_states=outputs.hidden_states,
+        )
+
+@dataclass
+class TextEncoderOutput(CausalLMOutput):
+    hidden_states: torch.FloatTensor = None
+
+
+class SuryaLayoutTextEncoder(SuryaADETRDecoderPreTrainedModel):
+    _tied_weights_keys = None
+
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        embed_tokens = WrappedEmbedding(config.vocab_size, config.hidden_size, config.pad_token_id)
+
+        self.model = SuryaADETRDecoderModel(
+            config,
+            embedder=embed_tokens,
+            static_cache=settings.LAYOUT_STATIC_CACHE,
+            max_boxes=settings.LAYOUT_MAX_BOXES
+        )
+        self.vocab_size = config.vocab_size
+        self.post_init()
+
+    def get_input_embeddings(self):
+        return self.model.embed_tokens
+
+    def set_input_embeddings(self, value):
+        self.model.embed_tokens = value
+
+    def set_decoder(self, decoder):
+        self.model = decoder
+
+    def get_decoder(self):
+        return self.model
+
+    # Ignore copy
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> Union[Tuple, CausalLMOutput]:
+        outputs = self.model(
+            input_ids=input_ids,
+            cache_position=cache_position,
+            attention_mask=attention_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            use_cache=use_cache,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+
+        return TextEncoderOutput(
+            hidden_states=outputs.last_hidden_state,
         )
