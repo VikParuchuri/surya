@@ -43,8 +43,12 @@ class SuryaLayoutConfig(PretrainedConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        encoder_config = kwargs.pop("encoder")
-        decoder_config = kwargs.pop("decoder")
+        if "encoder" in kwargs:
+            encoder_config = kwargs.pop("encoder")
+            decoder_config = kwargs.pop("decoder")
+        else:
+            encoder_config = DonutSwinLayoutConfig()
+            decoder_config = SuryaLayoutDecoderConfig()
 
         self.encoder = encoder_config
         self.decoder = decoder_config
@@ -132,7 +136,7 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
 
     def __init__(
         self,
-        num_hidden_layers=6,
+        num_hidden_layers=8,
         vocab_size=PADDED_BBOX_SIZE, # Plus one because if max_size is 1024, you actually need 1025 tokens
         bbox_size=BBOX_SIZE, # Special tokens for padding, bos, eos, (bos, eos are the same)
         label_count=LABEL_COUNT + SPECIAL_TOKENS, # 2 for special tokens
@@ -156,10 +160,10 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),
-        cross_attn_layers=(0, 1, 3, 4, 5),
-        encoder_cross_attn_layers=(0, 1, 3, 4, 5),
-        self_attn_layers=(0, 1, 2, 3, 4, 5),
-        global_attn_layers=(0, 1, 2, 3, 4, 5),
+        cross_attn_layers=(0, 1, 2, 3, 4, 5, 6, 7),
+        encoder_cross_attn_layers=(0, 1, 2, 3, 4, 5, 6, 7),
+        self_attn_layers=(0, 1, 2, 3, 4, 5, 6, 7),
+        global_attn_layers=(0, 1, 2, 3, 4, 5, 6, 7),
         attention_dropout=0.0,
         num_key_value_heads=4,
         attention_bias=False,
