@@ -6,11 +6,10 @@ import copy
 import json
 from collections import defaultdict
 
-from surya.detection import batch_text_detection
 from surya.input.load import load_from_folder, load_from_file
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model, load_processor
+from surya.model.layout.model import load_model
+from surya.model.layout.processor import load_processor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os
@@ -27,8 +26,6 @@ def main():
 
     model = load_model()
     processor = load_processor()
-    det_model = load_det_model()
-    det_processor = load_det_processor()
 
     if os.path.isdir(args.input_path):
         images, names, _ = load_from_folder(args.input_path, args.max)
@@ -38,9 +35,7 @@ def main():
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     start = time.time()
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-
-    layout_predictions = batch_layout_detection(images, model, processor, line_predictions, include_maps=args.debug)
+    layout_predictions = batch_layout_detection(images, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
     if args.debug:
@@ -49,17 +44,13 @@ def main():
     if args.images:
         for idx, (image, layout_pred, name) in enumerate(zip(images, layout_predictions, names)):
             polygons = [p.polygon for p in layout_pred.bboxes]
-            labels = [p.label for p in layout_pred.bboxes]
+            labels = [f"{p.label}-{p.position}" for p in layout_pred.bboxes]
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image), labels=labels)
             bbox_image.save(os.path.join(result_path, f"{name}_{idx}_layout.png"))
 
-            if args.debug:
-                heatmap = layout_pred.segmentation_map
-                heatmap.save(os.path.join(result_path, f"{name}_{idx}_segmentation.png"))
-
     predictions_by_page = defaultdict(list)
     for idx, (pred, name, image) in enumerate(zip(layout_predictions, names, images)):
-        out_pred = pred.model_dump(exclude=["segmentation_map"])
+        out_pred = pred.model_dump()
         out_pred["page"] = len(predictions_by_page[name]) + 1
         predictions_by_page[name].append(out_pred)
 

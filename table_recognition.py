@@ -10,7 +10,8 @@ from surya.input.load import load_from_folder, load_from_file
 from surya.input.pdflines import get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model as load_layout_model, load_processor as load_layout_processor
+from surya.model.layout.model import load_model as load_layout_model
+from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.table_rec.model import load_model as load_model
 from surya.model.table_rec.processor import load_processor
 from surya.tables import batch_table_recognition
@@ -20,8 +21,8 @@ from surya.postprocessing.util import rescale_bboxes, rescale_bbox
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Find reading order of an input file or folder (PDFs or image).")
-    parser.add_argument("input_path", type=str, help="Path to pdf or image file or folder to find reading order in.")
+    parser = argparse.ArgumentParser(description="Detect tables in an input file or folder (PDFs or image).")
+    parser.add_argument("input_path", type=str, help="Path to pdf or image file or folder.")
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with layout results.", default=os.path.join(settings.RESULT_DIR, "surya"))
     parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
     parser.add_argument("--images", action="store_true", help="Save images of detected layout bboxes.", default=False)
@@ -57,8 +58,7 @@ def main():
 
         prev_name = name
 
-    line_predictions = batch_text_detection(images, det_model, det_processor)
-    layout_predictions = batch_layout_detection(images, layout_model, layout_processor, line_predictions)
+    layout_predictions = batch_layout_detection(images, layout_model, layout_processor)
     table_cells = []
 
     table_imgs = []

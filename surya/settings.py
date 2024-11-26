@@ -65,15 +65,14 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "vikp/surya_layout3"
+    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout0"
+    LAYOUT_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
+    LAYOUT_SLICE_MIN: Dict = {"height": 1500, "width": 1500} # When to start slicing images
+    LAYOUT_SLICE_SIZE: Dict = {"height": 1200, "width": 1200} # Size of slices
+    LAYOUT_BATCH_SIZE: Optional[int] = None
     LAYOUT_BENCH_DATASET_NAME: str = "vikp/publaynet_bench"
+    LAYOUT_MAX_BOXES: int = 100
     COMPILE_LAYOUT: bool = False
-
-    # Ordering
-    ORDER_MODEL_CHECKPOINT: str = "vikp/surya_order"
-    ORDER_IMAGE_SIZE: Dict = {"height": 1024, "width": 1024}
-    ORDER_MAX_BOXES: int = 256
-    ORDER_BATCH_SIZE: Optional[int] = None  # Defaults to 4 for CPU/MPS, 32 otherwise
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
