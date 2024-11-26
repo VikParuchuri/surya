@@ -14,9 +14,10 @@ class ImageSlicer:
     merge_tolerance = .05
     merge_margin = .05
 
-    def __init__(self, slice_min_dims, max_slices=4):
+    def __init__(self, slice_min_dims, slice_sizes, max_slices=4):
         self.slice_min_dims = slice_min_dims
         self.max_slices = max_slices
+        self.slice_sizes = slice_sizes
 
     def slice(self, images: List[Image.Image]) -> SLICES_TYPE:
         all_slices = []
@@ -44,7 +45,7 @@ class ImageSlicer:
             return math.ceil(height / slice_size)
 
     def _calculate_slice_size(self, dimension: int, dim_type: str) -> int:
-        min_size = self.slice_min_dims[dim_type]
+        min_size = self.slice_sizes[dim_type]
         return max(min_size, (dimension // self.max_slices + 1))
 
     def _slice_image(self, image: Image.Image, idx: int) -> SLICES_TYPE:

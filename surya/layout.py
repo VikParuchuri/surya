@@ -69,7 +69,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
     if batch_size is None:
         batch_size = get_batch_size()
 
-    slicer = ImageSlicer(settings.LAYOUT_SLICE_SIZE)
+    slicer = ImageSlicer(settings.LAYOUT_SLICE_MIN, settings.LAYOUT_SLICE_SIZE)
 
     batches = []
     img_counts = [slicer.slice_count(image) for image in images]
@@ -170,7 +170,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             "class_logits": class_logits[j].detach().cpu(),
                             "orig_size": orig_sizes[j]
                         }
-                        prediction["text_label"] = ID_TO_LABEL[int(prediction["label"])]
+                        prediction["text_label"] = ID_TO_LABEL.get(int(prediction["label"]), None)
                         if last_prediction and last_prediction["paused"]:
                             pause_sequence = find_pause_items(batch_predictions[j])
                             entropies = [p["entropy"] for p in pause_sequence]
@@ -187,21 +187,18 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             prediction["pause_tokens"] = 1
                             prediction["token"].fill_(model.decoder.config.pause_token_id)
                             batch_decoder_input[j, :] = model.decoder.config.pause_token_id
-                        elif (
-                                prediction["text_label"] in ["PageHeader", "PageFooter"]
-                                and
-                                prediction["polygon"][0][1] < prediction["orig_size"][1] * .8
-                                and
-                                prediction["polygon"][2][1] > prediction["orig_size"][1] * .2
-                                and
-                                prediction["polygon"][0][0] < prediction["orig_size"][0] * .8
-                                and
+                        elif all([
+                                prediction["text_label"] in ["PageHeader", "PageFooter"],
+                                prediction["polygon"][0][1] < prediction["orig_size"][1] * .8,
+                                prediction["polygon"][2][1] > prediction["orig_size"][1] * .2,
+                                prediction["polygon"][0][0] < prediction["orig_size"][0] * .8,
                                 prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
-                        ):
+                            ]):
                             # Ensure page footers only occur at the bottom of the page, headers only at top
                             prediction["class_logits"][int(preds[6].item())] = 0
                             new_prediction = prediction["class_logits"].argmax(-1).item()
                             prediction["label"] = new_prediction - model.decoder.config.special_token_count
+                            prediction["token"][6] = new_prediction
                             batch_decoder_input[j, -1, 6] = new_prediction
 
                         batch_predictions[j].append(prediction)

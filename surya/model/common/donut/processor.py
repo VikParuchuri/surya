@@ -61,7 +61,8 @@ class SuryaEncoderImageProcessor(DonutImageProcessor):
         ]
         # Rescale and normalize
         for idx in range(len(images)):
-            images[idx] = images[idx] * self.rescale_factor
+            images[idx] = (images[idx].astype(np.float64) * self.rescale_factor).astype(np.float32)
+
         images = [
             SuryaEncoderImageProcessor.normalize(img, mean=self.image_mean, std=self.image_std, input_data_format=ChannelDimension.FIRST)
             for img in images
