@@ -166,8 +166,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                                     model.config.decoder.bbox_size,
                                     model.config.decoder.skew_scaler
                                 ),
-                            "label": preds[6].item() - model.decoder.config.special_token_count
+                            "label": preds[6].item() - model.decoder.config.special_token_count,
+                            "class_logits": class_logits[j].detach().cpu(),
+                            "orig_size": orig_sizes[j]
                         }
+                        prediction["text_label"] = ID_TO_LABEL[int(prediction["label"])]
                         if last_prediction and last_prediction["paused"]:
                             pause_sequence = find_pause_items(batch_predictions[j])
                             entropies = [p["entropy"] for p in pause_sequence]
@@ -184,6 +187,22 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             prediction["pause_tokens"] = 1
                             prediction["token"].fill_(model.decoder.config.pause_token_id)
                             batch_decoder_input[j, :] = model.decoder.config.pause_token_id
+                        elif (
+                                prediction["text_label"] in ["PageHeader", "PageFooter"]
+                                and
+                                prediction["polygon"][0][1] < prediction["orig_size"][1] * .8
+                                and
+                                prediction["polygon"][2][1] > prediction["orig_size"][1] * .2
+                                and
+                                prediction["polygon"][0][0] < prediction["orig_size"][0] * .8
+                                and
+                                prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
+                        ):
+                            # Ensure page footers only occur at the bottom of the page, headers only at top
+                            prediction["class_logits"][int(preds[6].item())] = 0
+                            new_prediction = prediction["class_logits"].argmax(-1).item()
+                            prediction["label"] = new_prediction - model.decoder.config.special_token_count
+                            batch_decoder_input[j, -1, 6] = new_prediction
 
                         batch_predictions[j].append(prediction)
 

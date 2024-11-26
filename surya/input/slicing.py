@@ -136,6 +136,7 @@ class ImageSlicer:
 
         new_result = LayoutResult(
             image_bbox=new_image_bbox,
-            bboxes=res1.bboxes + [b for i, b in enumerate(res2.bboxes) if i not in to_remove_idxs]
+            bboxes=res1.bboxes + [b for i, b in enumerate(res2.bboxes) if i not in to_remove_idxs],
+            sliced=True,
         )
         return new_result
