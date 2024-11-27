@@ -34,6 +34,18 @@ def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     return new_boxes
 
 
+def intersects_other_boxes(box: List[List[float]], boxes: List[List[List[float]]], thresh=.9) -> bool:
+    box = PolygonBox(polygon=box)
+    for other_box in boxes:
+        # find overlap percentage
+        other_box_obj = PolygonBox(polygon=other_box)
+        overlap = box.intersection_pct(other_box_obj)
+        if overlap > thresh:
+            return True
+    return False
+
+
+
 def clean_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
     new_boxes = []
     for box_obj in boxes:

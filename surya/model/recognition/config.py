@@ -57,6 +57,7 @@ class DonutSwinConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-5,
         encoder_length=256,
+        use_positional_embeddings=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -83,6 +84,7 @@ class DonutSwinConfig(PretrainedConfig):
         # this indicates the channel dimension after the last stage of the model
         self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
         self.encoder_length = encoder_length
+        self.use_positional_embeddings = use_positional_embeddings
 
 
 class SuryaOCRDecoderConfig(PretrainedConfig):

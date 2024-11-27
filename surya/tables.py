@@ -3,8 +3,8 @@ from typing import List, Dict
 import torch
 from PIL import Image
 
-from surya.model.ordering.encoderdecoder import OrderVisionEncoderDecoderModel
-from surya.schema import TableResult, TableCell, Bbox, TableCol, TableRow
+from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
+from surya.schema import TableResult, TableCell, TableCol, TableRow
 from surya.settings import settings
 from tqdm import tqdm
 import numpy as np
@@ -52,7 +52,7 @@ def pad_to_batch_size(tensor: torch.Tensor, batch_size: int) -> torch.Tensor:
     return torch.cat([tensor, pad_tensor], dim=0)
 
 
-def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: OrderVisionEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
+def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: TableRecEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     assert len(images) == len(table_cells)
     if batch_size is None:
@@ -138,7 +138,6 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 box_preds = torch.argmax(box_logits, dim=-1)
 
                 done = (rowcol_preds == processor.tokenizer.eos_id) | (rowcol_preds == processor.tokenizer.pad_id)
-                done = done
                 all_done = all_done | done
 
                 if all_done.all():
