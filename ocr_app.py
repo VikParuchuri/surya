@@ -204,7 +204,7 @@ if pil_image is None:
 if text_det:
     det_img, pred = text_detection(pil_image)
     with col1:
-        st.image(det_img, caption="Detected Text", use_column_width=True)
+        st.image(det_img, caption="Detected Text", use_container_width=True)
         st.json(pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
 
 
@@ -212,14 +212,14 @@ if text_det:
 if layout_det:
     layout_img, pred = layout_detection(pil_image)
     with col1:
-        st.image(layout_img, caption="Detected Layout", use_column_width=True)
+        st.image(layout_img, caption="Detected Layout", use_container_width=True)
         st.json(pred.model_dump(exclude=["segmentation_map"]), expanded=True)
 
 # Run OCR
 if text_rec:
     rec_img, pred = ocr(pil_image, pil_image_highres, languages)
     with col1:
-        st.image(rec_img, caption="OCR Result", use_column_width=True)
+        st.image(rec_img, caption="OCR Result", use_container_width=True)
         json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])
         with json_tab:
             st.json(pred.model_dump(), expanded=True)
@@ -230,8 +230,8 @@ if text_rec:
 if table_rec:
     table_img, pred = table_recognition(pil_image, pil_image_highres, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
     with col1:
-        st.image(table_img, caption="Table Recognition", use_column_width=True)
+        st.image(table_img, caption="Table Recognition", use_container_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)
 
 with col2:
-    st.image(pil_image, caption="Uploaded Image", use_column_width=True)
+    st.image(pil_image, caption="Uploaded Image", use_container_width=True)

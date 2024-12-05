@@ -50,7 +50,7 @@ def load_image(image_path):
 
 def load_from_file(input_path, max_pages=None, start_page=None, dpi=settings.IMAGE_DPI, load_text_lines=False, flatten_pdf=settings.FLATTEN_PDF):
     input_type = filetype.guess(input_path)
-    if input_type.extension == "pdf":
+    if input_type and input_type.extension == "pdf":
         return load_pdf(input_path, max_pages, start_page, dpi=dpi, load_text_lines=load_text_lines, flatten_pdf=flatten_pdf)
     else:
         return load_image(input_path)
