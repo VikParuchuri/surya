@@ -3,10 +3,8 @@ from typing import List
 
 import pypdfium2
 import streamlit as st
-from pypdfium2 import PdfiumError
 
 from surya.detection import batch_text_detection
-from surya.input.pdflines import get_page_text_lines, get_table_blocks
 from surya.layout import batch_layout_detection
 from surya.model.detection.model import load_model, load_processor
 from surya.model.layout.model import load_model as load_layout_model
@@ -24,7 +22,7 @@ from surya.input.langs import replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResult
 from surya.settings import settings
 from surya.tables import batch_table_recognition
-from surya.postprocessing.util import rescale_bboxes, rescale_bbox
+from surya.postprocessing.util import rescale_bbox
 
 
 @st.cache_resource()

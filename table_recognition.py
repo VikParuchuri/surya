@@ -1,4 +1,3 @@
-import pypdfium2 as pdfium # Needs to be on top to avoid warning
 import os
 import argparse
 import copy

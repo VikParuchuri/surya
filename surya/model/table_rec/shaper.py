@@ -1,3 +1,4 @@
+import math
 from typing import List, Dict
 import numpy as np
 import torch
@@ -120,21 +121,24 @@ class LabelShaper:
         y1 = cy - height / 2
         x2 = cx + width / 2
         y2 = cy + height / 2
-        skew_x = torch.floor((box[4] - skew_scaler) / 2)
-        skew_y = torch.floor((box[5] - skew_scaler) / 2)
+        skew_x = math.floor((box[4] - skew_scaler) / 2)
+        skew_y = math.floor((box[5] - skew_scaler) / 2)
 
         # Ensures we don't get slightly warped boxes
         # Note that the values are later scaled, so this is in 1/1024 space
-        skew_x[torch.abs(skew_x) < skew_min] = 0
-        skew_y[torch.abs(skew_y) < skew_min] = 0
+        if abs(skew_x) < skew_min:
+            skew_x = 0
+
+        if abs(skew_y) < skew_min:
+            skew_y = 0
 
         polygon = [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x,
                    y2 - skew_y]
         poly = []
         for i in range(4):
             poly.append([
-                polygon[2 * i].item(),
-                polygon[2 * i + 1].item()
+                polygon[2 * i],
+                polygon[2 * i + 1]
             ])
         return poly
 

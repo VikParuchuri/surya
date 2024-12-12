@@ -43,7 +43,10 @@ class LabelEmbedding(nn.Module):
 
         self.config = config
 
-    def forward(self, boxes: torch.LongTensor):
+    def forward(self, boxes: torch.LongTensor, *args):
+        # Need to keep *args for compatibility with common decoder
+        boxes = boxes.to(torch.long).clamp(0, self.config.vocab_size)
+
         boxes_unbound = boxes.to(torch.long).unbind(dim=-1)
         cx, cy, w, h, xskew, yskew = boxes_unbound[self.component_idxs["bbox"][0]:self.component_idxs["bbox"][1]]
         category = boxes_unbound[self.component_idxs["category"][0]:self.component_idxs["category"][1]][0]

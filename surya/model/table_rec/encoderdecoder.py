@@ -25,7 +25,6 @@ class TableRecEncoderDecoderModel(PreTrainedModel):
         self,
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
-        text_encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
     ):
         # initialize with config

@@ -57,18 +57,23 @@ def pad_to_batch_size(tensor: torch.Tensor, batch_size: int) -> torch.Tensor:
 
 def inference_loop(
         model: nn.Module,
-        processor: SuryaProcessor,
         encoder_hidden_states: torch.Tensor,
         batch_input_ids: torch.Tensor,
         current_batch_size: int,
+        batch_size: int
 ):
     shaper = LabelShaper()
-    max_batch_size = batch_input_ids.shape[0]
     batch_predictions = [[] for _ in range(current_batch_size)]
     max_tokens = settings.TABLE_REC_MAX_BOXES
     decoder_position_ids = torch.ones_like(batch_input_ids[0, :, 0], dtype=torch.int64, device=model.device).cumsum(
         0) - 1
+    inference_token_count = batch_input_ids.shape[1]
 
+    if settings.TABLE_REC_STATIC_CACHE:
+        encoder_hidden_states = pad_to_batch_size(encoder_hidden_states, batch_size)
+        batch_input_ids = pad_to_batch_size(batch_input_ids, batch_size)
+
+    model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
     with torch.inference_mode():
         token_count = 0
@@ -94,15 +99,15 @@ def inference_loop(
                 for (k, kcount, mode) in BOX_PROPERTIES:
                     k_logits = return_dict["box_property_logits"][k][j, -1, :]
                     if mode == "classification":
-                        item = torch.argmax(k_logits, dim=-1).item()
+                        item = int(torch.argmax(k_logits, dim=-1).item())
                         if k == "category":
-                            done.append(item == processor.tokenizer.eos_id or item == processor.tokenizer.pad_id)
+                            done.append(item == model.decoder.config.eos_token_id or item == model.decoder.config.pad_token_id)
                         item -= SPECIAL_TOKENS
                         box_property[k] = item
                     elif mode == "regression":
                         if k == "bbox":
                             k_logits *= BOX_DIM
-                        box_property[k] = k_logits
+                        box_property[k] = k_logits.tolist()
                 box_properties.append(box_property)
 
             all_done = all_done | torch.tensor(done, dtype=torch.bool)
@@ -111,6 +116,7 @@ def inference_loop(
                 break
 
             batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long).to(model.device)
+            batch_input_ids = batch_input_ids.unsqueeze(1) # Add sequence length dimension
 
             for j, (box_property, status) in enumerate(zip(box_properties, all_done)):
                 if not status:
@@ -120,7 +126,7 @@ def inference_loop(
             inference_token_count = batch_input_ids.shape[1]
 
             if settings.TABLE_REC_STATIC_CACHE:
-                batch_input_ids = pad_to_batch_size(batch_input_ids, max_batch_size)
+                batch_input_ids = pad_to_batch_size(batch_input_ids, batch_size)
     return batch_predictions
 
 
@@ -156,19 +162,14 @@ def batch_table_recognition(images: List, model: TableRecEncoderDecoderModel, pr
         batch_input_ids = model_inputs["input_ids"].to(model.device)
         batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
 
-        if settings.TABLE_REC_STATIC_CACHE:
-            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
-            batch_input_ids = pad_to_batch_size(batch_input_ids, batch_size)
-
-        model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
-        model.text_encoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
         shaper = LabelShaper()
 
         # We only need to process each image once
         with torch.inference_mode():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
-        row_predictions = inference_loop(model, processor, encoder_hidden_states, batch_input_ids, current_batch_size)
+        row_predictions = inference_loop(model, encoder_hidden_states, batch_input_ids, current_batch_size, batch_size)
+
         row_query_items = []
         row_encoder_hidden_states = []
         idx_map = []
@@ -186,7 +187,16 @@ def batch_table_recognition(images: List, model: TableRecEncoderDecoderModel, pr
 
         row_encoder_hidden_states = torch.stack(row_encoder_hidden_states)
         row_inputs = processor(images=None, query_items=row_query_items, convert_images=False)
-        cell_predictions = inference_loop(model, processor, row_encoder_hidden_states, row_inputs["input_ids"], len(row_query_items))
+        row_input_ids = row_inputs["input_ids"].to(model.device)
+        cell_predictions = []
+        for j in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
+            cell_batch_hidden_states = row_encoder_hidden_states[j:j+batch_size]
+            cell_batch_input_ids = row_input_ids[j:j+batch_size]
+            cell_batch_size = len(cell_batch_input_ids)
+
+            cell_predictions.extend(
+                inference_loop(model, cell_batch_hidden_states, cell_batch_input_ids, cell_batch_size, batch_size)
+            )
 
         batch_predictions = []
 

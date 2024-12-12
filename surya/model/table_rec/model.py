@@ -1,7 +1,6 @@
 from surya.model.table_rec.encoder import DonutSwinModel
-from surya.model.table_rec.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig, \
-    SuryaTableRecTextEncoderConfig
-from surya.model.table_rec.decoder import SuryaTableRecDecoder, SuryaTableRecTextEncoder
+from surya.model.table_rec.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig
+from surya.model.table_rec.decoder import SuryaTableRecDecoder
 from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
 from surya.settings import settings
 
