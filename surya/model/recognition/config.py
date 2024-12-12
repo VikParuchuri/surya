@@ -153,6 +153,7 @@ class SuryaOCRDecoderConfig(PretrainedConfig):
         self.aux_heads = aux_heads
         self.encoder_hidden_size = encoder_hidden_size
         self.causal = causal
+        self.double_residual_flow = True # Residual flow slightly different
 
         super().__init__(
             pad_token_id=pad_token_id,

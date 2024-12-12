@@ -337,7 +337,6 @@ class SuryaADETRDecoderMlp(nn.Module):
 class SuryaADETRDecoderLayer(nn.Module):
     def __init__(self, config, layer_idx, static_cache=False, max_boxes=None):
         super().__init__()
-        super().__init__()
         self.cross_pre_norm = SuryaADETRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.temporal_pre_norm = SuryaADETRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
@@ -353,7 +352,49 @@ class SuryaADETRDecoderLayer(nn.Module):
         self.channel_pre_norm = SuryaADETRDecoderRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.mlp_block = SuryaADETRDecoderMlp(config)
 
+        self.double_residual_flow = getattr(config, "double_residual_flow", False)
+
     def forward(
+            self,
+            activations: torch.Tensor,
+            position_ids: torch.Tensor,
+            attention_mask: torch.Tensor,
+            encoder_hidden_states: torch.Tensor = None,
+            encoder_attention_mask: torch.Tensor = None,
+            cache_position: torch.Tensor = None,
+            use_cache: bool = None,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        if self.double_residual_flow:
+            return self.double_res_forward(
+                activations, position_ids, attention_mask, encoder_hidden_states, encoder_attention_mask, cache_position, use_cache
+            )
+
+        hidden_states = activations
+        if self.cross_attn_block is not None:
+            # Do cross-attention on encoder outputs
+            cross_attn_inputs = self.cross_pre_norm(hidden_states)
+            cross_attn_path = self.cross_attn_block(
+                cross_attn_inputs, position_ids, encoder_hidden_states, attention_mask, encoder_attention_mask
+            )
+            hidden_states = cross_attn_path + hidden_states
+
+        if self.temporal_block is not None:
+            temporal_inputs = self.temporal_pre_norm(hidden_states)  # RMSNorm introduces slight slight differences
+            temporal_path = self.temporal_block(
+                temporal_inputs, position_ids, attention_mask, cache_position=cache_position,
+                use_cache=use_cache, window_attn=self.window_attn
+            )
+
+            hidden_states = temporal_path + hidden_states
+
+        block_input = hidden_states
+        hidden_states = self.channel_pre_norm(block_input)
+        hidden_states = self.mlp_block(hidden_states)
+        hidden_states = hidden_states + block_input
+
+        return hidden_states
+
+    def double_res_forward(
         self,
         activations: torch.Tensor,
         position_ids: torch.Tensor,
