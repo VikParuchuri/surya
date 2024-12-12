@@ -230,13 +230,15 @@ Setting the `LAYOUT_BATCH_SIZE` env var properly will make a big difference when
 from PIL import Image
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.layout.model import load_model, load_processor
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.layout.model import load_model as load_layout_model
+from surya.model.layout.processor import load_processor as load_layout_processor
 
 image = Image.open(IMAGE_PATH)
-model = load_model()
-processor = load_processor()
-det_model = load_model()
-det_processor = load_processor()
+model = load_layout_model()
+processor = load_layout_processor()
+det_model = load_det_model()
+det_processor = load_det_processor()
 
 # layout_predictions is a list of dicts, one per image
 line_predictions = batch_text_detection([image], det_model, det_processor)

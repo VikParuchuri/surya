@@ -70,14 +70,10 @@ def open_pdf(pdf_filepath):
 
 
 def get_page_images(doc, indices: List, dpi=settings.IMAGE_DPI):
-    renderer = doc.render(
-        pypdfium2.PdfBitmap.to_pil,
-        page_indices=indices,
-        scale=dpi / 72,
-    )
-    images = list(renderer)
+    images = [doc[i].render(scale=dpi/72, draw_annots=False).to_pil() for i in indices]
     images = [image.convert("RGB") for image in images]
     return images
+
 
 
 def slice_bboxes_from_image(image: Image.Image, bboxes):
