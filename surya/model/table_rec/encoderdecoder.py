@@ -1,23 +1,16 @@
-import random
 from dataclasses import dataclass
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Dict
 
 import torch
-from torch import nn
-from torch.nn import CrossEntropyLoss
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
-from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
-from transformers.models.vision_encoder_decoder.modeling_vision_encoder_decoder import shift_tokens_right
-from surya.model.table_rec.decoder import SuryaTableRecTextEncoder, SuryaTableRecDecoder
+from surya.model.table_rec.decoder import SuryaTableRecDecoder
 from surya.model.table_rec.encoder import DonutSwinModel
-import torch.nn.functional as F
 from transformers.utils import ModelOutput
 
 
 @dataclass
 class TableRecOutput(ModelOutput):
-    row_logits: torch.FloatTensor = None
-    col_logits: torch.FloatTensor = None
+    box_property_logits: Dict[str, torch.FloatTensor]
     decoder_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
 
 
@@ -44,21 +37,16 @@ class TableRecEncoderDecoderModel(PreTrainedModel):
         if encoder is None:
             encoder = DonutSwinModel(config.encoder)
 
-        if text_encoder is None:
-            text_encoder = SuryaTableRecTextEncoder(config.text_encoder, attn_implementation=config._attn_implementation)
-
         if decoder is None:
             decoder = SuryaTableRecDecoder(config.decoder, attn_implementation=config._attn_implementation)
 
         self.encoder = encoder
         self.decoder = decoder
-        self.text_encoder = text_encoder
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
-        self.text_encoder.config = self.config.text_encoder
 
     def get_encoder(self):
         return self.encoder
@@ -101,8 +89,7 @@ class TableRecEncoderDecoderModel(PreTrainedModel):
         )
 
         return TableRecOutput(
-            row_logits=decoder_outputs.row_logits,
-            col_logits=decoder_outputs.col_logits,
+            box_property_logits=decoder_outputs.box_property_logits,
             decoder_hidden_states=decoder_outputs.hidden_states,
         )
 

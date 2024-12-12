@@ -62,7 +62,7 @@ def layout_detection(img) -> (Image.Image, LayoutResult):
     return layout_img, pred
 
 
-def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: bool, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
+def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Image, List[TableResult]):
     if skip_table_detection:
         layout_tables = [(0, 0, highres_img.size[0], highres_img.size[1])]
         table_imgs = [highres_img]
@@ -78,18 +78,7 @@ def table_recognition(img, highres_img, filepath, page_idx: int, use_pdf_boxes: 
             )
             layout_tables.append(highres_bbox)
 
-    try:
-        page_text = get_page_text_lines(filepath, [page_idx], [highres_img.size])[0]
-        table_bboxes = get_table_blocks(layout_tables, page_text, highres_img.size)
-    except PdfiumError:
-        # This happens when we try to get text from an image
-        table_bboxes = [[] for _ in layout_tables]
-
-    if not use_pdf_boxes or any(len(tb) == 0 for tb in table_bboxes):
-        det_results = batch_text_detection(table_imgs, det_model, det_processor)
-        table_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
-
-    table_preds = batch_table_recognition(table_imgs, table_bboxes, table_model, table_processor)
+    table_preds = batch_table_recognition(table_imgs, table_model, table_processor)
     table_img = img.copy()
 
     for results, table_bbox in zip(table_preds, layout_tables):
@@ -194,7 +183,6 @@ text_det = st.sidebar.button("Run Text Detection")
 text_rec = st.sidebar.button("Run OCR")
 layout_det = st.sidebar.button("Run Layout Analysis")
 table_rec = st.sidebar.button("Run Table Rec")
-use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
 
 if pil_image is None:
@@ -228,7 +216,7 @@ if text_rec:
 
 
 if table_rec:
-    table_img, pred = table_recognition(pil_image, pil_image_highres, in_file, page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
+    table_img, pred = table_recognition(pil_image, pil_image_highres, skip_table_detection)
     with col1:
         st.image(table_img, caption="Table Recognition", use_container_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)

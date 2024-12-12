@@ -34,15 +34,13 @@ def main():
     dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split)
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
-    bboxes = list(dataset["bboxes"])
-    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
 
     if settings.TABLE_REC_STATIC_CACHE:
         # Run through one batch to compile the model
-        batch_table_recognition(images[:1], bboxes[:1], model, processor)
+        batch_table_recognition(images[:1], model, processor)
 
     start = time.time()
-    table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)
+    table_rec_predictions = batch_table_recognition(images, model, processor)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]

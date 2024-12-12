@@ -5,11 +5,8 @@ import copy
 import json
 from collections import defaultdict
 
-from surya.detection import batch_text_detection
 from surya.input.load import load_from_folder, load_from_file
-from surya.input.pdflines import get_table_blocks
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
 from surya.model.layout.model import load_model as load_layout_model
 from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.table_rec.model import load_model as load_model
@@ -17,7 +14,7 @@ from surya.model.table_rec.processor import load_processor
 from surya.tables import batch_table_recognition
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
-from surya.postprocessing.util import rescale_bboxes, rescale_bbox
+from surya.postprocessing.util import rescale_bbox
 
 
 def main():
@@ -36,16 +33,13 @@ def main():
     layout_model = load_layout_model()
     layout_processor = load_layout_processor()
 
-    det_model = load_det_model()
-    det_processor = load_det_processor()
-
     if os.path.isdir(args.input_path):
         images, _, _ = load_from_folder(args.input_path, args.max)
-        highres_images, names, text_lines = load_from_folder(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES, load_text_lines=True)
+        highres_images, names, _ = load_from_folder(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path)
     else:
         images, _, _ = load_from_file(args.input_path, args.max)
-        highres_images, names, text_lines = load_from_file(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES, load_text_lines=True)
+        highres_images, names, _ = load_from_file(args.input_path, args.max, dpi=settings.IMAGE_DPI_HIGHRES)
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     pnums = []
@@ -59,18 +53,15 @@ def main():
         prev_name = name
 
     layout_predictions = batch_layout_detection(images, layout_model, layout_processor)
-    table_cells = []
 
     table_imgs = []
     table_counts = []
 
-    for layout_pred, text_line, img, highres_img in zip(layout_predictions, text_lines, images, highres_images):
+    for layout_pred, img, highres_img in zip(layout_predictions, images, highres_images):
         # The table may already be cropped
         if args.skip_table_detection:
             table_imgs.append(highres_img)
             table_counts.append(1)
-            page_table_imgs = [highres_img]
-            highres_bbox = [[0, 0, highres_img.size[0], highres_img.size[1]]]
         else:
             # The bbox for the entire table
             bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
@@ -89,16 +80,7 @@ def main():
 
             table_imgs.extend(page_table_imgs)
 
-        # The text cells inside each table
-        table_blocks = get_table_blocks(highres_bbox, text_line, highres_img.size) if text_line is not None else None
-        if text_line is None or args.detect_boxes or any(len(tb) == 0 for tb in table_blocks):
-            det_results = batch_text_detection(page_table_imgs, det_model, det_processor,)
-            cell_bboxes = [[{"bbox": tb.bbox, "text": None} for tb in det_result.bboxes] for det_result in det_results]
-            table_cells.extend(cell_bboxes)
-        else:
-            table_cells.extend(table_blocks)
-
-    table_preds = batch_table_recognition(table_imgs, table_cells, model, processor)
+    table_preds = batch_table_recognition(table_imgs, model, processor)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 

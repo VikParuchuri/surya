@@ -25,6 +25,7 @@ ID_TO_CATEGORY = {
     3: 'Table-cell',
     4: 'Table'
 }
+CATEGORY_TO_ID = {v: k for k, v in ID_TO_CATEGORY.items()}
 
 BOX_PROPERTIES = [
     ("bbox", 6, "regression"),
@@ -146,7 +147,7 @@ class SuryaTableRecDecoderConfig(PretrainedConfig):
         eos_token_id=1,
         bos_token_id=1,
         pause_token_id=2,
-        query_end_token_id=5,
+        query_end_token_id=4,
         hidden_activation="gelu_pytorch_tanh",
         rope_theta=10000.0,
         block_types=("attention",),

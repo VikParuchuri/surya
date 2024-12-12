@@ -51,28 +51,6 @@ class LabelShaper:
 
         return out_list
 
-    def labels_to_dict(self, labels: List[List[float]]):
-        out_list = []
-        for label in labels:
-            label_component = {}
-            start_idx = 0
-            for (k, kcount, mode) in BOX_PROPERTIES:
-                if mode == "classification":
-                    item = label[start_idx]
-                    # Shift back down for processing
-                    item -= SPECIAL_TOKENS
-                    label_component[k] = item
-                    start_idx += 1
-                elif mode == "regression":
-                    label_component[k] = label[start_idx:start_idx + kcount]
-                    start_idx += kcount
-                else:
-                    raise ValueError(f"Invalid mode {mode} for key {k}")
-
-            out_list.append(label_component)
-
-        return out_list
-
     def component_idx(self, key):
         idx = 0
         for (k, kcount, mode) in BOX_PROPERTIES:
@@ -133,20 +111,17 @@ class LabelShaper:
 
         return label_components
 
-    def convert_bbox_to_polygons(self, boxes, img_size, bbox_scaler=BOX_DIM, skew_scaler=BOX_DIM // 2, skew_min=.001):
-        w_scale = img_size[0] / bbox_scaler
-        h_scale = img_size[1] / bbox_scaler
-
-        cx = boxes[0]
-        cy = boxes[1]
-        width = boxes[2]
-        height = boxes[3]
+    def convert_bbox_to_polygon(self, box, skew_scaler=BOX_DIM // 2, skew_min=.001):
+        cx = box[0]
+        cy = box[1]
+        width = box[2]
+        height = box[3]
         x1 = cx - width / 2
         y1 = cy - height / 2
         x2 = cx + width / 2
         y2 = cy + height / 2
-        skew_x = torch.floor((boxes[4] - skew_scaler) / 2)
-        skew_y = torch.floor((boxes[5] - skew_scaler) / 2)
+        skew_x = torch.floor((box[4] - skew_scaler) / 2)
+        skew_y = torch.floor((box[5] - skew_scaler) / 2)
 
         # Ensures we don't get slightly warped boxes
         # Note that the values are later scaled, so this is in 1/1024 space
@@ -158,8 +133,8 @@ class LabelShaper:
         poly = []
         for i in range(4):
             poly.append([
-                polygon[2 * i].item() * w_scale,
-                polygon[2 * i + 1].item() * h_scale
+                polygon[2 * i].item(),
+                polygon[2 * i + 1].item()
             ])
         return poly
 
