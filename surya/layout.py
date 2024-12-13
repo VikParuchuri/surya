@@ -223,7 +223,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                         polygon=poly,
                         label=ID_TO_LABEL[int(label)],
                         position=z,
-                        top_k={ID_TO_LABEL.get(max(int(l), 0)): prob.item() for (l, prob) in zip(top_k_indices[z], top_k_probs[z])}
+                        top_k={ID_TO_LABEL.get(int(l)): prob.item() for (l, prob) in zip(top_k_indices[z], top_k_probs[z]) if l > 0}
                     )
                     boxes.append(lb)
             boxes = clean_boxes(boxes)
