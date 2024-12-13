@@ -219,11 +219,14 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                 top_k_indices = [p["top_k_indices"] - model.decoder.config.special_token_count for p in preds]
 
                 for z, (poly, label) in enumerate(zip(polygons, labels)):
+                    l = ID_TO_LABEL[int(label)]
+                    top_k_dict = {ID_TO_LABEL.get(int(l)): prob.item() for (l, prob) in zip(top_k_indices[z], top_k_probs[z]) if l > 0}
                     lb = LayoutBox(
                         polygon=poly,
-                        label=ID_TO_LABEL[int(label)],
+                        label=l,
                         position=z,
-                        top_k={ID_TO_LABEL.get(int(l)): prob.item() for (l, prob) in zip(top_k_indices[z], top_k_probs[z]) if l > 0}
+                        top_k=top_k_dict,
+                        confidence=top_k_dict[l]
                     )
                     boxes.append(lb)
             boxes = clean_boxes(boxes)
