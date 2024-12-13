@@ -201,7 +201,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                             prediction["token"][6] = new_prediction
                             batch_decoder_input[j, -1, 6] = new_prediction
 
-                        prediction["class_logits"], prediction["class_indices"] = torch.topk(prediction["class_logits"], k=top_k, dim=-1)
+                        prediction["top_k_probs"], prediction["top_k_indices"] = torch.topk(torch.nn.functional.softmax(prediction["class_logits"], dim=-1), k=top_k, dim=-1)
+                        del prediction["class_logits"]
                         batch_predictions[j].append(prediction)
 
                 token_count += inference_token_count
@@ -214,8 +215,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
             if len(preds) > 0:
                 polygons = [p["polygon"] for p in preds]
                 labels = [p["label"] for p in preds]
-                top_k_probs = [p["class_logits"] for p in preds]
-                top_k_indices = [p["class_indices"] - model.decoder.config.special_token_count for p in preds]
+                top_k_probs = [p["top_k_probs"] for p in preds]
+                top_k_indices = [p["top_k_indices"] - model.decoder.config.special_token_count for p in preds]
 
                 for z, (poly, label) in enumerate(zip(polygons, labels)):
                     lb = LayoutBox(
