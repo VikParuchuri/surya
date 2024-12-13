@@ -74,6 +74,7 @@ def inference_loop(
 
     model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
+    print(batch_input_ids)
     with torch.inference_mode():
         token_count = 0
         all_done = torch.zeros(current_batch_size, dtype=torch.bool)
@@ -111,6 +112,7 @@ def inference_loop(
                         box_property[k] = k_logits.tolist()
                 box_properties.append(box_property)
 
+            print(box_properties[0])
             all_done = all_done | torch.tensor(done, dtype=torch.bool)
 
             if all_done.all():
@@ -133,9 +135,11 @@ def inference_loop(
 
 def batch_table_recognition(images: List, model: TableRecEncoderDecoderModel, processor, batch_size=None) -> List[TableResult]:
     assert all([isinstance(image, Image.Image) for image in images])
-    assert len(images) > 0
     if batch_size is None:
         batch_size = get_batch_size()
+
+    if len(images) == 0:
+        return []
 
     query_items = []
     for image in images:

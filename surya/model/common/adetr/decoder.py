@@ -27,13 +27,21 @@ class SuryaADETRDecoderRMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.zeros(dim))
 
     def _norm(self, x):
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        variance = x.pow(2).mean(-1, keepdim=True)
+
+        # Add clipping to prevent division by zero
+        variance = torch.clamp(variance, min=self.eps)
+        return x * torch.rsqrt(variance)
 
     def forward(self, x):
         output = self._norm(x.float())
         # Llama does x.to(float16) * w whilst SuryaADETRDecoder is (x * w).to(float16)
         # See https://github.com/huggingface/transformers/pull/29402
         output = output * (1.0 + self.weight.float())
+        # Clamp to float16 range
+        f16_info = torch.finfo(x.dtype)
+        output = output.clamp(min=f16_info.min, max=f16_info.max)
+        output[output.isnan()] = 0.0
         return output.type_as(x)
 
     def extra_repr(self):
