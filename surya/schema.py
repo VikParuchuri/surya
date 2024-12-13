@@ -186,11 +186,16 @@ class LayoutResult(BaseModel):
     sliced: bool = False # Whether the image was sliced and reconstructed
 
 
-class TableCell(Bbox):
-    text: str | None = None
+class TableCell(PolygonBox):
+    row_id: int
+    colspan: int
+    within_row_id: int
+    merge_up: bool = False
+    merge_down: bool = False
+    col_id: int | None = None
 
 
-class TableRow(Bbox):
+class TableRow(PolygonBox):
     row_id: int
 
     @property
@@ -198,7 +203,7 @@ class TableRow(Bbox):
         return f'Row {self.row_id}'
 
 
-class TableCol(Bbox):
+class TableCol(PolygonBox):
     col_id: int
 
     @property

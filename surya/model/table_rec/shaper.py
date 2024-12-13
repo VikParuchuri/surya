@@ -1,7 +1,6 @@
 import math
 from typing import List, Dict
 import numpy as np
-import torch
 
 from surya.model.table_rec.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM
 

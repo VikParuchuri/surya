@@ -1,17 +1,16 @@
-from copy import deepcopy
-from typing import List, Dict
+from typing import List
 import torch
 from PIL import Image
 from torch import nn
 
+from surya.model.table_rec.columns import find_columns
 from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
-from surya.model.table_rec.processor import SuryaProcessor
 from surya.model.table_rec.shaper import LabelShaper
-from surya.schema import TableResult, TableCell, TableCol, TableRow
+from surya.schema import TableResult, TableCell, TableRow
 from surya.settings import settings
 from tqdm import tqdm
 import numpy as np
-from surya.model.table_rec.config import SPECIAL_TOKENS, CATEGORY_TO_ID, BOX_PROPERTIES, BOX_DIM
+from surya.model.table_rec.config import SPECIAL_TOKENS, CATEGORY_TO_ID, BOX_PROPERTIES, BOX_DIM, MERGE_KEYS
 
 
 def get_batch_size():
@@ -107,6 +106,8 @@ def inference_loop(
                     elif mode == "regression":
                         if k == "bbox":
                             k_logits *= BOX_DIM
+                        elif k == "colspan":
+                            k_logits = k_logits.clamp(min=1)
                         box_property[k] = k_logits.tolist()
                 box_properties.append(box_property)
 
@@ -139,7 +140,7 @@ def batch_table_recognition(images: List, model: TableRecEncoderDecoderModel, pr
     query_items = []
     for image in images:
         query_items.append({
-            "polygon": [[0, 0], [0, image.height], [image.width, image.height], [image.width, 0]],
+            "polygon": [[0, 0], [image.width, 0], [image.width, image.height], [0, image.height]],
             "category": CATEGORY_TO_ID["Table"],
             "colspan": 0,
             "merges": 0,
@@ -189,77 +190,52 @@ def batch_table_recognition(images: List, model: TableRecEncoderDecoderModel, pr
         row_inputs = processor(images=None, query_items=row_query_items, convert_images=False)
         row_input_ids = row_inputs["input_ids"].to(model.device)
         cell_predictions = []
-        for j in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
+        """
+        for j in tqdm(range(0, len(row_input_ids), batch_size), desc="Recognizing tables"):
             cell_batch_hidden_states = row_encoder_hidden_states[j:j+batch_size]
             cell_batch_input_ids = row_input_ids[j:j+batch_size]
             cell_batch_size = len(cell_batch_input_ids)
-
             cell_predictions.extend(
                 inference_loop(model, cell_batch_hidden_states, cell_batch_input_ids, cell_batch_size, batch_size)
             )
+        """
 
-        batch_predictions = []
-
-        for j, img_predictions in enumerate(row_predictions):
+        for j, (img_predictions, orig_size) in enumerate(zip(row_predictions, orig_sizes)):
             row_cell_predictions = [c for i,c in enumerate(cell_predictions) if idx_map[i] == j]
-            batch_predictions.append({
-                "row": img_predictions,
-                "cell": row_cell_predictions
-            })
-
-
-        for j, (preds, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
-            img_w, img_h = orig_size
-            width_scaler = img_w / model.config.decoder.out_box_size
-            height_scaler = img_h / model.config.decoder.out_box_size
-
-            # cx, cy to corners
-            for i, pred in enumerate(preds):
-                w = pred[2] / 2
-                h = pred[3] / 2
-                x1 = pred[0] - w
-                y1 = pred[1] - h
-                x2 = pred[0] + w
-                y2 = pred[1] + h
-                class_ = int(pred[4] - SPECIAL_TOKENS)
-
-                preds[i] = [x1 * width_scaler, y1 * height_scaler, x2 * width_scaler, y2 * height_scaler, class_]
-
-            # Get rows and columns
-            bb_rows = [p[:4] for p in preds if p[4] == 0]
-            bb_cols = [p[:4] for p in preds if p[4] == 1]
-
+            # Each row prediction matches a cell prediction
+            #assert len(img_predictions) == len(row_cell_predictions)
             rows = []
-            cols = []
-            for row_idx, row in enumerate(bb_rows):
-                rows.append(TableRow(
-                    bbox=row,
-                    row_id=row_idx
-                ))
-
-            for col_idx, col in enumerate(bb_cols):
-                cols.append(TableCol(
-                    bbox=col,
-                    col_id=col_idx,
-                ))
-
-            # Assign cells to rows/columns
             cells = []
-            for cell in input_cells:
-                cells.append(
-                    TableCell(
-                        bbox=cell["bbox"],
-                        text=cell.get("text"),
+            for z, row_prediction in enumerate(img_predictions):
+                polygon = shaper.convert_bbox_to_polygon(row_prediction["bbox"])
+                polygon = processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
+                rows.append(TableRow(
+                    polygon=polygon,
+                    row_id=z
+                ))
+                """
+                for l, cell in enumerate(row_cell_predictions[z]):
+                    polygon = shaper.convert_bbox_to_polygon(cell["bbox"])
+                    polygon = processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
+                    cells.append(
+                        TableCell(
+                            polygon=polygon,
+                            row_id=z,
+                            within_row_id=l,
+                            colspan=max(1, int(cell["colspan"])),
+                            merge_up=cell["merges"] in [MERGE_KEYS["merge_up"], MERGE_KEYS["merge_both"]],
+                            merge_down=cell["merges"] in [MERGE_KEYS["merge_down"], MERGE_KEYS["merge_both"]],
+                        )
                     )
-                )
+                """
+            columns = find_columns(rows, cells)
 
             result = TableResult(
                 cells=cells,
                 rows=rows,
-                cols=cols,
-                image_bbox=[0, 0, img_w, img_h],
+                cols=columns,
+                image_bbox=[0, 0, orig_size[0], orig_size[1]],
             )
-
             output_order.append(result)
 
     return output_order
