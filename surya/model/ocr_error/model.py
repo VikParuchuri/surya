@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import math
 from typing import Dict, List, Optional, Set, Tuple, Union
-from __future__ import annotations
 
 import numpy as np
 import torch
