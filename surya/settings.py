@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     def TABLE_REC_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_TABLE_REC
 
+    @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
 
