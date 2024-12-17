@@ -88,7 +88,7 @@ def batch_detection(
         if static_cache:
             batch = pad_to_batch_size(batch, batch_size)
 
-        with torch.inference_mode():
+        with torch.no_grad():
             pred = model(pixel_values=batch)
 
         logits = pred.logits
