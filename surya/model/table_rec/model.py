@@ -6,6 +6,7 @@ from surya.model.table_rec.encoderdecoder import TableRecEncoderDecoderModel
 from surya.settings import settings
 
 import torch
+import torch_xla.core.xla_model as xm
 
 
 def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> TableRecEncoderDecoderModel:
@@ -39,9 +40,9 @@ def load_model(checkpoint=settings.TABLE_REC_MODEL_CHECKPOINT, device=settings.T
 
         
         print(f"Compiling table recognition model {checkpoint} on device {device} with dtype {dtype}")
-        model.encoder = torch.compile(model.encoder)
-        model.decoder = torch.compile(model.decoder)
-        model.text_encoder = torch.compile(model.text_encoder)
+        model.encoder = torch.compile(model.encoder, backend='openxla')
+        model.decoder = torch.compile(model.decoder, backend='openxla')
+        model.text_encoder = torch.compile(model.text_encoder, backend='openxla')
 
     print(f"Loaded table recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

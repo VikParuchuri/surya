@@ -14,6 +14,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_xla.core.xla_model as xm
 
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
@@ -35,7 +36,7 @@ def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TO
         torch._dynamo.config.suppress_errors = False
 
         print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
-        model = torch.compile(model)
+        model = torch.compile(model, backend='openxla')
 
     print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
     return model
