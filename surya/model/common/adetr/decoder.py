@@ -20,7 +20,7 @@ except:
 
 
 def mark_step():
-    if settings.TORCH_DEVICE == 'xla':
+    if settings.TORCH_DEVICE_MODEL == 'xla':
         xm.mark_step()
 
 

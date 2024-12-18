@@ -21,7 +21,7 @@ except:
 
 
 def mark_step():
-    if settings.TORCH_DEVICE == 'xla':
+    if settings.TORCH_DEVICE_MODEL == 'xla':
         xm.mark_step()
 
 
@@ -395,6 +395,8 @@ class DonutSwinSelfAttention(nn.Module):
         return outputs
 
 # Copied from transformers.models.swin.modeling_swin.SwinSelfOutput
+
+
 class DonutSwinSelfOutput(nn.Module):
     def __init__(self, config, dim):
         super().__init__()
