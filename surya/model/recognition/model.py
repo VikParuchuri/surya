@@ -1,7 +1,6 @@
 import warnings
 
 import torch
-import torch_xla.core.xla_model as xm
 
 warnings.filterwarnings("ignore", message="torch.utils._pytree._register_pytree_node is deprecated")
 
@@ -51,11 +50,15 @@ def load_model(checkpoint=settings.RECOGNITION_MODEL_CHECKPOINT, device=settings
         torch._dynamo.config.cache_size_limit = 16
         torch._dynamo.config.suppress_errors = False
 
-
         print(f"Compiling recognition model {checkpoint} on device {device} with dtype {dtype}")
-        model.encoder = torch.compile(model.encoder, backend='openxla')
-        model.decoder = torch.compile(model.decoder, backend='openxla')
-        model.text_encoder = torch.compile(model.text_encoder, backend='openxla')
+        if device == 'xla':
+            model.encoder = torch.compile(model.encoder, backend='openxla')
+            model.decoder = torch.compile(model.decoder, backend='openxla')
+            model.text_encoder = torch.compile(model.text_encoder, backend='openxla')
+        else:
+            model.encoder = torch.compile(model.encoder)
+            model.decoder = torch.compile(model.decoder)
+            model.text_encoder = torch.compile(model.text_encoder)
 
     print(f"Loaded recognition model {checkpoint} on device {device} with dtype {dtype}")
     return model

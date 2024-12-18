@@ -14,7 +14,6 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_xla.core.xla_model as xm
 
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
@@ -36,7 +35,10 @@ def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TO
         torch._dynamo.config.suppress_errors = False
 
         print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
-        model = torch.compile(model, backend='openxla')
+        if device == 'xla':
+            model = torch.compile(model, backend='openxla')
+        else:
+            model = torch.compile(model)
 
     print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
     return model
@@ -73,6 +75,7 @@ def get_same_padding(kernel_size: Union[int, Tuple[int, ...]]) -> Union[int, Tup
 def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1) -> int:
     padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
     return padding
+
 
 class ConvNormAct(nn.Module):
     def __init__(
@@ -727,7 +730,7 @@ class DecodeHead(EfficientViTPreTrainedModel):
         all_hidden_states = ()
         for encoder_hidden_state, mlp in zip(encoder_hidden_states, self.linear_c):
             height, width = encoder_hidden_state.shape[2], encoder_hidden_state.shape[3]
-            encoder_hidden_state = mlp(encoder_hidden_state) # Output is B, HW, C
+            encoder_hidden_state = mlp(encoder_hidden_state)  # Output is B, HW, C
             # Permute to B, C, HW
             encoder_hidden_state = encoder_hidden_state.permute(0, 2, 1)
             encoder_hidden_state = encoder_hidden_state.reshape(batch_size, -1, height, width)

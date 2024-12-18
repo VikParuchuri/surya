@@ -17,8 +17,6 @@ import time
 from tabulate import tabulate
 import datasets
 
-import torch
-import torch_xla.core.xla_model as xm
 
 def main():
     parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
@@ -29,7 +27,7 @@ def main():
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
     args = parser.parse_args()
 
-    model = load_model(device=xm.xla_device(), dtype=torch.bfloat16)
+    model = load_model()
     processor = load_processor()
 
     if args.pdf_path is not None:

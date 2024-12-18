@@ -1,5 +1,4 @@
 import torch
-import torch_xla.core.xla_model as xm
 
 from surya.model.layout.encoderdecoder import SuryaLayoutModel
 from surya.model.layout.config import SuryaLayoutConfig, SuryaLayoutDecoderConfig, DonutSwinLayoutConfig
@@ -26,8 +25,12 @@ def load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, device=settings.TORC
         torch._dynamo.config.suppress_errors = False
 
         print(f"Compiling layout model {checkpoint} on device {device} with dtype {dtype}")
-        model.encoder = torch.compile(model.encoder, backend='openxla')
-        model.decoder = torch.compile(model.decoder, backend='openxla')
+        if device == 'xla':
+            model.encoder = torch.compile(model.encoder, backend='openxla')
+            model.decoder = torch.compile(model.decoder, backend='openxla')
+        else:
+            model.encoder = torch.compile(model.encoder)
+            model.decoder = torch.compile(model.decoder)
 
     print(f"Loaded layout model {checkpoint} on device {device} with dtype {dtype}")
     return model

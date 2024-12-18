@@ -11,6 +11,7 @@ from surya.model.layout.config import ID_TO_LABEL
 from surya.postprocessing.heatmap import clean_boxes, intersects_other_boxes
 from surya.schema import LayoutResult, LayoutBox
 from surya.settings import settings
+import torch.nn.functional as F
 
 
 def get_batch_size():
@@ -64,6 +65,17 @@ def find_pause_items(preds):
     return pause_sequence
 
 
+def pad_to_batch_size(tensor, batch_size):
+    current_batch_size = tensor.shape[0]
+    if current_batch_size >= batch_size:
+        return tensor
+
+    pad_size = batch_size - current_batch_size
+    padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
+
+    return F.pad(tensor, padding, mode='constant', value=0)
+
+
 def batch_layout_detection(images: List, model, processor, batch_size=None) -> List[LayoutResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
@@ -80,7 +92,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         if any([
             sum(img_counts[start_idx:end_idx]) >= batch_size,
             sum(img_counts[start_idx:end_idx + 1]) > batch_size,
-            ]):
+        ]):
             batches.append((start_idx, end_idx))
             start_idx = end_idx
         end_idx += 1
@@ -101,7 +113,6 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
         batch_pixel_values = model_inputs["pixel_values"]
         batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
-
         pause_token = [model.config.decoder.pause_token_id] * 7
         start_token = [model.config.decoder.bos_token_id] * 7
         batch_decoder_input = [
@@ -110,6 +121,9 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
         ]
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
+        if settings.LAYOUT_STATIC_CACHE:
+            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
+            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
@@ -121,6 +135,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
+
+            if settings.LAYOUT_STATIC_CACHE:
+                # Pad inputs to max batch size for static cache
+                encoder_hidden_states = pad_to_batch_size(encoder_hidden_states, batch_size)
+                batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
             while token_count < settings.LAYOUT_MAX_BOXES:
                 is_prefill = token_count == 0
@@ -136,7 +155,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
                 class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
-                probs = torch.nn.functional.softmax(class_logits, dim=-1).detach().cpu()
+                probs = torch.nn.functional.softmax(class_logits, dim=-1)
                 entropy = torch.special.entr(probs).sum(dim=-1)
 
                 class_preds = class_logits.argmax(-1)
@@ -149,6 +168,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                     break
 
                 batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
+                if settings.LAYOUT_STATIC_CACHE:
+                    batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                     if not status:
@@ -161,11 +182,11 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             "paused": False,
                             "pause_tokens": 0,
                             "polygon": prediction_to_polygon(
-                                    preds,
-                                    orig_sizes[j],
-                                    model.config.decoder.bbox_size,
-                                    model.config.decoder.skew_scaler
-                                ),
+                                preds,
+                                orig_sizes[j],
+                                model.config.decoder.bbox_size,
+                                model.config.decoder.skew_scaler
+                            ),
                             "label": preds[6].item() - model.decoder.config.special_token_count,
                             "class_logits": class_logits[j].detach().cpu(),
                             "orig_size": orig_sizes[j]
@@ -188,12 +209,12 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             prediction["token"].fill_(model.decoder.config.pause_token_id)
                             batch_decoder_input[j, :] = model.decoder.config.pause_token_id
                         elif all([
-                                prediction["text_label"] in ["PageHeader", "PageFooter"],
-                                prediction["polygon"][0][1] < prediction["orig_size"][1] * .8,
-                                prediction["polygon"][2][1] > prediction["orig_size"][1] * .2,
-                                prediction["polygon"][0][0] < prediction["orig_size"][0] * .8,
-                                prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
-                            ]):
+                            prediction["text_label"] in ["PageHeader", "PageFooter"],
+                            prediction["polygon"][0][1] < prediction["orig_size"][1] * .8,
+                            prediction["polygon"][2][1] > prediction["orig_size"][1] * .2,
+                            prediction["polygon"][0][0] < prediction["orig_size"][0] * .8,
+                            prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
+                        ]):
                             # Ensure page footers only occur at the bottom of the page, headers only at top
                             prediction["class_logits"][int(preds[6].item())] = 0
                             new_prediction = prediction["class_logits"].argmax(-1).item()
@@ -209,7 +230,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
 
         for j, (pred_dict, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
             boxes = []
-            preds = [p for p in pred_dict if p["token"][6] > model.decoder.config.special_token_count] # Remove special tokens, like pause
+            preds = [p for p in pred_dict if p["token"][6] > model.decoder.config.special_token_count]  # Remove special tokens, like pause
             if len(preds) > 0:
                 polygons = [p["polygon"] for p in preds]
                 labels = [p["label"] for p in preds]
