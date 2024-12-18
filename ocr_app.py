@@ -28,6 +28,11 @@ from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResu
 from surya.settings import settings
 from surya.tables import batch_table_recognition
 from surya.postprocessing.util import rescale_bboxes, rescale_bbox
+from surya.util.session import Session
+
+# 缓存资源 建立Session对象
+st_session = Session(st=st, key="ocr_app", value=None)
+
 
 # 缓存加载检测模型和处理器
 
@@ -289,18 +294,12 @@ if layout_det:
         st.image(layout_img, caption="识别的布局", use_container_width=True)
         st.json(pred.model_dump(exclude=["segmentation_map"]), expanded=True)
 
-# 执行OCR
-if text_rec:
 
-    #
-    rec_img, pred = ocr(pil_image, pil_image_highres, languages)
-
-    print('文本识别的效果:', rec_img, "\n".join([p.text for p in pred.text_lines]))
+# 展示
+def display_ocr_results(rec_img, pred):
     with col1:
         st.image(rec_img, caption="OCR 结果", use_container_width=True)
         json_tab, text_tab = st.tabs(["JSON格式", "文本格式"])
-
-        # main_cols = st.columns([6, 6])
 
         # 如果是json格式
         with json_tab:
@@ -308,10 +307,6 @@ if text_rec:
 
         # 如果是文本格式 这里可以接入ollama 进行文本分析 给出建议
         with text_tab:
-            # st.text("\n".join([p.text for p in pred.text_lines]))
-            # for index, p in enumerate(pred.text_lines):
-            #     st.text(p.text)
-            #     st.button("分析", key=f"analyze_button_{index}")
             for index, p in enumerate(pred.text_lines):
                 cols = st.columns([4, 1])  # 创建两列，第一列宽度为4，第二列宽度为1
                 with cols[0]:
@@ -319,8 +314,51 @@ if text_rec:
                 with cols[1]:
                     st.button("分析", key=f"analyze_button_{index}")  # 在第二列显示按钮
 
+
+# 如果session中已经有了ocr的信息
+# if st.session_state.get("rec_img") is None:
+if st_session.get("rec_img") is None:
+    # 如果重新执行OCR
+    if text_rec:
+        # 先把session中的信息清除
+        st_session.remove("rec_img")
+        st_session.remove("pred")
+
+        # 执行ocr
+        rec_img, pred = ocr(pil_image, pil_image_highres, languages)
+
+        # 把结果保存在session中 以便于点击按钮后不会把图像摧毁
+        st_session.set("rec_img", rec_img)
+        st_session.set("pred", pred)
+        display_ocr_results(rec_img, pred)
+
+
+# 如果session中已经有了ocr的信息 那么直接拿出来渲染
+else:
+
+    # 如果有session  并且还要点了 那么就要重新执行ocr
+    if text_rec:
+
+        st_session.remove("rec_img")
+        st_session.remove("pred")
+
+        # 执行ocr
+        rec_img, pred = ocr(pil_image, pil_image_highres, languages)
+
+        # 把结果保存在session中 以便于点击按钮后不会把图像摧毁
+        st_session.set("rec_img", rec_img)
+        st_session.set("pred", pred)
+        display_ocr_results(rec_img, pred)
+    else:
+        # 如果session中已经有了ocr的信息
+        rec_img = st_session.get("rec_img")
+        pred = st_session.get("pred")
+        display_ocr_results(rec_img, pred)
+
+
 # 执行表格识别
 if table_rec:
+
     table_img, pred = table_recognition(pil_image, pil_image_highres, in_file,
                                         page_number - 1 if page_number else None, use_pdf_boxes, skip_table_detection)
     with col1:
