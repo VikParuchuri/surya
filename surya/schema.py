@@ -211,3 +211,8 @@ class TableResult(BaseModel):
     rows: List[TableRow]
     cols: List[TableCol]
     image_bbox: List[float]
+
+
+class OCRErrorDetectionResult(BaseModel):
+    texts: List[str]
+    labels: List[str]
