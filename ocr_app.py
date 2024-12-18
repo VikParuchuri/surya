@@ -92,7 +92,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
                 (item.bbox[3] + table_bbox[1])
             ])
             labels.append(item.label)
-            if hasattr(item, "row_id"):
+            if "Row" in item.label:
                 colors.append("blue")
             else:
                 colors.append("red")

@@ -54,7 +54,15 @@ class SuryaProcessor(ProcessorMixin):
 
         return polygon
 
-    def __call__(self, images: List[PIL.Image.Image] | None, query_items: List[dict], convert_images: bool = True, *args, **kwargs):
+    def __call__(
+            self,
+            images: List[PIL.Image.Image] | None,
+            query_items: List[dict],
+            columns: List[dict] | None = None,
+            convert_images: bool = True,
+            *args,
+            **kwargs
+    ):
         if convert_images:
             assert len(images) == len(query_items)
             assert len(images) > 0
@@ -74,6 +82,13 @@ class SuryaProcessor(ProcessorMixin):
                 label,
                 [self.token_query_end_id] * col_count
             ])
+
+        # Add columns to end of decoder input
+        if columns:
+            columns = self.shaper.convert_polygons_to_bboxes(columns)
+            column_labels = self.shaper.dict_to_labels(columns)
+            for decoder_box in decoder_input_boxes:
+                decoder_box += column_labels
 
         input_boxes = torch.tensor(decoder_input_boxes, dtype=torch.long)
         input_boxes_mask = torch.ones_like(input_boxes, dtype=torch.long)

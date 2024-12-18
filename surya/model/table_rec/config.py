@@ -93,7 +93,7 @@ class DonutSwinTableRecConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-5,
         encoder_length=1024,
-        use_positional_embeddings=False,
+        use_positional_embeddings=True,
         **kwargs,
     ):
         super().__init__(**kwargs)

@@ -1,4 +1,5 @@
 import copy
+from copy import deepcopy
 from typing import List, Tuple, Any, Optional
 
 from pydantic import BaseModel, field_validator, computed_field
@@ -70,6 +71,21 @@ class PolygonBox(BaseModel):
         x2 = max(self.bbox[2], other.bbox[2])
         y2 = max(self.bbox[3], other.bbox[3])
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+    def intersection_polygon(self, other) -> List[List[float]]:
+        new_poly = []
+        for i in range(4):
+            if i == 0:
+                new_corner = [max(self.polygon[0][0], other.polygon[0][0]), max(self.polygon[0][1], other.polygon[0][1])]
+            elif i == 1:
+                new_corner = [min(self.polygon[1][0], other.polygon[1][0]), max(self.polygon[1][1], other.polygon[1][1])]
+            elif i == 2:
+                new_corner = [min(self.polygon[2][0], other.polygon[2][0]), min(self.polygon[2][1], other.polygon[2][1])]
+            elif i == 3:
+                new_corner = [max(self.polygon[3][0], other.polygon[3][0]), min(self.polygon[3][1], other.polygon[3][1])]
+            new_poly.append(new_corner)
+
+        return new_poly
 
     def intersection_area(self, other, x_margin=0, y_margin=0):
         x_overlap = self.x_overlap(other, x_margin)
@@ -190,9 +206,15 @@ class TableCell(PolygonBox):
     row_id: int
     colspan: int
     within_row_id: int
+    cell_id: int
+    rowspan: int | None = None
     merge_up: bool = False
     merge_down: bool = False
     col_id: int | None = None
+
+    @property
+    def label(self):
+        return f'{self.row_id} {self.rowspan}/{self.colspan}'
 
 
 class TableRow(PolygonBox):
@@ -213,6 +235,7 @@ class TableCol(PolygonBox):
 
 class TableResult(BaseModel):
     cells: List[TableCell]
+    unmerged_cells: List[TableCell]
     rows: List[TableRow]
     cols: List[TableCol]
     image_bbox: List[float]
