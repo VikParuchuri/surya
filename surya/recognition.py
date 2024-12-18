@@ -9,13 +9,23 @@ from tqdm import tqdm
 import numpy as np
 import torch.nn.functional as F
 
+try:
+    import torch_xla.core.xla_model as xm
+except:
+    pass
+
+
+def mark_step():
+    if settings.TORCH_DEVICE_MODEL == 'xla':
+        xm.mark_step()
+
 
 def get_batch_size():
     batch_size = settings.RECOGNITION_BATCH_SIZE
     if batch_size is None:
         batch_size = 32
         if settings.TORCH_DEVICE_MODEL == "mps":
-            batch_size = 64 # 12GB RAM max
+            batch_size = 64  # 12GB RAM max
         if settings.TORCH_DEVICE_MODEL == "cuda":
             batch_size = 256
     return batch_size
@@ -30,6 +40,7 @@ def pad_to_batch_size(tensor, batch_size):
     padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
 
     return F.pad(tensor, padding, mode='constant', value=0)
+
 
 def batch_recognition(images: List[Image.Image], languages: List[List[str] | None], model, processor, batch_size=None):
     assert all(isinstance(image, Image.Image) for image in images)
@@ -50,10 +61,10 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
     output_text = []
     confidences = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
-        batch_images = images[i:i+batch_size]
+        batch_images = images[i:i + batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
         real_batch_size = len(batch_images)
-        batch_langs = languages[i:i+real_batch_size]
+        batch_langs = languages[i:i + real_batch_size]
         has_math = [lang and "_math" in lang for lang in batch_langs]
 
         processed_batch = processor(text=[""] * len(batch_images), images=batch_images, langs=batch_langs)
@@ -121,7 +132,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
 
             while token_count < settings.RECOGNITION_MAX_TOKENS - 1:
                 is_prefill = token_count == 0
-                #TODO: add attention mask
+                # TODO: add attention mask
                 return_dict = model.decoder(
                     input_ids=batch_decoder_input,
                     encoder_hidden_states=encoder_text_hidden_states,
@@ -145,6 +156,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
                     scores = scores.masked_fill(all_done, 0)
                     sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
+                mark_step()
                 if all_done.all():
                     break
 
@@ -152,10 +164,12 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
 
                 for j, (pred, status) in enumerate(zip(preds, all_done)):
                     if not status:
+                        mark_step()
                         batch_predictions[j].append(int(pred))
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[-1]
+                mark_step()
                 max_position_id = torch.max(decoder_position_ids).item()
                 decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64, device=model.device).cumsum(0) - 1 + max_position_id
 
@@ -169,6 +183,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
         # Postprocess to fix LaTeX output (add $$ signs, etc)
         detected_text = [fix_math(text) if math and contains_math(text) else text for text, math in zip(detected_text, has_math)]
 
+        mark_step()
         # Convert sequence_scores to list for the current batch
         batch_confidences = sequence_scores.tolist()
 
@@ -187,5 +202,3 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
     output_text = [text for _, text in output_text]
     confidences = [conf for _, conf in confidences]
     return output_text, confidences
-
-

@@ -270,6 +270,7 @@ class SuryaADETRDecoderSdpaAttention(nn.Module):
             if current_cache_position and self.static_cache:
                 # Mask out future cache positions
                 position_mask = torch.ones_like(causal_mask, dtype=torch.bool, device=causal_mask.device)
+                mark_step()
                 position_mask[:, :, :, :current_cache_position + 1] = False
                 causal_mask = torch.where(position_mask, torch.finfo(causal_mask.dtype).min, causal_mask)
 
