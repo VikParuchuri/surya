@@ -163,6 +163,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
                 batch_decoder_input = preds.unsqueeze(1)
 
                 for j, (pred, status) in enumerate(zip(preds, all_done)):
+                    mark_step()
                     if not status:
                         mark_step()
                         batch_predictions[j].append(int(pred))

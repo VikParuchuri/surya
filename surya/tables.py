@@ -10,6 +10,16 @@ from tqdm import tqdm
 import numpy as np
 from surya.model.table_rec.config import SPECIAL_TOKENS
 
+try:
+    import torch_xla.core.xla_model as xm
+except:
+    pass
+
+
+def mark_step():
+    if settings.TORCH_DEVICE_MODEL == 'xla':
+        xm.mark_step()
+
 
 def get_batch_size():
     batch_size = settings.TABLE_REC_BATCH_SIZE
@@ -60,11 +70,11 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
     output_order = []
     for i in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
-        batch_table_cells = deepcopy(table_cells[i:i+batch_size])
-        batch_table_cells = [sort_bboxes(page_bboxes) for page_bboxes in batch_table_cells] # Sort bboxes before passing in
+        batch_table_cells = deepcopy(table_cells[i:i + batch_size])
+        batch_table_cells = [sort_bboxes(page_bboxes) for page_bboxes in batch_table_cells]  # Sort bboxes before passing in
         batch_list_bboxes = [[block["bbox"] for block in page] for page in batch_table_cells]
 
-        batch_images = images[i:i+batch_size]
+        batch_images = images[i:i + batch_size]
         batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
 
         current_batch_size = len(batch_images)
@@ -84,6 +94,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
         # Setup inputs for the decoder
         batch_decoder_input = [[[model.config.decoder.bos_token_id] * 5] for _ in range(current_batch_size)]
+        mark_step()
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
 
@@ -140,21 +151,25 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
                 done = (rowcol_preds == processor.tokenizer.eos_id) | (rowcol_preds == processor.tokenizer.pad_id)
                 all_done = all_done | done
 
+                mark_step()
                 if all_done.all():
                     break
 
                 batch_decoder_input = torch.cat([box_preds.unsqueeze(1), rowcol_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
+                    mark_step()
                     if not status:
                         batch_predictions[j].append(pred[0].tolist())
 
                 token_count += inference_token_count
                 inference_token_count = batch_decoder_input.shape[1]
-                
+                mark_step()
+
                 if settings.TABLE_REC_STATIC_CACHE:
                     batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
+        mark_step()
         if settings.TABLE_REC_STATIC_CACHE:
             batch_predictions = batch_predictions[:current_batch_size]
             batch_table_cells = batch_table_cells[:current_batch_size]
