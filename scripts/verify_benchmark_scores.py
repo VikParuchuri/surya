@@ -1,7 +1,6 @@
 import json
 import argparse
 
-
 def verify_layout(data):
     scores = data["metrics"]
     for layout_type, metrics in scores.items():

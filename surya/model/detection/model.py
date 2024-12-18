@@ -1,10 +1,10 @@
 """
-This is an implementation of efficientvit, with some modifications (decode head, etc).
+这是efficientvit的实现，带有一些修改（解码头等）。
 
-Original paper at https://arxiv.org/abs/2205.14756
+原始论文：https://arxiv.org/abs/2205.14756
 
-Code adapted from timm, https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
-Original code (that timm adapted from) at https://github.com/mit-han-lab/efficientvit
+代码改编自timm：https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/efficientvit_mit.py
+原始代码：https://github.com/mit-han-lab/efficientvit
 """
 from __future__ import annotations
 
@@ -22,28 +22,45 @@ from surya.model.detection.config import EfficientViTConfig
 from surya.model.detection.processor import SegformerImageProcessor
 from surya.settings import settings
 
+# 加载模型函数
+
 
 def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> EfficientViTForSemanticSegmentation:
+    # 从预训练模型加载配置
     config = EfficientViTConfig.from_pretrained(checkpoint)
-    model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
+    # 从预训练模型加载模型
+    model = EfficientViTForSemanticSegmentation.from_pretrained(
+        checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
+    # 将模型移动到指定设备
     model = model.to(device)
+    # 设置模型为评估模式
     model = model.eval()
 
+    # 如果启用了静态缓存
     if settings.DETECTOR_STATIC_CACHE:
+        # 设置浮点数矩阵乘法精度为高
         torch.set_float32_matmul_precision('high')
+        # 设置动态编译缓存大小限制
         torch._dynamo.config.cache_size_limit = 1
+        # 设置是否抑制错误
         torch._dynamo.config.suppress_errors = False
 
-        print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
+        print(f"在设备 {device} 上编译检测模型 {checkpoint}，数据类型为 {dtype}")
+        # 编译模型
         model = torch.compile(model)
 
-    print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
+    print(f"在设备 {device} 上加载检测模型 {checkpoint}，数据类型为 {dtype}")
     return model
+
+# 加载处理器函数
 
 
 def load_processor(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT):
+    # 从预训练模型加载处理器
     processor = SegformerImageProcessor.from_pretrained(checkpoint)
     return processor
+
+# 将值转换为列表
 
 
 def val2list(x: Union[List, Tuple, Any], repeat_time=1):
@@ -51,14 +68,19 @@ def val2list(x: Union[List, Tuple, Any], repeat_time=1):
         return list(x)
     return [x for _ in range(repeat_time)]
 
+# 将值转换为元组
+
 
 def val2tuple(x: Union[List, Tuple, Any], min_len: int = 1, idx_repeat: int = -1):
-    # repeat elements if necessary
+    # 如果必要，重复元素
     x = val2list(x)
     if len(x) > 0:
-        x[idx_repeat:idx_repeat] = [x[idx_repeat] for _ in range(min_len - len(x))]
+        x[idx_repeat:idx_repeat] = [x[idx_repeat]
+                                    for _ in range(min_len - len(x))]
 
     return tuple(x)
+
+# 获取相同的填充
 
 
 def get_same_padding(kernel_size: Union[int, Tuple[int, ...]]) -> Union[int, Tuple[int, ...]]:
@@ -68,10 +90,15 @@ def get_same_padding(kernel_size: Union[int, Tuple[int, ...]]) -> Union[int, Tup
         assert kernel_size % 2 > 0, "kernel size should be odd number"
         return kernel_size // 2
 
+# 获取填充
+
 
 def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1) -> int:
     padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
     return padding
+
+# 卷积-归一化-激活模块
+
 
 class ConvNormAct(nn.Module):
     def __init__(
@@ -100,14 +127,18 @@ class ConvNormAct(nn.Module):
             bias=bias,
             padding=padding,
         )
-        self.norm = norm_layer(num_features=out_channels) if norm_layer else nn.Identity()
-        self.act = act_layer(inplace=True) if act_layer is not None else nn.Identity()
+        self.norm = norm_layer(
+            num_features=out_channels) if norm_layer else nn.Identity()
+        self.act = act_layer(
+            inplace=True) if act_layer is not None else nn.Identity()
 
     def forward(self, x):
         x = self.conv(x)
         x = self.norm(x)
         x = self.act(x)
         return x
+
+# 深度可分离卷积模块
 
 
 class DSConv(nn.Module):
@@ -149,6 +180,8 @@ class DSConv(nn.Module):
         x = self.depth_conv(x)
         x = self.point_conv(x)
         return x
+
+# 卷积块模块
 
 
 class ConvBlock(nn.Module):
@@ -193,6 +226,8 @@ class ConvBlock(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         return x
+
+# 移动块卷积模块
 
 
 class MBConv(nn.Module):
@@ -248,6 +283,8 @@ class MBConv(nn.Module):
         x = self.point_conv(x)
         return x
 
+# 融合移动块卷积模块
+
 
 class FusedMBConv(nn.Module):
     def __init__(
@@ -293,9 +330,11 @@ class FusedMBConv(nn.Module):
         x = self.point_conv(x)
         return x
 
+# 轻量级多尺度线性注意力模块
+
 
 class LiteMLA(nn.Module):
-    """Lightweight multi-scale linear attention"""
+    """轻量级多尺度线性注意力"""
 
     def __init__(
         self,
@@ -338,7 +377,8 @@ class LiteMLA(nn.Module):
                     groups=3 * total_dim,
                     bias=use_bias[0],
                 ),
-                nn.Conv2d(3 * total_dim, 3 * total_dim, 1, groups=3 * heads, bias=use_bias[0]),
+                nn.Conv2d(3 * total_dim, 3 * total_dim, 1,
+                          groups=3 * heads, bias=use_bias[0]),
             )
             for scale in scales
         ])
@@ -362,30 +402,33 @@ class LiteMLA(nn.Module):
         return out.to(dtype)
 
     def forward(self, x):
-        # Shape is B, C, H, W
+        # 形状为 B, C, H, W
         B, _, H, W = x.shape
 
-        # generate multi-scale q, k, v
+        # 生成多尺度 q, k, v
         qkv = self.qkv(x)
         multi_scale_qkv = [qkv]
         for op in self.aggreg:
             multi_scale_qkv.append(op(qkv))
         multi_scale_qkv = torch.cat(multi_scale_qkv, dim=1)
-        multi_scale_qkv = multi_scale_qkv.reshape(B, -1, 3 * self.dim, H * W).transpose(-1, -2)
-        # Shape for each is B, C, HW, head_dim
+        multi_scale_qkv = multi_scale_qkv.reshape(
+            B, -1, 3 * self.dim, H * W).transpose(-1, -2)
+        # 每个的形状为 B, C, HW, head_dim
         q, k, v = multi_scale_qkv.chunk(3, dim=-1)
 
-        # lightweight global attention
+        # 轻量级全局注意力
         q = self.kernel_func(q)
         k = self.kernel_func(k)
         v = F.pad(v, (0, 1), mode="constant", value=1.)
 
         out = self._attn(q, k, v)
 
-        # final projection
+        # 最终投影
         out = out.transpose(-1, -2).reshape(B, -1, H, W)
         out = self.proj(out)
         return out
+
+# EfficientVit块模块
 
 
 class EfficientVitBlock(nn.Module):
@@ -426,6 +469,8 @@ class EfficientVitBlock(nn.Module):
         x = self.local_module(x)
         return x
 
+# 残差块模块
+
 
 class ResidualBlock(nn.Module):
     def __init__(
@@ -444,6 +489,8 @@ class ResidualBlock(nn.Module):
         if self.shortcut is not None:
             res = res + self.shortcut(x)
         return res
+
+# 构建本地块模块
 
 
 def build_local_block(
@@ -488,7 +535,8 @@ def build_local_block(
                 kernel_size=kernel_size,
                 expand_ratio=expand_ratio,
                 use_bias=(True, True, False) if fewer_norm else False,
-                norm_layer=(None, None, norm_layer) if fewer_norm else norm_layer,
+                norm_layer=(
+                    None, None, norm_layer) if fewer_norm else norm_layer,
                 act_layer=(act_layer, act_layer, None),
             )
         else:
@@ -503,6 +551,8 @@ def build_local_block(
                 act_layer=(act_layer, None),
             )
     return block
+
+# Stem模块
 
 
 class Stem(nn.Sequential):
@@ -533,6 +583,8 @@ class Stem(nn.Sequential):
                 nn.Identity(),
             ))
             stem_block += 1
+
+# EfficientVitLargeStage模块
 
 
 class EfficientVitLargeStage(nn.Module):
@@ -566,7 +618,7 @@ class EfficientVitLargeStage(nn.Module):
         in_chs = out_chs
 
         if vit_stage:
-            # for stage 4
+            # 对于stage 4
             for _ in range(depth):
                 blocks.append(
                     EfficientVitBlock(
@@ -578,7 +630,7 @@ class EfficientVitLargeStage(nn.Module):
                     )
                 )
         else:
-            # for stage 1, 2, 3
+            # 对于stage 1, 2, 3
             for i in range(depth):
                 blocks.append(ResidualBlock(
                     build_local_block(
@@ -600,6 +652,8 @@ class EfficientVitLargeStage(nn.Module):
     def forward(self, x):
         return self.blocks(x)
 
+# EfficientVitLarge模块
+
 
 class EfficientVitLarge(nn.Module):
     def __init__(
@@ -614,8 +668,9 @@ class EfficientVitLarge(nn.Module):
         self.norm_eps = config.layer_norm_eps
         norm_layer = partial(norm_layer, eps=self.norm_eps)
 
-        # input stem
-        self.stem = Stem(config.num_channels, config.widths[0], config.depths[0], config.strides[0], norm_layer, act_layer, block_type='large')
+        # 输入stem
+        self.stem = Stem(config.num_channels, config.widths[0], config.depths[0],
+                         config.strides[0], norm_layer, act_layer, block_type='large')
         stride = config.strides[0]
 
         # stages
@@ -636,7 +691,8 @@ class EfficientVitLarge(nn.Module):
             ))
             stride *= s
             in_channels = w
-            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
+            self.feature_info += [dict(num_chs=in_channels,
+                                       reduction=stride, module=f'stages.{i}')]
 
         self.num_features = in_channels
 
@@ -654,10 +710,20 @@ class EfficientVitLarge(nn.Module):
         return encoder_hidden_states
 
 
+# EfficientViT预训练模型
+'''
+arxiv: https://arxiv.org/abs/2205.14756
+EfficientViT是一种高效的视觉Transformer
+(Vision Transformer)架构。Transformer模型最初
+用于自然语言处理任务，但近年来也被应用于计算机视觉任务，
+如图像分类、目标检测和语义分割。EfficientViT通过优化模
+型结构和参数，使其在保持高性能的同时，显著减少计算资源和内存的消耗。
+'''
+
+
 class EfficientViTPreTrainedModel(PreTrainedModel):
     """
-    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
-    models.
+    一个抽象类，用于处理权重初始化和下载和加载预训练模型的简单接口。
     """
 
     config_class = EfficientViTConfig
@@ -665,20 +731,24 @@ class EfficientViTPreTrainedModel(PreTrainedModel):
     main_input_name = "pixel_values"
 
     def _init_weights(self, module):
-        """Initialize the weights"""
+        """初始化权重"""
         if isinstance(module, (nn.Linear, nn.Conv2d)):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            # 与TF版本略有不同，TF版本使用截断正态分布进行初始化
+            # 参见 https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(
+                mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            module.weight.data.normal_(
+                mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
+
+# 解码MLP模块
 
 
 class DecodeMLP(nn.Module):
@@ -687,25 +757,28 @@ class DecodeMLP(nn.Module):
         self.proj = nn.Linear(input_dim, output_dim)
 
     def forward(self, hidden_states: torch.Tensor):
-        # Input is B, C, H, W
+        # 输入为 B, C, H, W
         hidden_states = hidden_states.flatten(2).transpose(1, 2)
-        # Output is B, HW, C
+        # 输出为 B, HW, C
         hidden_states = self.proj(hidden_states)
         return hidden_states
+
+# 解码头模块
 
 
 class DecodeHead(EfficientViTPreTrainedModel):
     def __init__(self, config: EfficientViTConfig):
         super().__init__(config)
 
-        # linear layers which will unify the channel dimension of each of the encoder blocks to the same config.decoder_hidden_size
+        # 线性层，将每个编码器块的通道维度统一为config.decoder_hidden_size
         mlps = []
         for width in config.widths[1:]:
-            mlp = DecodeMLP(input_dim=width, output_dim=config.decoder_layer_hidden_size)
+            mlp = DecodeMLP(input_dim=width,
+                            output_dim=config.decoder_layer_hidden_size)
             mlps.append(mlp)
         self.linear_c = nn.ModuleList(mlps)
 
-        # the following 3 layers implement the ConvModule of the original implementation
+        # 以下三层实现了原始实现中的ConvModule
         self.linear_fuse = nn.Conv2d(
             in_channels=config.decoder_layer_hidden_size * config.num_stages,
             out_channels=config.decoder_hidden_size,
@@ -716,7 +789,8 @@ class DecodeHead(EfficientViTPreTrainedModel):
         self.activation = nn.ReLU()
 
         self.dropout = nn.Dropout(config.classifier_dropout_prob)
-        self.classifier = nn.Conv2d(config.decoder_hidden_size, config.num_labels, kernel_size=1)
+        self.classifier = nn.Conv2d(
+            config.decoder_hidden_size, config.num_labels, kernel_size=1)
 
         self.config = config
 
@@ -726,24 +800,28 @@ class DecodeHead(EfficientViTPreTrainedModel):
         all_hidden_states = ()
         for encoder_hidden_state, mlp in zip(encoder_hidden_states, self.linear_c):
             height, width = encoder_hidden_state.shape[2], encoder_hidden_state.shape[3]
-            encoder_hidden_state = mlp(encoder_hidden_state) # Output is B, HW, C
-            # Permute to B, C, HW
+            encoder_hidden_state = mlp(encoder_hidden_state)  # 输出为 B, HW, C
+            # 转置为 B, C, HW
             encoder_hidden_state = encoder_hidden_state.permute(0, 2, 1)
-            encoder_hidden_state = encoder_hidden_state.reshape(batch_size, -1, height, width)
-            # upsample
+            encoder_hidden_state = encoder_hidden_state.reshape(
+                batch_size, -1, height, width)
+            # 上采样
             encoder_hidden_state = nn.functional.interpolate(
                 encoder_hidden_state, size=encoder_hidden_states[0].size()[2:], mode="bilinear", align_corners=False
             )
             all_hidden_states += (encoder_hidden_state,)
 
-        hidden_states = self.linear_fuse(torch.cat(all_hidden_states[::-1], dim=1))
+        hidden_states = self.linear_fuse(
+            torch.cat(all_hidden_states[::-1], dim=1))
         hidden_states = self.batch_norm(hidden_states)
         hidden_states = self.activation(hidden_states)
 
-        # logits are of shape (batch_size, num_labels, height/4, width/4)
+        # logits的形状为 (batch_size, num_labels, height/4, width/4)
         logits = self.classifier(hidden_states)
 
         return logits
+
+# EfficientViT语义分割模型
 
 
 class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
@@ -752,7 +830,7 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
         self.vit = EfficientVitLarge(config)
         self.decode_head = DecodeHead(config)
 
-        # Initialize weights and apply final processing
+        # 初始化权重并应用最终处理
         self.post_init()
 
     def forward(
@@ -760,14 +838,14 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
         pixel_values: torch.FloatTensor
     ) -> Union[Tuple, SemanticSegmenterOutput]:
 
-        # Pixel values should be B,C,H,W
+        # 像素值应为 B,C,H,W
         encoder_hidden_states = self.vit(
             pixel_values,
         )
 
         logits = self.decode_head(encoder_hidden_states)
 
-        # Apply sigmoid to get 0-1 output
+        # 应用sigmoid以获得0-1输出
         logits = torch.special.expit(logits)
 
         return SemanticSegmenterOutput(
@@ -776,6 +854,8 @@ class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
             hidden_states=encoder_hidden_states
         )
 
+# EfficientViT语义布局分割模型
+
 
 class EfficientViTForSemanticLayoutSegmentation(EfficientViTPreTrainedModel):
     def __init__(self, config, **kwargs):
@@ -783,7 +863,7 @@ class EfficientViTForSemanticLayoutSegmentation(EfficientViTPreTrainedModel):
         self.vit = EfficientVitLarge(config)
         self.decode_head = DecodeHead(config)
 
-        # Initialize weights and apply final processing
+        # 初始化权重并应用最终处理
         self.post_init()
 
     def forward(
@@ -791,14 +871,14 @@ class EfficientViTForSemanticLayoutSegmentation(EfficientViTPreTrainedModel):
         pixel_values: torch.FloatTensor
     ) -> Union[Tuple, SemanticSegmenterOutput]:
 
-        # Pixel values should be B,C,H,W
+        # 像素值应为 B,C,H,W
         encoder_hidden_states = self.vit(
             pixel_values,
         )
 
         logits = self.decode_head(encoder_hidden_states)
 
-        # Apply sigmoid to get 0-1 output
+        # 应用sigmoid以获得0-1输出
         logits = torch.special.expit(logits)
 
         return SemanticSegmenterOutput(
