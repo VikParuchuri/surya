@@ -6,12 +6,24 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
-
 from transformers.activations import ACT2FN
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, meshgrid, prune_linear_layer
 from transformers.utils import ModelOutput
+
 from surya.model.recognition.config import DonutSwinConfig
+from surya.settings import settings
+
+try:
+    import torch_xla.core.xla_model as xm
+except:
+    pass
+
+
+def mark_step():
+    if settings.TORCH_DEVICE == 'xla':
+        xm.mark_step()
+
 
 _EXPECTED_OUTPUT_SHAPE = [1, 49, 1024]
 
@@ -334,7 +346,7 @@ class DonutSwinSelfAttention(nn.Module):
     def transpose_kv_for_scores(self, x, repeats):
         new_x_shape = x.size()[:-1] + (self.num_kv_heads, self.attention_head_size)
         x = x.view(new_x_shape)
-        x = x.repeat(1, 1, repeats, 1) # repeat the values for each key-value head to match query dim
+        x = x.repeat(1, 1, repeats, 1)  # repeat the values for each key-value head to match query dim
         return x.permute(0, 2, 1, 3).contiguous()
 
     def forward(
@@ -365,6 +377,7 @@ class DonutSwinSelfAttention(nn.Module):
             attention_mask = attention_mask.repeat(repeat_count, 1, 1).unsqueeze(1)
             attention_mask = attention_mask + relative_position_bias
 
+        mark_step()
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query_layer,
             key_layer,
@@ -373,6 +386,7 @@ class DonutSwinSelfAttention(nn.Module):
             dropout_p=self.dropout_p if self.training else 0.0,
             scale=self.attention_head_size**-0.5,
         )
+        mark_step()
 
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(batch_size, dim, num_channels)
@@ -697,7 +711,7 @@ class DonutSwinEncoder(nn.Module):
                     depth=config.depths[i_layer],
                     num_heads=config.num_heads[i_layer],
                     num_kv_heads=config.num_kv_heads[i_layer] if hasattr(config, "num_kv_heads") else config.num_heads[i_layer],
-                    drop_path=dpr[sum(config.depths[:i_layer]) : sum(config.depths[: i_layer + 1])],
+                    drop_path=dpr[sum(config.depths[:i_layer]): sum(config.depths[: i_layer + 1])],
                     downsample=DonutSwinPatchMerging if (i_layer < self.num_layers - 1) else None,
                 )
                 for i_layer in range(self.num_layers)
