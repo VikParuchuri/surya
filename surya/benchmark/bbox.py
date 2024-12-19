@@ -3,6 +3,7 @@ from surya.postprocessing.util import rescale_bbox
 
 
 def get_pdf_lines(pdf_path, img_sizes):
+    # 获取 PDF 文本行
     doc = pymupdf.open(pdf_path)
     page_lines = []
     for idx, img_size in enumerate(img_sizes):

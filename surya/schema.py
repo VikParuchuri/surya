@@ -36,7 +36,8 @@ class PolygonBox(BaseModel):
     @computed_field
     @property
     def bbox(self) -> List[float]:
-        box = [self.polygon[0][0], self.polygon[0][1], self.polygon[1][0], self.polygon[2][1]]
+        box = [self.polygon[0][0], self.polygon[0][1],
+               self.polygon[1][0], self.polygon[2][1]]
         if box[0] > box[2]:
             box[0], box[2] = box[2], box[0]
         if box[1] > box[3]:
@@ -145,8 +146,10 @@ class Bbox(BaseModel):
         if self.area == 0:
             return 0
 
-        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
-        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
+        x_overlap = max(
+            0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
+        y_overlap = max(
+            0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
         intersection = x_overlap * y_overlap
         return intersection / self.area
 
@@ -183,7 +186,7 @@ class TextDetectionResult(BaseModel):
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
     image_bbox: List[float]
-    sliced: bool = False # Whether the image was sliced and reconstructed
+    sliced: bool = False  # Whether the image was sliced and reconstructed
 
 
 class TableCell(Bbox):

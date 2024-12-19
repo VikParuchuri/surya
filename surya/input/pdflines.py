@@ -8,6 +8,7 @@ from surya.settings import settings
 
 
 def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list, flatten_pdf: bool = settings.FLATTEN_PDF) -> list:
+    # 获取页面文本行
     assert len(page_idxs) == len(out_sizes)
     pages_text = dictionary_output(filepath, sort=False, page_range=page_idxs, keep_chars=True, flatten_pdf=flatten_pdf)
     for full_text, out_size in zip(pages_text, out_sizes):
@@ -27,6 +28,7 @@ def get_page_text_lines(filepath: str, page_idxs: list, out_sizes: list, flatten
 
 
 def get_dynamic_gap_thresh(full_text: dict, img_size: list, default_thresh=.01, min_chars=100):
+    # 获取动态间隙阈值
     space_dists = []
     for block in full_text["blocks"]:
         for line in block["lines"]:
@@ -47,6 +49,7 @@ def get_dynamic_gap_thresh(full_text: dict, img_size: list, default_thresh=.01, 
 
 
 def is_same_span(char, curr_box, img_size, space_thresh, rotation):
+    # 判断字符是否在同一跨度内
     def normalized_diff(a, b, dimension, mult=1, use_abs=True):
         func = abs if use_abs else lambda x: x
         return func(a - b) / img_size[dimension] < space_thresh * mult
@@ -79,6 +82,7 @@ def is_same_span(char, curr_box, img_size, space_thresh, rotation):
 
 
 def get_table_blocks(tables: list, full_text: dict, img_size: list, table_thresh=.8, space_thresh=.01):
+    # 获取表格块
     # Returns coordinates relative to input table, not full image
     table_texts = []
     space_thresh = max(space_thresh, get_dynamic_gap_thresh(full_text, img_size, default_thresh=space_thresh))
