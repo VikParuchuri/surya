@@ -4,7 +4,8 @@ from tqdm import tqdm
 import torch
 import numpy as np
 
-from surya.model.ocr_error.model import DistilBertForSequenceClassification, DistilBertTokenizer
+from surya.model.ocr_error.model import DistilBertTokenizer
+from surya.model.ocr_error.encoder import DistilBertForSequenceClassification
 from surya.model.ocr_error.config import ID2LABEL
 from surya.settings import settings
 from surya.schema import OCRErrorDetectionResult
