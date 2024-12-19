@@ -28,7 +28,13 @@ from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResu
 from surya.settings import settings
 from surya.tables import batch_table_recognition
 from surya.postprocessing.util import rescale_bboxes, rescale_bbox
+
+# 导入自定义的stSession
 from surya.util.session import Session
+
+
+# 导入正则表达式模块
+import re
 
 # 缓存资源 建立Session对象
 st_session = Session(st=st, key="ocr_app", value=None)
@@ -307,12 +313,20 @@ def display_ocr_results(rec_img, pred):
 
         # 如果是文本格式 这里可以接入ollama 进行文本分析 给出建议
         with text_tab:
+            # index是每一个识别出的文本的索引，p是每一个识别出的文本
             for index, p in enumerate(pred.text_lines):
                 cols = st.columns([4, 1])  # 创建两列，第一列宽度为4，第二列宽度为1
                 with cols[0]:
                     st.text(p.text)  # 在第一列显示文本
                 with cols[1]:
-                    st.button("分析", key=f"analyze_button_{index}")  # 在第二列显示按钮
+                    is_checked = st.button("分析", key=f"analyze_button_{
+                                           index}")  # 在第二列显示按钮
+
+                    # 如果按钮被点击 那么就要展示一个对话框，然后跟ollama对接
+                    if is_checked:
+                        st.write("分析中...")
+                        # TODO 存储到session中 其他的地方可以直接拿到
+                        st_session.set(f"text-{p.text}", p.text)
 
 
 # 如果session中已经有了ocr的信息
@@ -368,3 +382,22 @@ if table_rec:
 # 显示上传的图片
 with col2:
     st.image(pil_image, caption="上传的图片", use_container_width=True)
+
+    is_have = st_session.get('text-', is_reg=True)
+
+    print('is_have:', is_have)
+
+    if is_have:
+
+        if len(is_have) == 0:
+            st.write('渲染错误:没有匹配到相关的文本')
+
+        else:
+            # 使用 Markdown 美化标题
+            st.markdown("### 分析文本记录")
+            st.markdown("---")  # 添加分割线
+            # 遍历所有的文本记录 方便展示
+            for text in is_have:
+                st.write(text)
+    else:
+        print("没有匹配到相关的文本")

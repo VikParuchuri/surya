@@ -712,7 +712,12 @@ class EfficientVitLarge(nn.Module):
 
 # EfficientViT预训练模型
 '''
-arxiv: https://arxiv.org/abs/2205.14756
+arxiv: https://arxiv.org/abs/2205.14756 
+
+name : 具有级联组注意力机制的内存高效视觉转换器 
+
+github : https://github.com/microsoft/Cream/tree/main/EfficientViT
+
 EfficientViT是一种高效的视觉Transformer
 (Vision Transformer)架构。Transformer模型最初
 用于自然语言处理任务，但近年来也被应用于计算机视觉任务，
