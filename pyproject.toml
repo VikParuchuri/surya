@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "surya-ocr"
-version = "0.8.0"
+version = "0.8.1"
 description = "OCR, layout, reading order, and table recognition in 90+ languages"
 authors = ["Vik Paruchuri <vik.paruchuri@gmail.com>"]
 readme = "README.md"
@@ -45,6 +45,7 @@ rapidfuzz = "^3.6.1"
 arabic-reshaper = "^3.0.0"
 streamlit = "^1.31.0"
 playwright = "^1.41.2"
+pytest = "^8.3.4"
 
 [tool.poetry.scripts]
 surya_detect = "detect_text:main"
