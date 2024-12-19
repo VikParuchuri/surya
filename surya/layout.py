@@ -1,5 +1,4 @@
 from typing import List
-
 import numpy as np
 import torch
 from PIL import Image
@@ -136,7 +135,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                 box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
                 class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
-                probs = torch.nn.functional.softmax(class_logits, dim=-1)
+                probs = torch.nn.functional.softmax(class_logits, dim=-1).cpu()
                 entropy = torch.special.entr(probs).sum(dim=-1)
 
                 class_preds = class_logits.argmax(-1)
@@ -218,9 +217,12 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                 top_k_probs = [p["top_k_probs"] for p in preds]
                 top_k_indices = [p["top_k_indices"] - model.decoder.config.special_token_count for p in preds]
 
-                for z, (poly, label) in enumerate(zip(polygons, labels)):
+                for z, (poly, label, top_k_prob, top_k_index) in enumerate(zip(polygons, labels, top_k_probs, top_k_indices)):
+                    top_k_dict = {
+                        ID_TO_LABEL.get(int(l)): prob.item()
+                        for (l, prob) in zip(top_k_index, top_k_prob) if l > 0
+                    }
                     l = ID_TO_LABEL[int(label)]
-                    top_k_dict = {ID_TO_LABEL.get(int(l)): prob.item() for (l, prob) in zip(top_k_indices[z], top_k_probs[z]) if l > 0}
                     lb = LayoutBox(
                         polygon=poly,
                         label=l,

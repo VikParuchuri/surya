@@ -1,6 +1,4 @@
 import time
-
-import pypdfium2 # Causes a warning if not the top import
 import argparse
 import copy
 import json
