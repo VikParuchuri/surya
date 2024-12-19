@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     COMPILE_TABLE_REC: bool = False
 
     # OCR Error Detection
-    OCR_ERROR_MODEL_CHECKPOINT: str = "tarun-menta/ocr_error_detection"
+    OCR_ERROR_MODEL_CHECKPOINT: str = "datalab-to/ocr_error_detection"
     OCR_ERROR_BATCH_SIZE: Optional[int] = None
     COMPILE_OCR_ERROR: bool = False
 
