@@ -36,6 +36,9 @@ from surya.util.session import Session
 # 导入正则表达式模块
 import re
 
+# 导入ollama相关api
+from surya.ollama.ollama import chat_with_model
+
 # 缓存资源 建立Session对象
 st_session = Session(st=st, key="ocr_app", value=None)
 
@@ -327,6 +330,7 @@ def display_ocr_results(rec_img, pred):
                         st.write("分析中...")
                         # TODO 存储到session中 其他的地方可以直接拿到
                         st_session.set(f"text-{p.text}", p.text)
+                        st_session.set('current-text', p.text)
 
 
 # 如果session中已经有了ocr的信息
@@ -385,8 +389,6 @@ with col2:
 
     is_have = st_session.get('text-', is_reg=True)
 
-    print('is_have:', is_have)
-
     if is_have:
 
         if len(is_have) == 0:
@@ -395,9 +397,16 @@ with col2:
         else:
             # 使用 Markdown 美化标题
             st.markdown("### 分析文本记录")
+            # 这里实现对接ollama的逻辑 通过拿到当前 的提示词 去发起ollama api请求
+
+            current_text = st_session.get('current-text', is_reg=False)
+            if current_text:
+                reply = chat_with_model(content=current_text)
+                st.markdown(f"AI: {reply}")
+
             st.markdown("---")  # 添加分割线
             # 遍历所有的文本记录 方便展示
-            for text in is_have:
-                st.write(text)
+            chat_box = "\n".join(is_have)
+            st.text_area("聊天记录", chat_box, height=300)
     else:
         print("没有匹配到相关的文本")
