@@ -1,8 +1,6 @@
 from typing import List, Optional
 
 import numpy as np
-import pytesseract
-from pytesseract import Output
 from tqdm import tqdm
 
 from surya.input.processing import slice_bboxes_from_image
@@ -24,6 +22,7 @@ def surya_lang_to_tesseract(code: str) -> Optional[str]:
 
 
 def tesseract_ocr(img, bboxes, lang: str):
+    import pytesseract
     line_imgs = slice_bboxes_from_image(img, bboxes)
     config = f'--tessdata-dir "{settings.TESSDATA_PREFIX}"'
     lines = []
@@ -50,6 +49,8 @@ def tesseract_ocr_parallel(imgs, bboxes, langs: List[str], cpus=None):
 
 
 def tesseract_bboxes(img):
+    import pytesseract
+    from pytesseract import Output
     arr_img = np.asarray(img, dtype=np.uint8)
     ocr = pytesseract.image_to_data(arr_img, output_type=Output.DICT)
 
