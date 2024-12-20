@@ -173,8 +173,8 @@ class SuryaLayoutDecoderConfig(PretrainedConfig):
         aux_heads=0, # How many n-token-ahead heads to add
         causal=True,
         layer_norm_eps=1e-5,
-        pause_token_count=5,
-        max_pause_tokens=3,
+        pause_token_count=0,
+        max_pause_tokens=0,
         **kwargs,
     ):
         self.num_hidden_layers = num_hidden_layers
