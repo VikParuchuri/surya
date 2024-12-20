@@ -1,7 +1,7 @@
 import copy
-from typing import List, Tuple, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, field_validator, computed_field
+from pydantic import BaseModel, computed_field, field_validator
 
 from surya.postprocessing.util import rescale_bbox
 
@@ -154,6 +154,7 @@ class Bbox(BaseModel):
 class LayoutBox(PolygonBox):
     label: str
     position: int
+    top_k: Optional[Dict[str, float]] = None
 
 
 class ColumnLine(Bbox):
@@ -183,7 +184,7 @@ class TextDetectionResult(BaseModel):
 class LayoutResult(BaseModel):
     bboxes: List[LayoutBox]
     image_bbox: List[float]
-    sliced: bool = False # Whether the image was sliced and reconstructed
+    sliced: bool = False  # Whether the image was sliced and reconstructed
 
 
 class TableCell(Bbox):
@@ -211,3 +212,8 @@ class TableResult(BaseModel):
     rows: List[TableRow]
     cols: List[TableCol]
     image_bbox: List[float]
+
+
+class OCRErrorDetectionResult(BaseModel):
+    texts: List[str]
+    labels: List[str]

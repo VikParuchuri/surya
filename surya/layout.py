@@ -2,16 +2,15 @@ from typing import List
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
-
 from tqdm import tqdm
 
 from surya.input.slicing import ImageSlicer
 from surya.model.layout.config import ID_TO_LABEL
 from surya.postprocessing.heatmap import clean_boxes, intersects_other_boxes
-from surya.schema import LayoutResult, LayoutBox
+from surya.schema import LayoutBox, LayoutResult
 from surya.settings import settings
-import torch.nn.functional as F
 
 
 def get_batch_size():
@@ -76,7 +75,7 @@ def pad_to_batch_size(tensor, batch_size):
     return F.pad(tensor, padding, mode='constant', value=0)
 
 
-def batch_layout_detection(images: List, model, processor, batch_size=None) -> List[LayoutResult]:
+def batch_layout_detection(images: List, model, processor, batch_size=None, top_k=5) -> List[LayoutResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
         batch_size = get_batch_size()
@@ -155,7 +154,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                 box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
                 class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
 
-                probs = torch.nn.functional.softmax(class_logits, dim=-1)
+                probs = torch.nn.functional.softmax(class_logits, dim=-1).cpu()
                 entropy = torch.special.entr(probs).sum(dim=-1)
 
                 class_preds = class_logits.argmax(-1)
@@ -222,6 +221,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
                             prediction["token"][6] = new_prediction
                             batch_decoder_input[j, -1, 6] = new_prediction
 
+                        prediction["top_k_probs"], prediction["top_k_indices"] = torch.topk(torch.nn.functional.softmax(prediction["class_logits"], dim=-1), k=top_k, dim=-1)
+                        del prediction["class_logits"]
                         batch_predictions[j].append(prediction)
 
                 token_count += inference_token_count
@@ -234,12 +235,21 @@ def batch_layout_detection(images: List, model, processor, batch_size=None) -> L
             if len(preds) > 0:
                 polygons = [p["polygon"] for p in preds]
                 labels = [p["label"] for p in preds]
+                top_k_probs = [p["top_k_probs"] for p in preds]
+                top_k_indices = [p["top_k_indices"] - model.decoder.config.special_token_count for p in preds]
 
-                for z, (poly, label) in enumerate(zip(polygons, labels)):
+                for z, (poly, label, top_k_prob, top_k_index) in enumerate(zip(polygons, labels, top_k_probs, top_k_indices)):
+                    top_k_dict = {
+                        ID_TO_LABEL.get(int(l)): prob.item()
+                        for (l, prob) in zip(top_k_index, top_k_prob) if l > 0
+                    }
+                    l = ID_TO_LABEL[int(label)]
                     lb = LayoutBox(
                         polygon=poly,
-                        label=ID_TO_LABEL[int(label)],
-                        position=z
+                        label=l,
+                        position=z,
+                        top_k=top_k_dict,
+                        confidence=top_k_dict[l]
                     )
                     boxes.append(lb)
             boxes = clean_boxes(boxes)
