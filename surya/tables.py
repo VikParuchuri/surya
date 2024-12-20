@@ -111,7 +111,7 @@ def batch_table_recognition(images: List, table_cells: List[List[Dict]], model: 
 
         batch_predictions = [[] for _ in range(current_batch_size)]
 
-        with torch.no_grad():
+        with settings.INFERENCE_MODE():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values).last_hidden_state
             text_encoder_hidden_states = model.text_encoder(
                 input_boxes=batch_bboxes,

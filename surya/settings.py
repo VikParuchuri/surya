@@ -130,6 +130,13 @@ class Settings(BaseSettings):
             return torch.bfloat16
         return torch.float16
 
+    @computed_field
+    @property
+    def INFERENCE_MODE(self):
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.no_grad
+        return torch.inference_mode
+
     class Config:
         env_file = find_dotenv("local.env")
         extra = "ignore"

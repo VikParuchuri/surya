@@ -99,7 +99,7 @@ def batch_recognition(images: List[Image.Image], languages: List[List[str] | Non
         all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
         encoder_hidden_states = None
 
-        with torch.no_grad():
+        with settings.INFERENCE_MODE():
             encoder_batch_size = batch_size // settings.RECOGNITION_ENCODER_BATCH_DIVISOR
             for z in range(0, batch_pixel_values.shape[0], encoder_batch_size):
                 encoder_pixel_values = batch_pixel_values[z:min(z + encoder_batch_size, batch_pixel_values.shape[0])]

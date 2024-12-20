@@ -129,7 +129,7 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
 
         batch_predictions = [[] for _ in range(current_batch_size)]
 
-        with torch.no_grad():
+        with settings.INFERENCE_MODE():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values)[0]
 
             token_count = 0

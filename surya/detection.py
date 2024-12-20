@@ -27,6 +27,7 @@ def get_batch_size():
             batch_size = 36
     return batch_size
 
+
 def pad_to_batch_size(tensor, batch_size):
     current_batch_size = tensor.shape[0]
     if current_batch_size >= batch_size:
@@ -36,6 +37,7 @@ def pad_to_batch_size(tensor, batch_size):
     padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
 
     return F.pad(tensor, padding, mode='constant', value=0)
+
 
 def batch_detection(
     images: List,
@@ -86,7 +88,7 @@ def batch_detection(
         if static_cache:
             batch = pad_to_batch_size(batch, batch_size)
 
-        with torch.no_grad():
+        with settings.INFERENCE_MODE():
             pred = model(pixel_values=batch)
 
         logits = pred.logits
