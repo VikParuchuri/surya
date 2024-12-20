@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     RECOGNITION_BENCH_DATASET_NAME: str = os.getenv("SURYA_RECOGNITION_BENCH_DATASET_NAME", "vikp/rec_bench")
     RECOGNITION_PAD_VALUE: int = int(os.getenv("SURYA_RECOGNITION_PAD_VALUE", 255))  # Should be 0 or 255
     COMPILE_RECOGNITION: bool = os.getenv("SURYA_COMPILE_RECOGNITION", "False").lower() in __ENABLED_FLAG  # Static cache for torch compile
-    RECOGNITION_ENCODER_BATCH_DIVISOR: int = int(os.getenv("SURYA_RECOGNITION_ENCODER_BATCH_DIVISOR"), 1)  # Divisor for batch size in decoder
+    RECOGNITION_ENCODER_BATCH_DIVISOR: int = int(os.getenv("SURYA_RECOGNITION_ENCODER_BATCH_DIVISOR", 1))  # Divisor for batch size in decoder
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = os.getenv("SURYA_LAYOUT_MODEL_CHECKPOINT", "datalab-to/surya_layout0")
