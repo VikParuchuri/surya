@@ -181,7 +181,10 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                                 prediction["pause_tokens"] = last_prediction["pause_tokens"]
                                 prediction["token"].fill_(model.decoder.config.pause_token_id)
                                 batch_decoder_input[j, :] = model.decoder.config.pause_token_id
-                        elif intersects_other_boxes(prediction["polygon"], [p["polygon"] for p in batch_predictions[j]], thresh=.4):
+                        elif intersects_other_boxes(
+                                prediction["polygon"],
+                                [p["polygon"] for p in batch_predictions[j]], thresh=.4
+                        ) and model.decoder.config.max_pause_tokens > 0:
                             prediction["paused"] = True
                             prediction["pause_tokens"] = 1
                             prediction["token"].fill_(model.decoder.config.pause_token_id)
