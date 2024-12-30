@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout0"
+    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout"
     LAYOUT_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     LAYOUT_SLICE_MIN: Dict = {"height": 1500, "width": 1500} # When to start slicing images
     LAYOUT_SLICE_SIZE: Dict = {"height": 1200, "width": 1200} # Size of slices

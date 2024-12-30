@@ -84,7 +84,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
         labels = []
         colors = []
 
-        for item in results.rows + results.cols:
+        for item in results.cells:
             adjusted_bboxes.append([
                 (item.bbox[0] + table_bbox[0]),
                 (item.bbox[1] + table_bbox[1]),
