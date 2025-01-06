@@ -11,7 +11,7 @@ from transformers.activations import ACT2FN
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, meshgrid, prune_linear_layer
 from transformers.utils import ModelOutput
-from surya.model.recognition.config import DonutSwinConfig
+from transformers import DonutSwinConfig
 
 _EXPECTED_OUTPUT_SHAPE = [1, 49, 1024]
 

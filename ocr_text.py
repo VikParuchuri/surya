@@ -4,13 +4,11 @@ import json
 import time
 from collections import defaultdict
 
-from surya.input.langs import replace_lang_with_code
+from surya.detection import DetectionPredictor
+from surya.recognition.languages import replace_lang_with_code
 from surya.input.load import load_from_folder, load_from_file, load_lang_file
-from surya.model.detection.model import load_model as load_detection_model, load_processor as load_detection_processor
-from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import load_processor as load_recognition_processor
-from surya.ocr import run_ocr
 from surya.postprocessing.text import draw_text_on_image
+from surya.recognition import RecognitionPredictor
 from surya.settings import settings
 
 
@@ -49,17 +47,14 @@ def main():
     else:
         image_langs = [None] * len(images)
 
-    det_processor = load_detection_processor()
-    det_model = load_detection_model()
-
-    rec_model = load_recognition_model()
-    rec_processor = load_recognition_processor()
+    det_predictor = DetectionPredictor()
+    rec_predictor = RecognitionPredictor()
 
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
     start = time.time()
-    predictions_by_image = run_ocr(images, image_langs, det_model, det_processor, rec_model, rec_processor, highres_images=highres_images)
+    predictions_by_image = rec_predictor(images, image_langs, det_predictor=det_predictor, highres_images=highres_images)
     if args.debug:
         print(f"OCR took {time.time() - start:.2f} seconds")
         max_chars = max([len(l.text) for p in predictions_by_image for l in p.text_lines])

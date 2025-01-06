@@ -7,9 +7,9 @@ from surya.input.processing import slice_bboxes_from_image
 from surya.settings import settings
 import os
 from concurrent.futures import ProcessPoolExecutor
-from surya.detection import get_batch_size as get_det_batch_size
-from surya.recognition import get_batch_size as get_rec_batch_size
-from surya.languages import CODE_TO_LANGUAGE
+from surya.recognition.languages import CODE_TO_LANGUAGE
+from surya.recognition import RecognitionPredictor
+from surya.detection import DetectionPredictor
 
 
 def surya_lang_to_tesseract(code: str) -> Optional[str]:
@@ -33,7 +33,7 @@ def tesseract_ocr(img, bboxes, lang: str):
 
 
 def tesseract_ocr_parallel(imgs, bboxes, langs: List[str], cpus=None):
-    tess_parallel_cores = min(len(imgs), get_rec_batch_size())
+    tess_parallel_cores = min(len(imgs), RecognitionPredictor.get_batch_size())
     if not cpus:
         cpus = os.cpu_count()
     tess_parallel_cores = min(tess_parallel_cores, cpus)
@@ -67,7 +67,7 @@ def tesseract_bboxes(img):
 
 def tesseract_parallel(imgs):
     # Tesseract uses 4 threads per instance
-    tess_parallel_cores = min(len(imgs), get_det_batch_size())
+    tess_parallel_cores = min(len(imgs), DetectionPredictor.get_batch_size())
     cpus = os.cpu_count()
     tess_parallel_cores = min(tess_parallel_cores, cpus)
 

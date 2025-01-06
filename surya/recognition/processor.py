@@ -1,16 +1,12 @@
 from transformers import DonutProcessor
 
 from surya.common.donut.processor import SuryaEncoderImageProcessor
-from surya.model.recognition.tokenizer import Byt5LangTokenizer
+from surya.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
 
 
-def load_processor():
-    return SuryaProcessor()
-
-
 class SuryaProcessor(DonutProcessor):
-    def __init__(self, image_processor=None, tokenizer=None, train=False, **kwargs):
+    def __init__(self, image_processor=None, tokenizer=None, **kwargs):
         image_processor = SuryaEncoderImageProcessor.from_pretrained(settings.RECOGNITION_MODEL_CHECKPOINT)
         image_processor.do_align_long_axis = True
         image_processor.max_size = settings.RECOGNITION_IMAGE_SIZE

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, Tuple
-from surya.model.recognition.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
+from surya.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
 
 
 class DonutSwinModel(DonutSwinPreTrainedModel):

@@ -2,7 +2,7 @@ from typing import List, Union
 from transformers import ByT5Tokenizer
 import numpy as np
 import torch
-from surya.model.recognition.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
+from surya.recognition.model.config import LANGUAGE_MAP, TOTAL_TOKENS, TOKEN_OFFSET
 
 
 def text_to_utf16_numbers(text):

@@ -1,21 +1,19 @@
 from typing import Optional
 import torch
 
+from surya.common.load import ModelLoader
 from surya.settings import settings
 
 
 class BasePredictor:
+    model_loader_cls = ModelLoader
     def __init__(self, checkpoint: Optional[str] = None, device: torch.device | str | None = settings.TORCH_DEVICE_MODEL, dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE):
         self.model = None
         self.processor = None
-        self.load_model(checkpoint, device, dtype)
-        self.load_processor(checkpoint)
+        loader = self.model_loader_cls(checkpoint)
 
-    def load_model(self, checkpoint: Optional[str] = None, device: torch.device | str | None = settings.TORCH_DEVICE_MODEL, dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE):
-        raise NotImplementedError()
-
-    def load_processor(self, checkpoint: Optional[str] = None):
-        raise NotImplementedError()
+        self.model = loader.model(device, dtype)
+        self.processor = loader.processor()
 
     def to(self, device_dtype: torch.device | str | None = None):
         if self.model:
@@ -23,7 +21,8 @@ class BasePredictor:
         else:
             raise ValueError("Model not loaded")
 
-    def get_batch_size(self):
+    @staticmethod
+    def get_batch_size():
         raise NotImplementedError()
 
     def __call__(self, *args, **kwargs):

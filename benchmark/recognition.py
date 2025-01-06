@@ -3,12 +3,10 @@ from collections import defaultdict
 
 from benchmark.scoring import overlap_score
 from surya.input.processing import convert_if_not_rgb
-from surya.model.recognition.model import load_model as load_recognition_model
-from surya.model.recognition.processor import load_processor as load_recognition_processor
-from surya.ocr import run_recognition
 from surya.postprocessing.text import draw_text_on_image
+from surya.recognition import RecognitionPredictor
 from surya.settings import settings
-from surya.languages import CODE_TO_LANGUAGE
+from surya.recognition.languages import CODE_TO_LANGUAGE
 from surya.benchmark.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
 import os
 import datasets
@@ -30,8 +28,7 @@ def main():
     parser.add_argument("--specify_language", action="store_true", help="Pass language codes into the model.", default=False)
     args = parser.parse_args()
 
-    rec_model = load_recognition_model()
-    rec_processor = load_recognition_processor()
+    rec_predictor = RecognitionPredictor()
 
     split = "train"
     if args.max:
@@ -61,10 +58,10 @@ def main():
 
     if settings.RECOGNITION_STATIC_CACHE:
         # Run through one batch to compile the model
-        run_recognition(images[:1], lang_list[:1], rec_model, rec_processor, bboxes=bboxes[:1])
+        rec_predictor(images[:1], lang_list[:1], bboxes=bboxes[:1])
 
     start = time.time()
-    predictions_by_image = run_recognition(images, lang_list if args.specify_language else n_list, rec_model, rec_processor, bboxes=bboxes)
+    predictions_by_image = rec_predictor(images, lang_list if args.specify_language else n_list, bboxes=bboxes)
     surya_time = time.time() - start
 
     surya_scores = defaultdict(list)

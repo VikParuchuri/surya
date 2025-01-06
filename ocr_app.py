@@ -7,19 +7,18 @@ import streamlit as st
 
 from surya.layout import batch_layout_detection
 from surya.detection import DetectionPredictor
+from surya.recognition import RecognitionPredictor
+
 from surya.model.layout.model import load_model as load_layout_model
 from surya.model.layout.processor import load_processor as load_layout_processor
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
 from surya.model.table_rec.model import load_model as load_table_model
 from surya.model.table_rec.processor import load_processor as load_table_processor
 from surya.model.ocr_error.model import load_model as load_ocr_error_model, load_tokenizer as load_ocr_error_processor
 from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
-from surya.ocr import run_ocr
+
 from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
-from surya.languages import CODE_TO_LANGUAGE
-from surya.input.langs import replace_lang_with_code
+from surya.recognition.languages import CODE_TO_LANGUAGE, replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResult
 from surya.settings import settings
 from surya.tables import batch_table_recognition
@@ -32,16 +31,13 @@ from surya.ocr_error import batch_ocr_error_detection
 def load_det_cached():
     return DetectionPredictor()
 
-
 @st.cache_resource()
 def load_rec_cached():
-    return load_rec_model(), load_rec_processor()
-
+    return RecognitionPredictor()
 
 @st.cache_resource()
 def load_layout_cached():
     return load_layout_model(), load_layout_processor()
-
 
 @st.cache_resource()
 def load_table_cached():
@@ -139,7 +135,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 # Function for OCR
 def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
     replace_lang_with_code(langs)
-    img_pred = run_ocr([img], [langs], det_predictor, rec_model, rec_processor, highres_images=[highres_img])[0]
+    img_pred = recognition_predictor([img], [langs], det_predictor, highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
@@ -178,7 +174,7 @@ st.set_page_config(layout="wide")
 col1, col2 = st.columns([.5, .5])
 
 det_predictor = load_det_cached()
-rec_model, rec_processor = load_rec_cached()
+recognition_predictor = load_rec_cached()
 layout_model, layout_processor = load_layout_cached()
 table_model, table_processor = load_table_cached()
 ocr_error_model, ocr_error_processor = load_ocr_error_cached()

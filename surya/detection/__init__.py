@@ -9,8 +9,8 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
-from surya.detection.config import EfficientViTConfig
-from surya.detection.model import EfficientViTForSemanticSegmentation
+
+from surya.detection.loader import DetectionModelLoader
 from surya.detection.parallel import FakeExecutor
 from surya.detection.processor import SegformerImageProcessor
 from surya.detection.util import get_total_splits, split_image
@@ -20,6 +20,8 @@ from surya.detection.heatmap import parallel_get_lines
 
 
 class DetectionPredictor(BasePredictor):
+    model_loader_cls = DetectionModelLoader
+
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
 
@@ -34,38 +36,8 @@ class DetectionPredictor(BasePredictor):
 
         return [future.result() for future in postprocessing_futures]
 
-    def load_model(
-            self,
-            checkpoint: Optional[str] = None,
-            device: Optional[torch.device | str] = None,
-            dtype: Optional[torch.dtype | str] = None
-    ):
-        if checkpoint is None:
-            checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
-        config = EfficientViTConfig.from_pretrained(checkpoint)
-        model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config,
-                                                                    ignore_mismatched_sizes=True)
-        model = model.to(device)
-        model = model.eval()
-
-        if settings.DETECTOR_STATIC_CACHE:
-            torch.set_float32_matmul_precision('high')
-            torch._dynamo.config.cache_size_limit = 1
-            torch._dynamo.config.suppress_errors = False
-
-            print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
-            model = torch.compile(model)
-
-        print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
-        self.model = model
-
-    def load_processor(self, checkpoint: Optional[str] = None):
-        if checkpoint is None:
-            checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
-
-        self.processor = SegformerImageProcessor.from_pretrained(checkpoint)
-
-    def get_batch_size(self):
+    @staticmethod
+    def get_batch_size():
         batch_size = settings.DETECTOR_BATCH_SIZE
         if batch_size is None:
             batch_size = 8
