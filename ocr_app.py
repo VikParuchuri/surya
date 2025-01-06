@@ -5,9 +5,8 @@ from typing import List
 import pypdfium2
 import streamlit as st
 
-from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.detection import DetectionPredictor
 from surya.model.layout.model import load_model as load_layout_model
 from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.recognition.model import load_model as load_rec_model
@@ -31,7 +30,7 @@ from surya.ocr_error import batch_ocr_error_detection
 
 @st.cache_resource()
 def load_det_cached():
-    return load_model(), load_processor()
+    return DetectionPredictor()
 
 
 @st.cache_resource()
@@ -83,7 +82,7 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
 
 
 def text_detection(img) -> (Image.Image, TextDetectionResult):
-    pred = batch_text_detection([img], det_model, det_processor)[0]
+    pred = det_predictor([img])[0]
     polygons = [p.polygon for p in pred.bboxes]
     det_img = draw_polys_on_image(polygons, img.copy())
     return det_img, pred
@@ -140,7 +139,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 # Function for OCR
 def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
     replace_lang_with_code(langs)
-    img_pred = run_ocr([img], [langs], det_model, det_processor, rec_model, rec_processor, highres_images=[highres_img])[0]
+    img_pred = run_ocr([img], [langs], det_predictor, rec_model, rec_processor, highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
@@ -178,7 +177,7 @@ def page_counter(pdf_file):
 st.set_page_config(layout="wide")
 col1, col2 = st.columns([.5, .5])
 
-det_model, det_processor = load_det_cached()
+det_predictor = load_det_cached()
 rec_model, rec_processor = load_rec_cached()
 layout_model, layout_processor = load_layout_cached()
 table_model, table_processor = load_table_cached()

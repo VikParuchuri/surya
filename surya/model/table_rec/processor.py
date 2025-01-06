@@ -4,7 +4,7 @@ import PIL
 import torch
 from transformers import ProcessorMixin
 
-from surya.model.common.donut.processor import SuryaEncoderImageProcessor
+from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.model.table_rec.shaper import LabelShaper
 from surya.settings import settings
 from surya.model.table_rec.config import BOX_DIM, SPECIAL_TOKENS

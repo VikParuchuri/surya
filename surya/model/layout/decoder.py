@@ -8,7 +8,7 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import functional as F
 
-from surya.model.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel
+from surya.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel
 from surya.model.layout.config import LayoutModelOutput
 from transformers.modeling_outputs import CausalLMOutput
 from surya.settings import settings

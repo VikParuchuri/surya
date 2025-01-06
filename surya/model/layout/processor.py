@@ -1,6 +1,6 @@
 import logging
 
-from surya.model.common.donut.processor import SuryaEncoderImageProcessor
+from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.settings import settings
 
 logger = logging.getLogger()

@@ -1,6 +1,6 @@
 from transformers import DonutProcessor
 
-from surya.model.common.donut.processor import SuryaEncoderImageProcessor
+from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.model.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
 

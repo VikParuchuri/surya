@@ -8,7 +8,7 @@ from transformers.utils import ModelOutput
 
 from surya.model.recognition.config import SuryaOCRTextEncoderConfig
 from transformers.modeling_outputs import CausalLMOutput
-from surya.model.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel, WrappedEmbedding
+from surya.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel, WrappedEmbedding
 from surya.settings import settings
 
 _MAX_SQRT_GRADIENT = 1000.0

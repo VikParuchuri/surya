@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import List
 from PIL import Image
 
-from surya.detection import batch_text_detection
+from surya.detection import DetectionPredictor
 from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image, convert_if_not_rgb
 from surya.postprocessing.text import sort_text_lines
 from surya.recognition import batch_recognition
@@ -60,10 +60,10 @@ def run_recognition(images: List[Image.Image], langs: List[List[str] | None], re
     return predictions_by_image
 
 
-def run_ocr(images: List[Image.Image], langs: List[List[str] | None], det_model, det_processor, rec_model, rec_processor, detection_batch_size=None, recognition_batch_size=None, highres_images: List[Image.Image] | None = None) -> List[OCRResult]:
+def run_ocr(images: List[Image.Image], langs: List[List[str] | None], det_predictor: DetectionPredictor, rec_model, rec_processor, detection_batch_size=None, recognition_batch_size=None, highres_images: List[Image.Image] | None = None) -> List[OCRResult]:
     images = convert_if_not_rgb(images)
     highres_images = convert_if_not_rgb(highres_images) if highres_images is not None else [None] * len(images)
-    det_predictions = batch_text_detection(images, det_model, det_processor, batch_size=detection_batch_size)
+    det_predictions = det_predictor(images, batch_size=detection_batch_size)
 
     all_slices = []
     slice_map = []

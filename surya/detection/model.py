@@ -18,32 +18,7 @@ import torch.nn.functional as F
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
 
-from surya.model.detection.config import EfficientViTConfig
-from surya.model.detection.processor import SegformerImageProcessor
-from surya.settings import settings
-
-
-def load_model(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE) -> EfficientViTForSemanticSegmentation:
-    config = EfficientViTConfig.from_pretrained(checkpoint)
-    model = EfficientViTForSemanticSegmentation.from_pretrained(checkpoint, torch_dtype=dtype, config=config, ignore_mismatched_sizes=True)
-    model = model.to(device)
-    model = model.eval()
-
-    if settings.DETECTOR_STATIC_CACHE:
-        torch.set_float32_matmul_precision('high')
-        torch._dynamo.config.cache_size_limit = 1
-        torch._dynamo.config.suppress_errors = False
-
-        print(f"Compiling detection model {checkpoint} on device {device} with dtype {dtype}")
-        model = torch.compile(model)
-
-    print(f"Loaded detection model {checkpoint} on device {device} with dtype {dtype}")
-    return model
-
-
-def load_processor(checkpoint=settings.DETECTOR_MODEL_CHECKPOINT):
-    processor = SegformerImageProcessor.from_pretrained(checkpoint)
-    return processor
+from surya.detection.config import EfficientViTConfig
 
 
 def val2list(x: Union[List, Tuple, Any], repeat_time=1):

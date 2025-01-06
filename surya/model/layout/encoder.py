@@ -1,5 +1,5 @@
 from typing import Optional, Tuple, Union
-from surya.model.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
+from surya.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
 import torch
 from torch import nn
 
