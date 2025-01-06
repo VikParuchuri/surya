@@ -1,14 +1,15 @@
 from typing import List
+
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
-
 from tqdm import tqdm
 
 from surya.input.slicing import ImageSlicer
 from surya.model.layout.config import ID_TO_LABEL
 from surya.postprocessing.heatmap import clean_boxes, intersects_other_boxes
-from surya.schema import LayoutResult, LayoutBox
+from surya.schema import LayoutBox, LayoutResult
 from surya.settings import settings
 
 
@@ -63,6 +64,17 @@ def find_pause_items(preds):
     return pause_sequence
 
 
+def pad_to_batch_size(tensor, batch_size):
+    current_batch_size = tensor.shape[0]
+    if current_batch_size >= batch_size:
+        return tensor
+
+    pad_size = batch_size - current_batch_size
+    padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
+
+    return F.pad(tensor, padding, mode='constant', value=0)
+
+
 def batch_layout_detection(images: List, model, processor, batch_size=None, top_k=5) -> List[LayoutResult]:
     assert all([isinstance(image, Image.Image) for image in images])
     if batch_size is None:
@@ -100,7 +112,6 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
 
         batch_pixel_values = model_inputs["pixel_values"]
         batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=model.dtype).to(model.device)
-
         pause_token = [model.config.decoder.pause_token_id] * 7
         start_token = [model.config.decoder.bos_token_id] * 7
         batch_decoder_input = [
@@ -109,17 +120,25 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
         ]
         batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long, device=model.device)
         inference_token_count = batch_decoder_input.shape[1]
+        if settings.LAYOUT_STATIC_CACHE:
+            batch_pixel_values = pad_to_batch_size(batch_pixel_values, batch_size)
+            batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
         decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64, device=model.device).cumsum(0) - 1
         model.decoder.model._setup_cache(model.config, batch_size, model.device, model.dtype)
 
         batch_predictions = [[] for _ in range(current_batch_size)]
 
-        with torch.inference_mode():
+        with settings.INFERENCE_MODE():
             encoder_hidden_states = model.encoder(pixel_values=batch_pixel_values)[0]
 
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=model.device)
+
+            if settings.LAYOUT_STATIC_CACHE:
+                # Pad inputs to max batch size for static cache
+                encoder_hidden_states = pad_to_batch_size(encoder_hidden_states, batch_size)
+                batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
             while token_count < settings.LAYOUT_MAX_BOXES:
                 is_prefill = token_count == 0
@@ -148,6 +167,8 @@ def batch_layout_detection(images: List, model, processor, batch_size=None, top_
                     break
 
                 batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
+                if settings.LAYOUT_STATIC_CACHE:
+                    batch_decoder_input = pad_to_batch_size(batch_decoder_input, batch_size)
 
                 for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                     if not status:

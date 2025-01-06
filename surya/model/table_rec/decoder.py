@@ -9,6 +9,16 @@ from surya.model.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRD
 from surya.model.table_rec.config import TableRecModelOutput, SuryaTableRecTextEncoderConfig
 from surya.settings import settings
 
+try:
+    import torch_xla.core.xla_model as xm
+except:
+    pass
+
+
+def mark_step():
+    if settings.TORCH_DEVICE_MODEL == 'xla':
+        xm.mark_step()
+
 
 class LabelEmbedding(nn.Module):
     def __init__(self, config):
@@ -97,8 +107,9 @@ class BboxEmbedding(nn.Module):
         if self.embed_positions:
             for j in range(embedded.shape[0]):
                 box_start = input_box_counts[j, 0]
-                box_end = input_box_counts[j, 1] - 1 # Skip the sep token
+                box_end = input_box_counts[j, 1] - 1  # Skip the sep token
                 box_count = box_end - box_start
+                mark_step()
                 embedded[j, box_start:box_end] = embedded[j, box_start:box_end] + self.box_pos_embed.weight[:box_count]
 
         return embedded
@@ -178,6 +189,8 @@ class SuryaTableRecDecoder(SuryaADETRDecoderPreTrainedModel):
             class_logits=class_logits,
             hidden_states=hidden_states,
         )
+
+
 @dataclass
 class TextEncoderOutput(CausalLMOutput):
     hidden_states: torch.FloatTensor = None
