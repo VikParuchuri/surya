@@ -6,67 +6,6 @@ from surya.schema import PolygonBox
 from surya.postprocessing.text import get_text_size
 
 
-def keep_largest_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
-    new_boxes = []
-    for box_obj in boxes:
-        box = box_obj.bbox
-        box_area = (box[2] - box[0]) * (box[3] - box[1])
-        contained = False
-        for other_box_obj in boxes:
-            if other_box_obj.polygon == box_obj.polygon:
-                continue
-
-            other_box = other_box_obj.bbox
-            other_box_area = (other_box[2] - other_box[0]) * (other_box[3] - other_box[1])
-            if box == other_box:
-                continue
-            # find overlap percentage
-            overlap = box_obj.intersection_pct(other_box_obj)
-            if overlap > .9 and box_area < other_box_area:
-                contained = True
-                break
-        if not contained:
-            new_boxes.append(box_obj)
-    return new_boxes
-
-
-def intersects_other_boxes(box: List[List[float]], boxes: List[List[List[float]]], thresh=.9) -> bool:
-    box = PolygonBox(polygon=box)
-    for other_box in boxes:
-        # find overlap percentage
-        other_box_obj = PolygonBox(polygon=other_box)
-        overlap = box.intersection_pct(other_box_obj)
-        if overlap > thresh:
-            return True
-    return False
-
-
-
-def clean_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
-    new_boxes = []
-    for box_obj in boxes:
-        xs = [point[0] for point in box_obj.polygon]
-        ys = [point[1] for point in box_obj.polygon]
-        if max(xs) == min(xs) or max(ys) == min(ys):
-            continue
-
-        box = box_obj.bbox
-        contained = False
-        for other_box_obj in boxes:
-            if other_box_obj.polygon == box_obj.polygon:
-                continue
-
-            other_box = other_box_obj.bbox
-            if box == other_box:
-                continue
-            if box[0] >= other_box[0] and box[1] >= other_box[1] and box[2] <= other_box[2] and box[3] <= other_box[3]:
-                contained = True
-                break
-        if not contained:
-            new_boxes.append(box_obj)
-    return new_boxes
-
-
 def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: str | list = 'red'):
     polys = []
     for bb in bboxes:

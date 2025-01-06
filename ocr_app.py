@@ -5,12 +5,10 @@ from typing import List
 import pypdfium2
 import streamlit as st
 
-from surya.layout import batch_layout_detection
 from surya.detection import DetectionPredictor
 from surya.recognition import RecognitionPredictor
+from surya.layout import LayoutPredictor
 
-from surya.model.layout.model import load_model as load_layout_model
-from surya.model.layout.processor import load_processor as load_layout_processor
 from surya.model.table_rec.model import load_model as load_table_model
 from surya.model.table_rec.processor import load_processor as load_table_processor
 from surya.model.ocr_error.model import load_model as load_ocr_error_model, load_tokenizer as load_ocr_error_processor
@@ -37,7 +35,7 @@ def load_rec_cached():
 
 @st.cache_resource()
 def load_layout_cached():
-    return load_layout_model(), load_layout_processor()
+    return LayoutPredictor()
 
 @st.cache_resource()
 def load_table_cached():
@@ -85,7 +83,7 @@ def text_detection(img) -> (Image.Image, TextDetectionResult):
 
 
 def layout_detection(img) -> (Image.Image, LayoutResult):
-    pred = batch_layout_detection([img], layout_model, layout_processor)[0]
+    pred = layout_predictor([img])[0]
     polygons = [p.polygon for p in pred.bboxes]
     labels = [f"{p.label}-{p.position}" for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
@@ -139,7 +137,7 @@ def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
-    rec_img = draw_text_on_image(bboxes, text, img.size, langs, has_math="_math" in langs)
+    rec_img = draw_text_on_image(bboxes, text, img.size, langs)
     return rec_img, img_pred
 
 
@@ -175,7 +173,7 @@ col1, col2 = st.columns([.5, .5])
 
 det_predictor = load_det_cached()
 recognition_predictor = load_rec_cached()
-layout_model, layout_processor = load_layout_cached()
+layout_predictor = load_layout_cached()
 table_model, table_processor = load_table_cached()
 ocr_error_model, ocr_error_processor = load_ocr_error_cached()
 

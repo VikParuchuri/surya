@@ -21,7 +21,7 @@ class DetectionModelLoader(ModelLoader):
             self,
             device: Optional[torch.device | str] = None,
             dtype: Optional[torch.dtype | str] = None
-    ):
+    ) -> EfficientViTForSemanticSegmentation:
         config = EfficientViTConfig.from_pretrained(self.checkpoint)
         model = EfficientViTForSemanticSegmentation.from_pretrained(self.checkpoint, torch_dtype=dtype, config=config,
                                                                     ignore_mismatched_sizes=True)
@@ -39,5 +39,5 @@ class DetectionModelLoader(ModelLoader):
         print(f"Loaded detection model {self.checkpoint} on device {device} with dtype {dtype}")
         return model
 
-    def processor(self):
+    def processor(self) -> SegformerImageProcessor:
         return SegformerImageProcessor.from_pretrained(self.checkpoint)

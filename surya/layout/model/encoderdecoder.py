@@ -4,8 +4,8 @@ from typing import Optional, Union, Tuple
 import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
-from surya.model.layout.encoder import DonutSwinLayoutModel
-from surya.model.layout.decoder import SuryaLayoutDecoder
+from surya.layout.model.encoder import DonutSwinLayoutModel
+from surya.layout.model.decoder import SuryaLayoutDecoder
 from transformers.utils import ModelOutput
 
 @dataclass

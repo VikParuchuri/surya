@@ -23,10 +23,10 @@ class RecognitionModelLoader(ModelLoader):
             self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
 
     def model(
-            self,
-            device=settings.TORCH_DEVICE_MODEL,
-            dtype=settings.MODEL_DTYPE
-    ):
+        self,
+        device=settings.TORCH_DEVICE_MODEL,
+        dtype=settings.MODEL_DTYPE
+    ) -> OCREncoderDecoderModel:
         config = SuryaOCRConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaOCRDecoderConfig(**decoder_config)
@@ -57,6 +57,6 @@ class RecognitionModelLoader(ModelLoader):
         print(f"Loaded recognition model {self.checkpoint} on device {device} with dtype {dtype}")
         return model
 
-    def processor(self):
+    def processor(self) -> SuryaProcessor:
         return SuryaProcessor()
 

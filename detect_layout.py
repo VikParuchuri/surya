@@ -5,9 +5,7 @@ import json
 from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
-from surya.layout import batch_layout_detection
-from surya.model.layout.model import load_model
-from surya.model.layout.processor import load_processor
+from surya.layout import LayoutPredictor
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os
@@ -22,8 +20,7 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
-    processor = load_processor()
+    layout_predictor = LayoutPredictor()
 
     if os.path.isdir(args.input_path):
         images, names, _ = load_from_folder(args.input_path, args.max)
@@ -33,7 +30,7 @@ def main():
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     start = time.time()
-    layout_predictions = batch_layout_detection(images, model, processor)
+    layout_predictions = layout_predictor(images)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
     if args.debug:
