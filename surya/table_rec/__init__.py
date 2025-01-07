@@ -8,7 +8,8 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
-from surya.schema import TableResult, TableCol, TableRow, TableCell, PolygonBox
+from surya.table_rec.schema import TableCell, TableRow, TableCol, TableResult
+from surya.common.polygon import PolygonBox
 from surya.settings import settings
 from surya.table_rec.loader import TableRecModelLoader
 from surya.table_rec.model.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM, CATEGORY_TO_ID, MERGE_KEYS

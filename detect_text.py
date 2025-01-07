@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
 from surya.detection import DetectionPredictor
-from surya.detection.affinity import draw_lines_on_image
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os
@@ -45,15 +44,9 @@ def main():
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image))
             bbox_image.save(os.path.join(result_path, f"{name}_{idx}_bbox.png"))
 
-            column_image = draw_lines_on_image(pred.vertical_lines, copy.deepcopy(image))
-            column_image.save(os.path.join(result_path, f"{name}_{idx}_column.png"))
-
             if args.debug:
                 heatmap = pred.heatmap
                 heatmap.save(os.path.join(result_path, f"{name}_{idx}_heat.png"))
-
-                affinity_map = pred.affinity_map
-                affinity_map.save(os.path.join(result_path, f"{name}_{idx}_affinity.png"))
 
     predictions_by_page = defaultdict(list)
     for idx, (pred, name, image) in enumerate(zip(predictions, names, images)):

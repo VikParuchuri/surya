@@ -9,8 +9,9 @@ from surya.common.predictor import BasePredictor
 from surya.layout.loader import LayoutModelLoader
 from surya.layout.model.config import ID_TO_LABEL
 from surya.layout.slicer import ImageSlicer
-from surya.layout.util import prediction_to_polygon, clean_boxes
-from surya.schema import LayoutResult, LayoutBox
+from surya.layout.util import prediction_to_polygon
+from surya.common.util import clean_boxes
+from surya.layout.schema import LayoutBox, LayoutResult
 from surya.settings import settings
 
 

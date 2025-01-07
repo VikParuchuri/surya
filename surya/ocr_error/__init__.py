@@ -8,7 +8,7 @@ from tqdm import tqdm
 from surya.common.predictor import BasePredictor
 from surya.ocr_error.loader import OCRErrorModelLoader
 from surya.ocr_error.model.config import ID2LABEL
-from surya.schema import OCRErrorDetectionResult
+from surya.ocr_error.schema import OCRErrorDetectionResult
 from surya.settings import settings
 
 

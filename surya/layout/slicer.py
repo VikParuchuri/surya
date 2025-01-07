@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from surya.schema import LayoutResult
+from surya.layout import LayoutResult
 
 SLICES_TYPE = Tuple[List[Image.Image], List[Tuple[int, int, int]]]
 

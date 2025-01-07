@@ -1,11 +1,10 @@
 import argparse
 import collections
-import copy
 import json
 
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import LayoutPredictor
-from surya.schema import Bbox
+from surya.common.polygon import PolygonBox
 from surya.settings import settings
 from benchmark.utils.metrics import rank_accuracy
 import os
@@ -48,7 +47,7 @@ def main():
             max_intersection = 0
             matching_idx = 0
             for pred_box in order_pred.bboxes:
-                intersection = pred_box.intersection_pct(Bbox(bbox=bbox))
+                intersection = pred_box.intersection_pct(PolygonBox(polygon=bbox))
                 if intersection > max_intersection:
                     max_intersection = intersection
                     matching_idx = pred_box.position

@@ -1,6 +1,6 @@
 from typing import List
 
-from surya.schema import TextLine
+from surya.recognition import TextLine
 
 
 def sort_text_lines(lines: List[TextLine] | List[dict], tolerance=1.25):

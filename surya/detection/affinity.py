@@ -3,10 +3,8 @@ from typing import List
 import cv2
 import numpy as np
 
-from PIL import ImageDraw
-
 from surya.postprocessing.util import get_line_angle
-from surya.schema import ColumnLine
+from surya.detection.schema import ColumnLine
 
 
 def get_detected_lines_sobel(image, vertical=True):
@@ -74,7 +72,7 @@ def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False)
                 bbox[1], bbox[3] = bbox[3], bbox[1]
             if bbox[2] < bbox[0]:
                 bbox[0], bbox[2] = bbox[2], bbox[0]
-            row = ColumnLine(bbox=bbox, vertical=vertical_line, horizontal=horizontal_line)
+            row = ColumnLine(polygon=bbox, vertical=vertical_line, horizontal=horizontal_line)
             line_info.append(row)
 
     if vertical:
@@ -84,20 +82,6 @@ def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False)
         line_info = [line for line in line_info if line.horizontal]
 
     return line_info
-
-
-def draw_lines_on_image(line_info: List[ColumnLine], img):
-    draw = ImageDraw.Draw(img)
-
-    for line in line_info:
-        divisor = 20
-        if line.horizontal:
-            divisor = 200
-        x1, y1, x2, y2 = [x // divisor * divisor for x in line.bbox]
-        if line.vertical:
-            draw.line((x1, y1, x2, y2), fill="red", width=3)
-
-    return img
 
 
 def get_vertical_lines(image, processor_size, image_size, divisor=20, x_tolerance=40, y_tolerance=20) -> List[ColumnLine]:

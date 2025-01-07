@@ -4,9 +4,10 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from surya.common.util import clean_boxes
 from surya.detection.affinity import get_vertical_lines
-from surya.postprocessing.heatmap import clean_boxes
-from surya.schema import PolygonBox, TextDetectionResult
+from surya.detection import TextDetectionResult
+from surya.common.polygon import PolygonBox
 from surya.settings import settings
 
 

@@ -12,7 +12,10 @@ from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_ima
 from surya.postprocessing.text import draw_text_on_image
 from PIL import Image
 from surya.recognition.languages import CODE_TO_LANGUAGE, replace_lang_with_code
-from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResult
+from surya.table_rec import TableResult
+from surya.detection import TextDetectionResult
+from surya.recognition import OCRResult
+from surya.layout import LayoutResult
 from surya.settings import settings
 from surya.postprocessing.util import rescale_bbox
 from pdftext.extraction import plain_text_output

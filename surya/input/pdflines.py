@@ -1,7 +1,7 @@
 from pdftext.extraction import dictionary_output
 
 from surya.recognition.util import sort_text_lines
-from surya.schema import PolygonBox
+from surya.common.polygon import PolygonBox
 import numpy as np
 
 from surya.settings import settings

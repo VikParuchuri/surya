@@ -14,7 +14,7 @@ from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import truncate_repetitions
 from surya.recognition.processor import SuryaProcessor
 from surya.recognition.util import sort_text_lines
-from surya.schema import OCRResult, TextLine
+from surya.recognition.schema import TextLine, OCRResult
 from surya.settings import settings
 
 

@@ -2,7 +2,7 @@ from typing import List
 from PIL import ImageDraw, ImageFont
 
 from surya.postprocessing.fonts import get_font_path
-from surya.schema import PolygonBox
+from surya.common.polygon import PolygonBox
 from surya.postprocessing.text import get_text_size
 
 

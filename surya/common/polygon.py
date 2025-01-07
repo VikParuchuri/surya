@@ -1,9 +1,7 @@
 import copy
-from typing import Any, Dict, List, Optional
-from copy import deepcopy
-from typing import List, Tuple, Any, Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, computed_field, field_validator
+from pydantic import BaseModel, field_validator, computed_field
 
 from surya.postprocessing.util import rescale_bbox
 
@@ -12,16 +10,24 @@ class PolygonBox(BaseModel):
     polygon: List[List[float]]
     confidence: Optional[float] = None
 
-    @field_validator('polygon')
-    @classmethod
-    def check_elements(cls, v: List[List[float]]) -> List[List[float]]:
-        if len(v) != 4:
-            raise ValueError('corner must have 4 elements')
+    @field_validator('polygon', mode='before')
+    def convert_bbox_to_polygon(cls, value):
+        if isinstance(value, (list, tuple)) and len(value) == 4:
+            x_min, y_min, x_max, y_max = value
+            polygon = [
+                [x_min, y_min],
+                [x_max, y_min],
+                [x_max, y_max],
+                [x_min, y_max],
+            ]
+            return polygon
 
-        for corner in v:
-            if len(corner) != 2:
-                raise ValueError('corner must have 2 elements')
-        return v
+        if isinstance(value, list) and len(value) == 4:
+            if all(isinstance(point, (list, tuple)) and len(point) == 2 for point in value):
+                return value
+
+        raise ValueError(
+            "Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)]")
 
     @property
     def height(self):
@@ -36,14 +42,10 @@ class PolygonBox(BaseModel):
         return self.width * self.height
 
     @computed_field
-    @property
     def bbox(self) -> List[float]:
-        box = [self.polygon[0][0], self.polygon[0][1], self.polygon[1][0], self.polygon[2][1]]
-        if box[0] > box[2]:
-            box[0], box[2] = box[2], box[0]
-        if box[1] > box[3]:
-            box[1], box[3] = box[3], box[1]
-        return box
+        x_coords = [point[0] for point in self.polygon]
+        y_coords = [point[1] for point in self.polygon]
+        return [min(x_coords), min(y_coords), max(x_coords), max(y_coords)]
 
     def rescale(self, processor_size, image_size):
         # Point is in x, y format
@@ -166,83 +168,3 @@ class Bbox(BaseModel):
         y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
         intersection = x_overlap * y_overlap
         return intersection / self.area
-
-
-class LayoutBox(PolygonBox):
-    label: str
-    position: int
-    top_k: Optional[Dict[str, float]] = None
-
-
-class ColumnLine(Bbox):
-    vertical: bool
-    horizontal: bool
-
-
-class TextLine(PolygonBox):
-    text: str
-    confidence: Optional[float] = None
-
-
-class OCRResult(BaseModel):
-    text_lines: List[TextLine]
-    languages: List[str] | None = None
-    image_bbox: List[float]
-
-
-class TextDetectionResult(BaseModel):
-    bboxes: List[PolygonBox]
-    vertical_lines: List[ColumnLine]
-    heatmap: Optional[Any]
-    affinity_map: Optional[Any]
-    image_bbox: List[float]
-
-
-class LayoutResult(BaseModel):
-    bboxes: List[LayoutBox]
-    image_bbox: List[float]
-    sliced: bool = False  # Whether the image was sliced and reconstructed
-
-
-class TableCell(PolygonBox):
-    row_id: int
-    colspan: int
-    within_row_id: int
-    cell_id: int
-    rowspan: int | None = None
-    merge_up: bool = False
-    merge_down: bool = False
-    col_id: int | None = None
-
-    @property
-    def label(self):
-        return f'{self.row_id} {self.rowspan}/{self.colspan}'
-
-
-class TableRow(PolygonBox):
-    row_id: int
-
-    @property
-    def label(self):
-        return f'Row {self.row_id}'
-
-
-class TableCol(PolygonBox):
-    col_id: int
-
-    @property
-    def label(self):
-        return f'Column {self.col_id}'
-
-
-class TableResult(BaseModel):
-    cells: List[TableCell]
-    unmerged_cells: List[TableCell]
-    rows: List[TableRow]
-    cols: List[TableCol]
-    image_bbox: List[float]
-
-
-class OCRErrorDetectionResult(BaseModel):
-    texts: List[str]
-    labels: List[str]

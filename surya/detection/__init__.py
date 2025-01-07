@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, List, Generator, Tuple
+from typing import List, Generator, Tuple
 
 import numpy as np
 import torch
@@ -14,7 +14,7 @@ from surya.detection.loader import DetectionModelLoader
 from surya.detection.parallel import FakeExecutor
 from surya.detection.processor import SegformerImageProcessor
 from surya.detection.util import get_total_splits, split_image
-from surya.schema import TextDetectionResult
+from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
 from surya.detection.heatmap import parallel_get_lines
 

@@ -80,7 +80,7 @@ def outputs_to_objects(outputs, img_sizes, id2label):
 
         rows = []
         cols = []
-        for i, cell in enumerate(objects):
+        for cell in objects:
             if cell["label"] == "table column":
                 cols.append(cell)
 
