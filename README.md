@@ -13,15 +13,15 @@ It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmar
 
 |                            Detection                             |                                   OCR                                   |
 |:----------------------------------------------------------------:|:-----------------------------------------------------------------------:|
-|  <img src="static/images/excerpt.png" width="500px"/>  |  <img src="static/images/excerpt_text.png" width="500px"/> |
+|  <img src="https://github.com/VikParuchuri/surya/blob/master/static/images/excerpt.png" width="500px"/>  |  <img src="https://github.com/VikParuchuri/surya/blob/master/static/images/excerpt_text.png" width="500px"/> |
 
 |                               Layout                               |                               Reading Order                                |
 |:------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
-| <img src="static/images/excerpt_layout.png" width="500px"/> | <img src="static/images/excerpt_reading.jpg" width="500px"/> |
+| <img src="https://github.com/VikParuchuri/surya/blob/master/static/images/excerpt_layout.png" width="500px"/> | <img src="https://github.com/VikParuchuri/surya/blob/master/static/images/excerpt_reading.jpg" width="500px"/> |
 
 |                       Table Recognition                       |     |
 |:-------------------------------------------------------------:|:----------------:|
-| <img src="static/images/scanned_tablerec.png" width="500px"/> | <img width="500px"/> |
+| <img src="https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_tablerec.png" width="500px"/> | <img width="500px"/> |
 
 
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
@@ -34,17 +34,17 @@ Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who
 
 | Name             |              Detection              |                                      OCR |                                     Layout |                                       Order |                                    Table Rec |
 |------------------|:-----------------------------------:|-----------------------------------------:|-------------------------------------------:|--------------------------------------------:|---------------------------------------------:|
-| Japanese         | [Image](static/images/japanese.jpg) | [Image](static/images/japanese_text.jpg) | [Image](static/images/japanese_layout.jpg) | [Image](static/images/japanese_reading.jpg) | [Image](static/images/japanese_tablerec.png) |
-| Chinese          | [Image](static/images/chinese.jpg)  |  [Image](static/images/chinese_text.jpg) |  [Image](static/images/chinese_layout.jpg) |  [Image](static/images/chinese_reading.jpg) |                                              |
-| Hindi            |  [Image](static/images/hindi.jpg)   |    [Image](static/images/hindi_text.jpg) |    [Image](static/images/hindi_layout.jpg) |    [Image](static/images/hindi_reading.jpg) |                                              |
-| Arabic           |  [Image](static/images/arabic.jpg)  |   [Image](static/images/arabic_text.jpg) |   [Image](static/images/arabic_layout.jpg) |   [Image](static/images/arabic_reading.jpg) |                                              |
-| Chinese + Hindi  | [Image](static/images/chi_hind.jpg) | [Image](static/images/chi_hind_text.jpg) | [Image](static/images/chi_hind_layout.jpg) | [Image](static/images/chi_hind_reading.jpg) |                                              |
-| Presentation     |   [Image](static/images/pres.png)   |     [Image](static/images/pres_text.jpg) |     [Image](static/images/pres_layout.jpg) |     [Image](static/images/pres_reading.jpg) |     [Image](static/images/pres_tablerec.png) |
-| Scientific Paper |  [Image](static/images/paper.jpg)   |    [Image](static/images/paper_text.jpg) |    [Image](static/images/paper_layout.jpg) |    [Image](static/images/paper_reading.jpg) |    [Image](static/images/paper_tablerec.png) |
-| Scanned Document | [Image](static/images/scanned.png)  |  [Image](static/images/scanned_text.jpg) |  [Image](static/images/scanned_layout.jpg) |  [Image](static/images/scanned_reading.jpg) |  [Image](static/images/scanned_tablerec.png) |
-| New York Times   |   [Image](static/images/nyt.jpg)    |      [Image](static/images/nyt_text.jpg) |      [Image](static/images/nyt_layout.jpg) |        [Image](static/images/nyt_order.jpg) |                                              |
-| Scanned Form     |  [Image](static/images/funsd.png)   |    [Image](static/images/funsd_text.jpg) |    [Image](static/images/funsd_layout.jpg) |    [Image](static/images/funsd_reading.jpg) | [Image](static/images/scanned_tablerec2.png) |
-| Textbook         | [Image](static/images/textbook.jpg) | [Image](static/images/textbook_text.jpg) | [Image](static/images/textbook_layout.jpg) |   [Image](static/images/textbook_order.jpg) |                                              |
+| Japanese         | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/japanese.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/japanese_text.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/japanese_layout.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/japanese_reading.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/japanese_tablerec.png) |
+| Chinese          | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chinese.jpg)  |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chinese_text.jpg) |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chinese_layout.jpg) |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chinese_reading.jpg) |                                              |
+| Hindi            |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/hindi.jpg)   |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/hindi_text.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/hindi_layout.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/hindi_reading.jpg) |                                              |
+| Arabic           |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/arabic.jpg)  |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/arabic_text.jpg) |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/arabic_layout.jpg) |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/arabic_reading.jpg) |                                              |
+| Chinese + Hindi  | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chi_hind.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chi_hind_text.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chi_hind_layout.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/chi_hind_reading.jpg) |                                              |
+| Presentation     |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/pres.png)   |     [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/pres_text.jpg) |     [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/pres_layout.jpg) |     [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/pres_reading.jpg) |     [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/pres_tablerec.png) |
+| Scientific Paper |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/paper.jpg)   |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/paper_text.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/paper_layout.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/paper_reading.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/paper_tablerec.png) |
+| Scanned Document | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned.png)  |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_text.jpg) |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_layout.jpg) |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_reading.jpg) |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_tablerec.png) |
+| New York Times   |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/nyt.jpg)    |      [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/nyt_text.jpg) |      [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/nyt_layout.jpg) |        [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/nyt_order.jpg) |                                              |
+| Scanned Form     |  [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/funsd.png)   |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/funsd_text.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/funsd_layout.jpg) |    [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/funsd_reading.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/scanned_tablerec2.png) |
+| Textbook         | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/textbook.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/textbook_text.jpg) | [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/textbook_layout.jpg) |   [Image](https://github.com/VikParuchuri/surya/blob/master/static/images/textbook_order.jpg) |                                              |
 
 # Hosted API
 
@@ -312,14 +312,14 @@ If you want to develop surya, you can install it manually:
 
 ## OCR
 
-![Benchmark chart tesseract](static/images/benchmark_rec_chart.png)
+![Benchmark chart tesseract](https://github.com/VikParuchuri/surya/blob/master/static/images/benchmark_rec_chart.png)
 
 | Model     | Time per page (s) | Avg similarity (⬆) |
 |-----------|-------------------|--------------------|
 | surya     | .62               | 0.97               |
 | tesseract | .45               | 0.88               |
 
-[Full language results](static/images/rec_acc_table.png)
+[Full language results](https://github.com/VikParuchuri/surya/blob/master/static/images/rec_acc_table.png)
 
 Tesseract is CPU-based, and surya is CPU or GPU.  I tried to cost-match the resources used, so I used a 1xA6000 (48GB VRAM) for surya, and 28 CPU cores for Tesseract (same price on Lambda Labs/DigitalOcean).
 
@@ -327,9 +327,9 @@ Tesseract is CPU-based, and surya is CPU or GPU.  I tried to cost-match the reso
 
 I benchmarked OCR against Google Cloud vision since it has similar language coverage to Surya.
 
-![Benchmark chart google cloud](static/images/gcloud_rec_bench.png)
+![Benchmark chart google cloud](https://github.com/VikParuchuri/surya/blob/master/static/images/gcloud_rec_bench.png)
 
-[Full language results](static/images/gcloud_full_langs.png)
+[Full language results](https://github.com/VikParuchuri/surya/blob/master/static/images/gcloud_full_langs.png)
 
 **Methodology**
 
@@ -341,7 +341,7 @@ For Google Cloud, I aligned the output from Google Cloud with the ground truth. 
 
 ## Text line detection
 
-![Benchmark chart](static/images/benchmark_chart_small.png)
+![Benchmark chart](https://github.com/VikParuchuri/surya/blob/master/static/images/benchmark_chart_small.png)
 
 | Model     | Time (s)   | Time per page (s)   | precision   |   recall |
 |-----------|------------|---------------------|-------------|----------|
