@@ -4,10 +4,8 @@ import copy
 import json
 
 from surya.benchmark.metrics import precision_recall
-from surya.model.layout.model import load_model
-from surya.model.layout.processor import load_processor
+from surya.layout import LayoutPredictor
 from surya.input.processing import convert_if_not_rgb
-from surya.layout import batch_layout_detection
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 import os
@@ -23,8 +21,7 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
-    processor = load_processor()
+    layout_predictor = LayoutPredictor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
@@ -33,10 +30,10 @@ def main():
     images = convert_if_not_rgb(images)
 
     if settings.LAYOUT_STATIC_CACHE:
-        batch_layout_detection(images[:1], model, processor)
+        layout_predictor(images[:1])
 
     start = time.time()
-    layout_predictions = batch_layout_detection(images, model, processor)
+    layout_predictions = layout_predictor(images)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]

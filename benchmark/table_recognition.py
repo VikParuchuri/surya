@@ -5,9 +5,7 @@ import json
 from tabulate import tabulate
 
 from surya.input.processing import convert_if_not_rgb
-from surya.model.table_rec.model import load_model
-from surya.model.table_rec.processor import load_processor
-from surya.tables import batch_table_recognition
+from surya.table_rec import TableRecPredictor
 from surya.settings import settings
 from surya.benchmark.metrics import penalized_iou_score
 from surya.benchmark.tatr import load_tatr, batch_inference_tatr
@@ -23,8 +21,7 @@ def main():
     parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
-    processor = load_processor()
+    table_rec_predictor = TableRecPredictor()
 
     pathname = "table_rec_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
@@ -37,10 +34,10 @@ def main():
 
     if settings.TABLE_REC_STATIC_CACHE:
         # Run through one batch to compile the model
-        batch_table_recognition(images[:1], model, processor)
+        table_rec_predictor(images[:1])
 
     start = time.time()
-    table_rec_predictions = batch_table_recognition(images, model, processor)
+    table_rec_predictions = table_rec_predictor(images)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]

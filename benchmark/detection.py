@@ -6,12 +6,12 @@ import json
 from surya.benchmark.bbox import get_pdf_lines
 from surya.benchmark.metrics import precision_recall
 from surya.benchmark.tesseract import tesseract_parallel
-from surya.model.detection.model import load_model, load_processor
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
-from surya.detection import batch_text_detection
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.postprocessing.util import rescale_bbox
 from surya.settings import settings
+from surya.detection import DetectionPredictor
+
 import os
 import time
 from tabulate import tabulate
@@ -27,8 +27,7 @@ def main():
     parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
-    processor = load_processor()
+    det_predictor = DetectionPredictor()
 
     if args.pdf_path is not None:
         pathname = args.pdf_path
@@ -56,10 +55,10 @@ def main():
 
     if settings.DETECTOR_STATIC_CACHE:
         # Run through one batch to compile the model
-        batch_text_detection(images[:1], model, processor)
+        det_predictor(images[:1])
 
     start = time.time()
-    predictions = batch_text_detection(images, model, processor)
+    predictions = det_predictor(images)
     surya_time = time.time() - start
 
     if args.tesseract:
