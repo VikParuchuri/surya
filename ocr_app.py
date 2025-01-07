@@ -8,10 +8,10 @@ import streamlit as st
 from surya.detection import DetectionPredictor
 from surya.recognition import RecognitionPredictor
 from surya.layout import LayoutPredictor
+from surya.ocr_error import OCRErrorPredictor
 
 from surya.model.table_rec.model import load_model as load_table_model
 from surya.model.table_rec.processor import load_processor as load_table_processor
-from surya.model.ocr_error.model import load_model as load_ocr_error_model, load_tokenizer as load_ocr_error_processor
 from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
 
 from surya.postprocessing.text import draw_text_on_image
@@ -22,7 +22,6 @@ from surya.settings import settings
 from surya.tables import batch_table_recognition
 from surya.postprocessing.util import rescale_bbox
 from pdftext.extraction import plain_text_output
-from surya.ocr_error import batch_ocr_error_detection
 
 
 @st.cache_resource()
@@ -43,7 +42,7 @@ def load_table_cached():
 
 @st.cache_resource()
 def load_ocr_error_cached():
-    return load_ocr_error_model(), load_ocr_error_processor()
+    return OCRErrorPredictor()
 
 
 def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=15):
@@ -68,7 +67,7 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
     for i in range(0, len(text), sample_gap):
         samples.append(text[i:i + sample_len])
 
-    results = batch_ocr_error_detection(samples, ocr_error_model, ocr_error_processor)
+    results = error_predictor(samples)
     label = "This PDF has good text."
     if results.labels.count("bad") / len(results.labels) > .2:
         label = "This PDF may have garbled or bad OCR text."
@@ -175,7 +174,7 @@ det_predictor = load_det_cached()
 recognition_predictor = load_rec_cached()
 layout_predictor = load_layout_cached()
 table_model, table_processor = load_table_cached()
-ocr_error_model, ocr_error_processor = load_ocr_error_cached()
+error_predictor = load_ocr_error_cached()
 
 
 st.markdown("""

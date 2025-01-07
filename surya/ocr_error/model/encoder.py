@@ -21,7 +21,7 @@ if is_flash_attn_2_available():
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
-from surya.model.ocr_error.config import DistilBertConfig
+from surya.ocr_error.model.config import DistilBertConfig
 
 
 def _get_unpad_data(attention_mask):
