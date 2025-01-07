@@ -3,8 +3,8 @@ from typing import Optional, Union, Tuple, Dict
 
 import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
-from surya.model.table_rec.decoder import SuryaTableRecDecoder
-from surya.model.table_rec.encoder import DonutSwinModel
+from surya.table_rec.model.decoder import SuryaTableRecDecoder
+from surya.table_rec.model.encoder import DonutSwinModel
 from transformers.utils import ModelOutput
 
 

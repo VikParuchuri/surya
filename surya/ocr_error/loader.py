@@ -9,7 +9,7 @@ from surya.ocr_error.tokenizer import DistilBertTokenizer
 from surya.settings import settings
 
 
-class OCRErrorLoader(ModelLoader):
+class OCRErrorModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
         super().__init__(checkpoint)
 

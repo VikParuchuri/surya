@@ -2,7 +2,7 @@ import math
 from typing import List, Dict
 import numpy as np
 
-from surya.model.table_rec.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM
+from surya.table_rec.model.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM
 
 
 class LabelShaper:

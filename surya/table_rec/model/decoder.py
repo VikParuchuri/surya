@@ -4,8 +4,8 @@ import torch
 from torch import nn
 
 from surya.common.adetr.decoder import SuryaADETRDecoderModel, SuryaADETRDecoderPreTrainedModel
-from surya.model.table_rec.config import TableRecModelOutput
-from surya.model.table_rec.shaper import LabelShaper
+from surya.table_rec.model.config import TableRecModelOutput
+from surya.table_rec.model.shaper import LabelShaper
 from surya.settings import settings
 
 

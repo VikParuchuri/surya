@@ -5,9 +5,8 @@ import time
 from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
-from surya.model.detection.model import load_model, load_processor
-from surya.detection import batch_text_detection
-from surya.postprocessing.affinity import draw_lines_on_image
+from surya.detection import DetectionPredictor
+from surya.detection.affinity import draw_lines_on_image
 from surya.postprocessing.heatmap import draw_polys_on_image
 from surya.settings import settings
 import os
@@ -23,9 +22,7 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
     args = parser.parse_args()
 
-    checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
-    model = load_model(checkpoint=checkpoint)
-    processor = load_processor(checkpoint=checkpoint)
+    det_predictor = DetectionPredictor()
 
     if os.path.isdir(args.input_path):
         images, names, _ = load_from_folder(args.input_path, args.max)
@@ -35,7 +32,7 @@ def main():
         folder_name = os.path.basename(args.input_path).split(".")[0]
 
     start = time.time()
-    predictions = batch_text_detection(images, model, processor, include_maps=args.debug)
+    predictions = det_predictor(images, include_maps=args.debug)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
     end = time.time()

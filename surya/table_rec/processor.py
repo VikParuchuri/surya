@@ -5,19 +5,9 @@ import torch
 from transformers import ProcessorMixin
 
 from surya.common.donut.processor import SuryaEncoderImageProcessor
-from surya.model.table_rec.shaper import LabelShaper
+from surya.table_rec.shaper import LabelShaper
 from surya.settings import settings
-from surya.model.table_rec.config import BOX_DIM, SPECIAL_TOKENS
-
-
-def load_processor():
-    processor = SuryaProcessor()
-
-    processor.token_pad_id = 0
-    processor.token_eos_id = 1
-    processor.token_bos_id = 1
-    processor.token_query_end_id = 4
-    return processor
+from surya.table_rec.model.config import BOX_DIM, SPECIAL_TOKENS
 
 
 class SuryaProcessor(ProcessorMixin):

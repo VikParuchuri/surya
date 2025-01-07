@@ -5,13 +5,8 @@ from typing import List
 import pypdfium2
 import streamlit as st
 
-from surya.detection import DetectionPredictor
-from surya.recognition import RecognitionPredictor
-from surya.layout import LayoutPredictor
-from surya.ocr_error import OCRErrorPredictor
+from surya.models import load_predictors
 
-from surya.model.table_rec.model import load_model as load_table_model
-from surya.model.table_rec.processor import load_processor as load_table_processor
 from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
 
 from surya.postprocessing.text import draw_text_on_image
@@ -19,30 +14,13 @@ from PIL import Image
 from surya.recognition.languages import CODE_TO_LANGUAGE, replace_lang_with_code
 from surya.schema import OCRResult, TextDetectionResult, LayoutResult, TableResult
 from surya.settings import settings
-from surya.tables import batch_table_recognition
 from surya.postprocessing.util import rescale_bbox
 from pdftext.extraction import plain_text_output
 
 
 @st.cache_resource()
-def load_det_cached():
-    return DetectionPredictor()
-
-@st.cache_resource()
-def load_rec_cached():
-    return RecognitionPredictor()
-
-@st.cache_resource()
-def load_layout_cached():
-    return LayoutPredictor()
-
-@st.cache_resource()
-def load_table_cached():
-    return load_table_model(), load_table_processor()
-
-@st.cache_resource()
-def load_ocr_error_cached():
-    return OCRErrorPredictor()
+def load_predictors_cached():
+    return load_predictors()
 
 
 def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=15):
@@ -67,7 +45,7 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
     for i in range(0, len(text), sample_gap):
         samples.append(text[i:i + sample_len])
 
-    results = error_predictor(samples)
+    results = predictors["ocr_error"](samples)
     label = "This PDF has good text."
     if results.labels.count("bad") / len(results.labels) > .2:
         label = "This PDF may have garbled or bad OCR text."
@@ -75,14 +53,14 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
 
 
 def text_detection(img) -> (Image.Image, TextDetectionResult):
-    pred = det_predictor([img])[0]
+    pred = predictors["detection"]([img])[0]
     polygons = [p.polygon for p in pred.bboxes]
     det_img = draw_polys_on_image(polygons, img.copy())
     return det_img, pred
 
 
 def layout_detection(img) -> (Image.Image, LayoutResult):
-    pred = layout_predictor([img])[0]
+    pred = predictors["layout"]([img])[0]
     polygons = [p.polygon for p in pred.bboxes]
     labels = [f"{p.label}-{p.position}" for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
@@ -105,7 +83,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
             )
             layout_tables.append(highres_bbox)
 
-    table_preds = batch_table_recognition(table_imgs, table_model, table_processor)
+    table_preds = predictors["table_rec"](table_imgs)
     table_img = img.copy()
 
     for results, table_bbox in zip(table_preds, layout_tables):
@@ -132,7 +110,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 # Function for OCR
 def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
     replace_lang_with_code(langs)
-    img_pred = recognition_predictor([img], [langs], det_predictor, highres_images=[highres_img])[0]
+    img_pred = predictors["recognition"]([img], [langs], predictors["detection"], highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
@@ -170,12 +148,7 @@ def page_counter(pdf_file):
 st.set_page_config(layout="wide")
 col1, col2 = st.columns([.5, .5])
 
-det_predictor = load_det_cached()
-recognition_predictor = load_rec_cached()
-layout_predictor = load_layout_cached()
-table_model, table_processor = load_table_cached()
-error_predictor = load_ocr_error_cached()
-
+predictors = load_predictors_cached()
 
 st.markdown("""
 # Surya OCR Demo

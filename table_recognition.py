@@ -5,12 +5,8 @@ import json
 from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
-from surya.layout import batch_layout_detection
-from surya.model.layout.model import load_model as load_layout_model
-from surya.model.layout.processor import load_processor as load_layout_processor
-from surya.model.table_rec.model import load_model as load_model
-from surya.model.table_rec.processor import load_processor
-from surya.tables import batch_table_recognition
+from surya.layout import LayoutPredictor
+from surya.table_rec import TableRecPredictor
 from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.settings import settings
 from surya.postprocessing.util import rescale_bbox
@@ -26,11 +22,8 @@ def main():
     parser.add_argument("--skip_table_detection", action="store_true", help="Tables are already cropped, so don't re-detect tables.", default=False)
     args = parser.parse_args()
 
-    model = load_model()
-    processor = load_processor()
-
-    layout_model = load_layout_model()
-    layout_processor = load_layout_processor()
+    table_rec_predictor = TableRecPredictor()
+    layout_predictor = LayoutPredictor()
 
     if os.path.isdir(args.input_path):
         images, _, _ = load_from_folder(args.input_path, args.max)
@@ -51,7 +44,7 @@ def main():
 
         prev_name = name
 
-    layout_predictions = batch_layout_detection(images, layout_model, layout_processor)
+    layout_predictions = layout_predictor(images)
 
     table_imgs = []
     table_counts = []
@@ -79,7 +72,7 @@ def main():
 
             table_imgs.extend(page_table_imgs)
 
-    table_preds = batch_table_recognition(table_imgs, model, processor)
+    table_preds = table_rec_predictor(table_imgs)
     result_path = os.path.join(args.results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 

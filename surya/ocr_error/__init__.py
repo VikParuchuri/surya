@@ -6,14 +6,14 @@ import torch
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
-from surya.ocr_error.loader import OCRErrorLoader
+from surya.ocr_error.loader import OCRErrorModelLoader
 from surya.ocr_error.model.config import ID2LABEL
 from surya.schema import OCRErrorDetectionResult
 from surya.settings import settings
 
 
 class OCRErrorPredictor(BasePredictor):
-    model_loader_cls = OCRErrorLoader
+    model_loader_cls = OCRErrorModelLoader
 
     def __call__(
         self,
