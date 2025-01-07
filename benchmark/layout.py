@@ -3,7 +3,7 @@ import collections
 import copy
 import json
 
-from surya.benchmark.metrics import precision_recall
+from benchmark.utils.metrics import precision_recall
 from surya.layout import LayoutPredictor
 from surya.input.processing import convert_if_not_rgb
 from surya.postprocessing.heatmap import draw_bboxes_on_image

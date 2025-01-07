@@ -1,8 +1,6 @@
 import torch
-from transformers import DetrFeatureExtractor, AutoModelForObjectDetection
+from transformers import AutoModelForObjectDetection
 from surya.settings import settings
-
-from PIL import Image
 import numpy as np
 
 

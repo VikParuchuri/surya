@@ -7,8 +7,8 @@ from tabulate import tabulate
 from surya.input.processing import convert_if_not_rgb
 from surya.table_rec import TableRecPredictor
 from surya.settings import settings
-from surya.benchmark.metrics import penalized_iou_score
-from surya.benchmark.tatr import load_tatr, batch_inference_tatr
+from benchmark.utils.metrics import penalized_iou_score
+from benchmark.utils.tatr import load_tatr, batch_inference_tatr
 import os
 import time
 import datasets

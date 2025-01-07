@@ -1,6 +1,6 @@
 from pdftext.extraction import dictionary_output
 
-from surya.postprocessing.text import sort_text_lines
+from surya.recognition.util import sort_text_lines
 from surya.schema import PolygonBox
 import numpy as np
 

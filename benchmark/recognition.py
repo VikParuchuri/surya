@@ -1,13 +1,13 @@
 import argparse
 from collections import defaultdict
 
-from benchmark.scoring import overlap_score
+from benchmark.utils.scoring import overlap_score
 from surya.input.processing import convert_if_not_rgb
 from surya.postprocessing.text import draw_text_on_image
 from surya.recognition import RecognitionPredictor
 from surya.settings import settings
 from surya.recognition.languages import CODE_TO_LANGUAGE
-from surya.benchmark.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
+from benchmark.utils.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
 import os
 import datasets
 import json

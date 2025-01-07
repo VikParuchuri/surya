@@ -7,7 +7,7 @@ from surya.input.processing import convert_if_not_rgb
 from surya.layout import LayoutPredictor
 from surya.schema import Bbox
 from surya.settings import settings
-from surya.benchmark.metrics import rank_accuracy
+from benchmark.utils.metrics import rank_accuracy
 import os
 import time
 import datasets
