@@ -8,7 +8,6 @@ from PIL import Image
 import json
 
 
-
 def get_name_from_path(path):
     return os.path.basename(path).split(".")[0]
 

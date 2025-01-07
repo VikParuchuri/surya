@@ -21,6 +21,12 @@ from surya.detection.heatmap import parallel_get_lines
 
 class DetectionPredictor(BasePredictor):
     model_loader_cls = DetectionModelLoader
+    batch_size = settings.DETECTOR_BATCH_SIZE
+    default_batch_sizes = {
+        "cpu": 8,
+        "mps": 8,
+        "cuda": 36
+    }
 
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
@@ -35,17 +41,6 @@ class DetectionPredictor(BasePredictor):
                     postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
 
         return [future.result() for future in postprocessing_futures]
-
-    @staticmethod
-    def get_batch_size():
-        batch_size = settings.DETECTOR_BATCH_SIZE
-        if batch_size is None:
-            batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "mps":
-                batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "cuda":
-                batch_size = 36
-        return batch_size
 
     def pad_to_batch_size(self, tensor, batch_size):
         current_batch_size = tensor.shape[0]

@@ -14,6 +14,12 @@ from surya.settings import settings
 
 class OCRErrorPredictor(BasePredictor):
     model_loader_cls = OCRErrorModelLoader
+    batch_size = settings.OCR_ERROR_BATCH_SIZE
+    default_batch_sizes = {
+        "cpu": 8,
+        "mps": 8,
+        "cuda": 64
+    }
 
     def __call__(
         self,
@@ -21,17 +27,6 @@ class OCRErrorPredictor(BasePredictor):
         batch_size: Optional[int] = None
     ):
         return self.batch_ocr_error_detection(texts, batch_size)
-
-    @staticmethod
-    def get_batch_size():
-        batch_size = settings.OCR_ERROR_BATCH_SIZE
-        if batch_size is None:
-            batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "mps":
-                batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "cuda":
-                batch_size = 64
-        return batch_size
 
     def batch_ocr_error_detection(
             self,

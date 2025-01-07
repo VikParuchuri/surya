@@ -20,6 +20,12 @@ from surya.settings import settings
 
 class RecognitionPredictor(BasePredictor):
     model_loader_cls = RecognitionModelLoader
+    batch_size = settings.RECOGNITION_BATCH_SIZE
+    default_batch_sizes = {
+        "cpu": 32,
+        "mps": 64,
+        "cuda": 256
+    }
 
     def __call__(
             self,
@@ -170,17 +176,6 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons
         }
 
-    @staticmethod
-    def get_batch_size():
-        batch_size = settings.RECOGNITION_BATCH_SIZE
-        if batch_size is None:
-            batch_size = 32
-            if settings.TORCH_DEVICE_MODEL == "mps":
-                batch_size = 64  # 12GB RAM max
-            if settings.TORCH_DEVICE_MODEL == "cuda":
-                batch_size = 256
-        return batch_size
-
     def pad_to_batch_size(self, tensor, batch_size):
         current_batch_size = tensor.shape[0]
         if current_batch_size >= batch_size:
@@ -240,8 +235,6 @@ class RecognitionPredictor(BasePredictor):
             batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
             real_batch_size = len(batch_images)
             batch_langs = languages[i:i + real_batch_size]
-            has_math = [lang and "_math" in lang for lang in batch_langs]
-
             processed_batch = self.processor(text=[""] * len(batch_images), images=batch_images, langs=batch_langs)
 
             batch_pixel_values = processed_batch["pixel_values"]

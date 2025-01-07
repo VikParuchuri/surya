@@ -18,6 +18,12 @@ from surya.table_rec.shaper import LabelShaper
 
 class TableRecPredictor(BasePredictor):
     model_loader_cls = TableRecModelLoader
+    batch_size = settings.TABLE_REC_BATCH_SIZE
+    default_batch_sizes = {
+        "cpu": 8,
+        "mps": 8,
+        "cuda": 128
+    }
 
     def __call__(self, images: List[Image.Image], batch_size: int | None = None) -> List[TableResult]:
         return self.batch_table_recognition(images, batch_size)
@@ -34,17 +40,6 @@ class TableRecPredictor(BasePredictor):
         pad_tensor = repeated_rows[:pad_size]
 
         return torch.cat([tensor, pad_tensor], dim=0)
-
-    @staticmethod
-    def get_batch_size():
-        batch_size = settings.TABLE_REC_BATCH_SIZE
-        if batch_size is None:
-            batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "mps":
-                batch_size = 8
-            if settings.TORCH_DEVICE_MODEL == "cuda":
-                batch_size = 128
-        return batch_size
 
     def inference_loop(
             self,
@@ -229,6 +224,7 @@ class TableRecPredictor(BasePredictor):
             col_predictions = [pred for pred in img_predictions if
                                pred["category"] == CATEGORY_TO_ID["Table-column"]]
 
+            # Generate table columns
             for z, col_prediction in enumerate(col_predictions):
                 polygon = shaper.convert_bbox_to_polygon(col_prediction["bbox"])
                 polygon = self.processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
@@ -239,6 +235,7 @@ class TableRecPredictor(BasePredictor):
                     )
                 )
 
+            # Generate table rows
             for z, row_prediction in enumerate(row_predictions):
                 polygon = shaper.convert_bbox_to_polygon(row_prediction["bbox"])
                 polygon = self.processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
@@ -248,6 +245,7 @@ class TableRecPredictor(BasePredictor):
                 )
                 rows.append(row)
 
+                # Get cells that span multiple columns within a row
                 spanning_cells = []
                 for l, spanning_cell in enumerate(row_cell_predictions[z]):
                     polygon = shaper.convert_bbox_to_polygon(spanning_cell["bbox"])
@@ -267,6 +265,7 @@ class TableRecPredictor(BasePredictor):
                     )
                     cell_id += 1
 
+                # Add cells - either add spanning cells (multiple cols), or generate a cell based on row/col
                 used_spanning_cells = set()
                 for l, col in enumerate(columns):
                     cell_polygon = row.intersection_polygon(col)
@@ -277,6 +276,7 @@ class TableRecPredictor(BasePredictor):
                             cell_added = True
                             if zz not in used_spanning_cells:
                                 used_spanning_cells.add(zz)
+                                spanning_cell.col_id = l
                                 cells.append(spanning_cell)
 
                     if not cell_added:
@@ -290,15 +290,18 @@ class TableRecPredictor(BasePredictor):
                                 colspan=1,
                                 merge_up=False,
                                 merge_down=False,
+                                col_id=l
                             )
                         )
                         cell_id += 1
 
+            # Turn cells into a row grid
             grid_cells = deepcopy([
                 [cell for cell in cells if cell.row_id == row.row_id]
                 for row in rows
             ])
 
+            # Merge cells across rows
             for z, grid_row in enumerate(grid_cells[1:]):
                 prev_row = grid_cells[z]
                 for l, cell in enumerate(grid_row):
@@ -306,10 +309,16 @@ class TableRecPredictor(BasePredictor):
                         continue
 
                     above_cell = prev_row[l]
-                    if above_cell.merge_down and cell.merge_up:
+                    if all([
+                        above_cell.merge_down,
+                        cell.merge_up,
+                        above_cell.col_id == cell.col_id,
+                        above_cell.colspan == cell.colspan
+                    ]):
                         above_cell.merge(cell)
                         above_cell.rowspan += cell.rowspan
                         grid_row[l] = above_cell
+
             merged_cells_all = list(chain.from_iterable(grid_cells))
             used_ids = set()
             merged_cells = []

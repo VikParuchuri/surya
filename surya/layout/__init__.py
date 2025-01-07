@@ -17,6 +17,12 @@ from surya.settings import settings
 
 class LayoutPredictor(BasePredictor):
     model_loader_cls = LayoutModelLoader
+    batch_size = settings.LAYOUT_BATCH_SIZE
+    default_batch_sizes = {
+        "cpu": 4,
+        "mps": 4,
+        "cuda": 32
+    }
 
     def __call__(
             self,
@@ -29,17 +35,6 @@ class LayoutPredictor(BasePredictor):
             top_k=top_k,
             batch_size=batch_size
         )
-
-    @staticmethod
-    def get_batch_size():
-        batch_size = settings.LAYOUT_BATCH_SIZE
-        if batch_size is None:
-            batch_size = 4
-            if settings.TORCH_DEVICE_MODEL == "mps":
-                batch_size = 4
-            if settings.TORCH_DEVICE_MODEL == "cuda":
-                batch_size = 32
-        return batch_size
 
     def batch_layout_detection(
             self,

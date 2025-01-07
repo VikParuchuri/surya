@@ -1,6 +1,7 @@
 import copy
 from typing import List, Optional
 
+import numpy as np
 from pydantic import BaseModel, field_validator, computed_field
 
 from surya.postprocessing.util import rescale_bbox
@@ -11,23 +12,26 @@ class PolygonBox(BaseModel):
     confidence: Optional[float] = None
 
     @field_validator('polygon', mode='before')
+    @classmethod
     def convert_bbox_to_polygon(cls, value):
         if isinstance(value, (list, tuple)) and len(value) == 4:
-            x_min, y_min, x_max, y_max = value
-            polygon = [
-                [x_min, y_min],
-                [x_max, y_min],
-                [x_max, y_max],
-                [x_min, y_max],
-            ]
-            return polygon
-
-        if isinstance(value, list) and len(value) == 4:
-            if all(isinstance(point, (list, tuple)) and len(point) == 2 for point in value):
+            if all(isinstance(x, (int, float)) for x in value):
+                x_min, y_min, x_max, y_max = value
+                polygon = [
+                    [x_min, y_min],
+                    [x_max, y_min],
+                    [x_max, y_max],
+                    [x_min, y_max],
+                ]
+                return polygon
+            elif all(isinstance(point, (list, tuple)) and len(point) == 2 for point in value):
                 return value
+        elif isinstance(value, np.ndarray):
+            if value.shape == (4, 2):
+                return value.tolist()
 
         raise ValueError(
-            "Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)]")
+            f"Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)].  You passed {value}.")
 
     @property
     def height(self):
@@ -122,49 +126,3 @@ class PolygonBox(BaseModel):
         if y_shift is not None:
             for corner in self.polygon:
                 corner[1] += y_shift
-
-
-class Bbox(BaseModel):
-    bbox: List[float]
-
-    @field_validator('bbox')
-    @classmethod
-    def check_4_elements(cls, v: List[float]) -> List[float]:
-        if len(v) != 4:
-            raise ValueError('bbox must have 4 elements')
-        return v
-
-    def rescale_bbox(self, orig_size, new_size):
-        self.bbox = rescale_bbox(self.bbox, orig_size, new_size)
-
-    def round_bbox(self, divisor):
-        self.bbox = [x // divisor * divisor for x in self.bbox]
-
-    @property
-    def height(self):
-        return self.bbox[3] - self.bbox[1]
-
-    @property
-    def width(self):
-        return self.bbox[2] - self.bbox[0]
-
-    @property
-    def area(self):
-        return self.width * self.height
-
-    @property
-    def polygon(self):
-        return [[self.bbox[0], self.bbox[1]], [self.bbox[2], self.bbox[1]], [self.bbox[2], self.bbox[3]], [self.bbox[0], self.bbox[3]]]
-
-    @property
-    def center(self):
-        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
-
-    def intersection_pct(self, other):
-        if self.area == 0:
-            return 0
-
-        x_overlap = max(0, min(self.bbox[2], other.bbox[2]) - max(self.bbox[0], other.bbox[0]))
-        y_overlap = max(0, min(self.bbox[3], other.bbox[3]) - max(self.bbox[1], other.bbox[1]))
-        intersection = x_overlap * y_overlap
-        return intersection / self.area
