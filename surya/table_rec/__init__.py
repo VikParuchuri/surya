@@ -163,6 +163,7 @@ class TableRecPredictor(BasePredictor):
             with torch.inference_mode():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
+            # Inference to get rows and columns
             rowcol_predictions = self.inference_loop(
                 encoder_hidden_states,
                 batch_input_ids,
@@ -194,24 +195,27 @@ class TableRecPredictor(BasePredictor):
                             "merges": 0,
                         })
 
+            # Re-inference to predict cells
             row_encoder_hidden_states = torch.stack(row_encoder_hidden_states)
             row_inputs = self.processor(images=None, query_items=row_query_items, columns=columns, convert_images=False)
             row_input_ids = row_inputs["input_ids"].to(self.model.device)
             cell_predictions = []
-            for j in tqdm(range(0, len(row_input_ids), batch_size), desc="Recognizing tables"):
+            for j in tqdm(range(0, len(row_input_ids), batch_size), desc="Recognizing table cells"):
                 cell_batch_hidden_states = row_encoder_hidden_states[j:j + batch_size]
                 cell_batch_input_ids = row_input_ids[j:j + batch_size]
                 cell_batch_size = len(cell_batch_input_ids)
                 cell_predictions.extend(
                     self.inference_loop(cell_batch_hidden_states, cell_batch_input_ids, cell_batch_size, batch_size)
                 )
-                result = self.decode_batch_predictions(rowcol_predictions, cell_predictions, orig_sizes, idx_map, shaper)
-                output_order.append(result)
+
+            result = self.decode_batch_predictions(rowcol_predictions, cell_predictions, orig_sizes, idx_map, shaper)
+            output_order.extend(result)
 
         return output_order
 
 
     def decode_batch_predictions(self, rowcol_predictions, cell_predictions, orig_sizes, idx_map, shaper):
+        results = []
         for j, (img_predictions, orig_size) in enumerate(zip(rowcol_predictions, orig_sizes)):
             row_cell_predictions = [c for i, c in enumerate(cell_predictions) if idx_map[i] == j]
             # Each row prediction matches a cell prediction
@@ -221,8 +225,7 @@ class TableRecPredictor(BasePredictor):
 
             cell_id = 0
             row_predictions = [pred for pred in img_predictions if pred["category"] == CATEGORY_TO_ID["Table-row"]]
-            col_predictions = [pred for pred in img_predictions if
-                               pred["category"] == CATEGORY_TO_ID["Table-column"]]
+            col_predictions = [pred for pred in img_predictions if pred["category"] == CATEGORY_TO_ID["Table-column"]]
 
             # Generate table columns
             for z, col_prediction in enumerate(col_predictions):
@@ -335,4 +338,5 @@ class TableRecPredictor(BasePredictor):
                 cols=columns,
                 image_bbox=[0, 0, orig_size[0], orig_size[1]],
             )
-            return result
+            results.append(result)
+        return results

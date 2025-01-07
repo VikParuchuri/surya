@@ -48,8 +48,12 @@ class SuryaTableRecConfig(PretrainedConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        encoder_config = kwargs.pop("encoder")
-        decoder_config = kwargs.pop("decoder")
+        if "encoder" in kwargs:
+            encoder_config = kwargs.pop("encoder")
+            decoder_config = kwargs.pop("decoder")
+        else:
+            encoder_config = DonutSwinTableRecConfig()
+            decoder_config = SuryaTableRecDecoderConfig()
 
         self.encoder = encoder_config
         self.decoder = decoder_config

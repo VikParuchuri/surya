@@ -15,7 +15,7 @@ class PolygonBox(BaseModel):
     @classmethod
     def convert_bbox_to_polygon(cls, value):
         if isinstance(value, (list, tuple)) and len(value) == 4:
-            if all(isinstance(x, (int, float)) for x in value):
+            if all(isinstance(x, (int, float, np.int32)) for x in value):
                 x_min, y_min, x_max, y_max = value
                 polygon = [
                     [x_min, y_min],
