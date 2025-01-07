@@ -1,3 +1,5 @@
+from tests.conftest import layout_predictorfrom tests.conftest import detection_predictorfrom tests.conftest import recognition_predictor
+
 # Surya
 
 Surya is a document OCR toolkit that does:
@@ -121,17 +123,15 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 
 ```python
 from PIL import Image
-from surya.ocr import run_ocr
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
+from surya.recognition import RecognitionPredictor
+from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages - optional but recommended
-det_processor, det_model = load_det_processor(), load_det_model()
-rec_model, rec_processor = load_rec_model(), load_rec_processor()
+langs = ["en"] # Replace with your languages or pass None (recommended to use None)
+recognition_predictor = RecognitionPredictor()
+detection_predictor = DetectionPredictor()
 
-predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
+predictions = recognition_predictor([image], [langs], detection_predictor)
 ```
 
 ### Compilation
@@ -187,14 +187,13 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 
 ```python
 from PIL import Image
-from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-model, processor = load_model(), load_processor()
+det_predictor = DetectionPredictor()
 
 # predictions is a list of dicts, one per image
-predictions = batch_text_detection([image], model, processor)
+predictions = det_predictor([image])
 ```
 
 ## Layout and reading order
@@ -229,21 +228,13 @@ Setting the `LAYOUT_BATCH_SIZE` env var properly will make a big difference when
 
 ```python
 from PIL import Image
-from surya.detection import batch_text_detection
-from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model as load_layout_model
-from surya.model.layout.processor import load_processor as load_layout_processor
+from surya.layout import LayoutPredictor
 
 image = Image.open(IMAGE_PATH)
-model = load_layout_model()
-processor = load_layout_processor()
-det_model = load_det_model()
-det_processor = load_det_processor()
+layout_predictor = LayoutPredictor()
 
 # layout_predictions is a list of dicts, one per image
-line_predictions = batch_text_detection([image], det_model, det_processor)
-layout_predictions = batch_layout_detection([image], model, processor, line_predictions)
+layout_predictions = layout_predictor([image])
 ```
 
 ## Table Recognition
@@ -282,7 +273,16 @@ Setting the `TABLE_REC_BATCH_SIZE` env var properly will make a big difference w
 
 ### From python
 
-See `table_recognition.py` for a code sample.  Table recognition depends on extracting cells, so it is a little more involved to setup than other model types.
+```python
+from PIL import Image
+from surya.table_rec import TableRecPredictor
+
+image = Image.open(IMAGE_PATH)
+table_rec_predictor = TableRecPredictor()
+
+# list of dicts, one per image
+table_predictions = table_rec_predictor([image])
+```
 
 # Limitations
 
