@@ -1,10 +1,19 @@
+import math
 from typing import List
 
 import cv2
 import numpy as np
 
-from surya.postprocessing.util import get_line_angle
 from surya.detection.schema import ColumnLine
+
+
+def get_line_angle(x1, y1, x2, y2):
+    slope = (y2 - y1) / (x2 - x1)
+
+    angle_radians = math.atan(slope)
+    angle_degrees = math.degrees(angle_radians)
+
+    return angle_degrees
 
 
 def get_detected_lines_sobel(image, vertical=True):

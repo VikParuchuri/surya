@@ -1,7 +1,9 @@
 import argparse
+from PIL import ImageDraw
 import collections
 import json
 
+from surya.debug.draw import draw_bboxes_on_image
 from tabulate import tabulate
 
 from surya.input.processing import convert_if_not_rgb
@@ -19,6 +21,7 @@ def main():
     parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
     parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
     parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode.", default=False)
     args = parser.parse_args()
 
     table_rec_predictor = TableRecPredictor()
@@ -47,7 +50,7 @@ def main():
     page_metrics = collections.OrderedDict()
     mean_col_iou = 0
     mean_row_iou = 0
-    for idx, pred in enumerate(table_rec_predictions):
+    for idx, (pred, image) in enumerate(zip(table_rec_predictions, images)):
         row = dataset[idx]
         pred_row_boxes = [p.bbox for p in pred.rows]
         pred_col_bboxes = [p.bbox for p in pred.cols]
@@ -66,6 +69,21 @@ def main():
         mean_row_iou += row_score
 
         page_metrics[idx] = page_results
+
+        if args.debug:
+            # Save debug images
+            draw_img = image.copy()
+            draw = ImageDraw.Draw(draw_img)
+            draw_bboxes_on_image(pred_row_boxes, draw_img, [f"Row {i}" for i in range(len(pred_row_boxes))])
+            draw_bboxes_on_image(pred_col_bboxes, draw_img, [f"Col {i}" for i in range(len(pred_col_bboxes))], color="blue")
+            draw_img.save(os.path.join(result_path, f"{idx}_bbox.png"))
+
+            actual_draw_image = image.copy()
+            draw = ImageDraw.Draw(actual_draw_image)
+            draw_bboxes_on_image(actual_row_bboxes, actual_draw_image, [f"Row {i}" for i in range(len(actual_row_bboxes))])
+            draw_bboxes_on_image(actual_col_bboxes, actual_draw_image, [f"Col {i}" for i in range(len(actual_col_bboxes))], color="blue")
+            actual_draw_image.save(os.path.join(result_path, f"{idx}_actual.png"))
+
 
     mean_col_iou /= len(table_rec_predictions)
     mean_row_iou /= len(table_rec_predictions)

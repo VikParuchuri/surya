@@ -1,5 +1,3 @@
-from tests.conftest import layout_predictorfrom tests.conftest import detection_predictorfrom tests.conftest import recognition_predictor
-
 # Surya
 
 Surya is a document OCR toolkit that does:

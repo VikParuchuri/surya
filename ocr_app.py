@@ -7,9 +7,9 @@ import streamlit as st
 
 from surya.models import load_predictors
 
-from surya.postprocessing.heatmap import draw_polys_on_image, draw_bboxes_on_image
+from surya.debug.draw import draw_polys_on_image, draw_bboxes_on_image
 
-from surya.postprocessing.text import draw_text_on_image
+from surya.debug.text import draw_text_on_image
 from PIL import Image
 from surya.recognition.languages import CODE_TO_LANGUAGE, replace_lang_with_code
 from surya.table_rec import TableResult
@@ -17,7 +17,7 @@ from surya.detection import TextDetectionResult
 from surya.recognition import OCRResult
 from surya.layout import LayoutResult
 from surya.settings import settings
-from surya.postprocessing.util import rescale_bbox
+from surya.common.util import rescale_bbox
 from pdftext.extraction import plain_text_output
 
 

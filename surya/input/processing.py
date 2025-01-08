@@ -2,10 +2,8 @@ from typing import List
 
 import cv2
 import numpy as np
-import math
 import pypdfium2
-from PIL import Image, ImageOps, ImageDraw
-import torch
+from PIL import Image
 from surya.settings import settings
 
 

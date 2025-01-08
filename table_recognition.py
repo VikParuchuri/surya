@@ -8,9 +8,10 @@ from surya.common.cli.config import CLILoader
 from surya.input.load import load_from_folder, load_from_file
 from surya.layout import LayoutPredictor
 from surya.table_rec import TableRecPredictor
-from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.debug.draw import draw_bboxes_on_image
 from surya.settings import settings
-from surya.postprocessing.util import rescale_bbox
+from surya.common.util import rescale_bbox
+
 
 @click.command(help="Detect layout of an input file or folder (PDFs or image).")
 @CLILoader.common_options

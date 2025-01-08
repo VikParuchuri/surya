@@ -1,5 +1,5 @@
 import fitz as pymupdf
-from surya.postprocessing.util import rescale_bbox
+from surya.common.util import rescale_bbox
 
 
 def get_pdf_lines(pdf_path, img_sizes):

@@ -1,7 +1,7 @@
 from typing import List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
-from surya.postprocessing.fonts import get_font_path
+from surya.debug.fonts import get_font_path
 
 
 def get_text_size(text, font):

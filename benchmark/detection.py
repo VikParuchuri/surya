@@ -7,8 +7,8 @@ from benchmark.utils.bbox import get_pdf_lines
 from benchmark.utils.metrics import precision_recall
 from benchmark.utils.tesseract import tesseract_parallel
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
-from surya.postprocessing.heatmap import draw_polys_on_image
-from surya.postprocessing.util import rescale_bbox
+from surya.debug.draw import draw_polys_on_image
+from surya.common.util import rescale_bbox
 from surya.settings import settings
 from surya.detection import DetectionPredictor
 

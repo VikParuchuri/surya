@@ -6,7 +6,7 @@ import json
 from benchmark.utils.metrics import precision_recall
 from surya.layout import LayoutPredictor
 from surya.input.processing import convert_if_not_rgb
-from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.debug.draw import draw_bboxes_on_image
 from surya.settings import settings
 import os
 import time

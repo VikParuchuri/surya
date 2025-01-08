@@ -1,9 +1,9 @@
 from typing import List
 from PIL import ImageDraw, ImageFont
 
-from surya.postprocessing.fonts import get_font_path
+from surya.debug.fonts import get_font_path
 from surya.common.polygon import PolygonBox
-from surya.postprocessing.text import get_text_size
+from surya.debug.text import get_text_size
 
 
 def draw_bboxes_on_image(bboxes, image, labels=None, label_font_size=10, color: str | list = 'red'):

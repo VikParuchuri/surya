@@ -7,7 +7,7 @@ from collections import defaultdict
 from surya.detection import DetectionPredictor
 from surya.recognition.languages import replace_lang_with_code
 from surya.input.load import load_from_folder, load_from_file, load_lang_file
-from surya.postprocessing.text import draw_text_on_image
+from surya.debug.text import draw_text_on_image
 from surya.recognition import RecognitionPredictor
 from surya.common.cli.config import CLILoader
 from surya.settings import settings

@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from surya.input.load import load_from_folder, load_from_file
 from surya.detection import DetectionPredictor
-from surya.postprocessing.heatmap import draw_polys_on_image
+from surya.debug.draw import draw_polys_on_image
 from surya.common.cli.config import CLILoader
 from surya.settings import settings
 import os
