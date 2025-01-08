@@ -5,11 +5,9 @@ import json
 from collections import defaultdict
 
 from surya.common.cli.config import CLILoader
-from surya.input.load import load_from_folder, load_from_file
 from surya.layout import LayoutPredictor
 from surya.table_rec import TableRecPredictor
 from surya.debug.draw import draw_bboxes_on_image
-from surya.settings import settings
 from surya.common.util import rescale_bbox
 
 

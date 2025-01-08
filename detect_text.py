@@ -4,14 +4,10 @@ import json
 import time
 from collections import defaultdict
 
-from surya.input.load import load_from_folder, load_from_file
 from surya.detection import DetectionPredictor
 from surya.debug.draw import draw_polys_on_image
 from surya.common.cli.config import CLILoader
-from surya.settings import settings
 import os
-from tqdm import tqdm
-
 
 @click.command(help="Detect bboxes in an input file or folder (PDFs or image).")
 @CLILoader.common_options

@@ -4,10 +4,8 @@ import copy
 import json
 from collections import defaultdict
 
-from surya.input.load import load_from_folder, load_from_file
 from surya.layout import LayoutPredictor
 from surya.debug.draw import draw_polys_on_image
-from surya.settings import settings
 from surya.common.cli.config import CLILoader
 import os
 
