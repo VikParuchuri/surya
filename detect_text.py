@@ -1,4 +1,4 @@
-import argparse
+import click
 import copy
 import json
 import time
@@ -7,57 +7,45 @@ from collections import defaultdict
 from surya.input.load import load_from_folder, load_from_file
 from surya.detection import DetectionPredictor
 from surya.postprocessing.heatmap import draw_polys_on_image
+from surya.common.cli.config import CLILoader
 from surya.settings import settings
 import os
 from tqdm import tqdm
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Detect bboxes in an input file or folder (PDFs or image).")
-    parser.add_argument("input_path", type=str, help="Path to pdf or image file or folder to detect bboxes in.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "surya"))
-    parser.add_argument("--max", type=int, help="Maximum number of pages to process.", default=None)
-    parser.add_argument("--images", action="store_true", help="Save images of detected bboxes.", default=False)
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
-    args = parser.parse_args()
+@click.command(help="Detect bboxes in an input file or folder (PDFs or image).")
+@CLILoader.common_options
+def main(input_path: str, **kwargs):
+    loader = CLILoader(input_path, kwargs)
 
     det_predictor = DetectionPredictor()
 
-    if os.path.isdir(args.input_path):
-        images, names, _ = load_from_folder(args.input_path, args.max)
-        folder_name = os.path.basename(args.input_path)
-    else:
-        images, names, _ = load_from_file(args.input_path, args.max)
-        folder_name = os.path.basename(args.input_path).split(".")[0]
-
     start = time.time()
-    predictions = det_predictor(images, include_maps=args.debug)
-    result_path = os.path.join(args.results_dir, folder_name)
-    os.makedirs(result_path, exist_ok=True)
+    predictions = det_predictor(loader.images, include_maps=loader.debug)
     end = time.time()
-    if args.debug:
+    if loader.debug:
         print(f"Detection took {end - start} seconds")
 
-    if args.images:
-        for idx, (image, pred, name) in enumerate(zip(images, predictions, names)):
+    if loader.images:
+        for idx, (image, pred, name) in enumerate(zip(loader.images, predictions, loader.names)):
             polygons = [p.polygon for p in pred.bboxes]
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image))
-            bbox_image.save(os.path.join(result_path, f"{name}_{idx}_bbox.png"))
+            bbox_image.save(os.path.join(loader.result_path, f"{name}_{idx}_bbox.png"))
 
-            if args.debug:
+            if loader.debug:
                 heatmap = pred.heatmap
-                heatmap.save(os.path.join(result_path, f"{name}_{idx}_heat.png"))
+                heatmap.save(os.path.join(loader.result_path, f"{name}_{idx}_heat.png"))
 
     predictions_by_page = defaultdict(list)
-    for idx, (pred, name, image) in enumerate(zip(predictions, names, images)):
+    for idx, (pred, name, image) in enumerate(zip(predictions, loader.names, loader.images)):
         out_pred = pred.model_dump(exclude=["heatmap", "affinity_map"])
         out_pred["page"] = len(predictions_by_page[name]) + 1
         predictions_by_page[name].append(out_pred)
 
-    with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
+    with open(os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(predictions_by_page, f, ensure_ascii=False)
 
-    print(f"Wrote results to {result_path}")
+    print(f"Wrote results to {loader.result_path}")
 
 
 if __name__ == "__main__":

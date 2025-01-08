@@ -100,9 +100,8 @@ surya_ocr DATA_PATH
 - `--langs` is an optional (but recommended) argument that specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
 - `--lang_file` if you want to use a different language for different PDFs/images, you can optionally specify languages in a file.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
 - `--images` will save images of the pages and detected text lines (optional)
-- `--results_dir` specifies the directory to save results to instead of the default
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--start_page` specifies the page number to start processing from
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -165,8 +164,8 @@ surya_detect DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected text lines (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -206,8 +205,8 @@ surya_layout DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected text lines (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -247,8 +246,8 @@ surya_table DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected table cells + rows and columns (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 - `--detect_boxes` specifies if cells should be detected.  By default, they're pulled out of the PDF, but this is not always possible. 
 - `--skip_table_detection` tells table recognition not to detect tables first.  Use this if your image is already cropped to a table.
 

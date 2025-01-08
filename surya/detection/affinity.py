@@ -87,10 +87,10 @@ def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False)
 def get_vertical_lines(image, processor_size, image_size, divisor=20, x_tolerance=40, y_tolerance=20) -> List[ColumnLine]:
     vertical_lines = get_detected_lines(image, vertical=True)
     for line in vertical_lines:
-        line.rescale_bbox(processor_size, image_size)
+        line.rescale(processor_size, image_size)
     vertical_lines = sorted(vertical_lines, key=lambda x: x.bbox[0])
     for line in vertical_lines:
-        line.round_bbox(divisor)
+        line.round(divisor)
 
     # Merge adjacent line segments together
     to_remove = []

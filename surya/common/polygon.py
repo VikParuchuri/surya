@@ -65,6 +65,11 @@ class PolygonBox(BaseModel):
             corner[1] = int(corner[1] * height_scaler)
         self.polygon = new_corners
 
+    def round(self, divisor):
+        for corner in self.polygon:
+            corner[0] = int(corner[0] / divisor) * divisor
+            corner[1] = int(corner[1] / divisor) * divisor
+
     def fit_to_bounds(self, bounds):
         new_corners = copy.deepcopy(self.polygon)
         for corner in new_corners:
