@@ -21,6 +21,10 @@ class TableRecModelLoader(ModelLoader):
             device=settings.TORCH_DEVICE_MODEL,
             dtype=settings.MODEL_DTYPE
     ) -> TableRecEncoderDecoderModel:
+        if device is None:
+            device = settings.TORCH_DEVICE_MODEL
+        if dtype is None:
+            dtype = settings.MODEL_DTYPE
         config = SuryaTableRecConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaTableRecDecoderConfig(**decoder_config)

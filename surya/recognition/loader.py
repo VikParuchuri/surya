@@ -27,6 +27,10 @@ class RecognitionModelLoader(ModelLoader):
         device=settings.TORCH_DEVICE_MODEL,
         dtype=settings.MODEL_DTYPE
     ) -> OCREncoderDecoderModel:
+        if device is None:
+            device = settings.TORCH_DEVICE_MODEL
+        if dtype is None:
+            dtype = settings.MODEL_DTYPE
         config = SuryaOCRConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaOCRDecoderConfig(**decoder_config)

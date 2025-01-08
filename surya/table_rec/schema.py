@@ -10,10 +10,12 @@ class TableCell(PolygonBox):
     colspan: int
     within_row_id: int
     cell_id: int
+    is_header: bool
     rowspan: int | None = None
     merge_up: bool = False
     merge_down: bool = False
     col_id: int | None = None
+    text: str | None = None
 
     @property
     def label(self):

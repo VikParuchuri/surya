@@ -264,6 +264,7 @@ class TableRecPredictor(BasePredictor):
                             merge_up=spanning_cell["merges"] in [MERGE_KEYS["merge_up"], MERGE_KEYS["merge_both"]],
                             merge_down=spanning_cell["merges"] in [MERGE_KEYS["merge_down"],
                                                                    MERGE_KEYS["merge_both"]],
+                            is_header=z == 0
                         )
                     )
                     cell_id += 1
@@ -293,7 +294,8 @@ class TableRecPredictor(BasePredictor):
                                 colspan=1,
                                 merge_up=False,
                                 merge_down=False,
-                                col_id=l
+                                col_id=l,
+                                is_header=z == 0
                             )
                         )
                         cell_id += 1

@@ -21,6 +21,11 @@ class LayoutModelLoader(ModelLoader):
         device=settings.TORCH_DEVICE_MODEL,
         dtype=settings.MODEL_DTYPE
     ) -> SuryaLayoutModel:
+        if device is None:
+            device = settings.TORCH_DEVICE_MODEL
+        if dtype is None:
+            dtype = settings.MODEL_DTYPE
+
         config = SuryaLayoutConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaLayoutDecoderConfig(**decoder_config)

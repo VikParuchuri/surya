@@ -82,7 +82,7 @@ Model weights will automatically download the first time you run surya.
 I've included a streamlit app that lets you interactively try Surya on images or PDF files.  Run it with:
 
 ```shell
-pip install streamlit
+pip install streamlit pdftext
 surya_gui
 ```
 

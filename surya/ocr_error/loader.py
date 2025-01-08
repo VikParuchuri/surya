@@ -21,6 +21,11 @@ class OCRErrorModelLoader(ModelLoader):
         device=settings.TORCH_DEVICE_MODEL,
         dtype=settings.MODEL_DTYPE
     ) -> DistilBertForSequenceClassification:
+        if device is None:
+            device = settings.TORCH_DEVICE_MODEL
+        if dtype is None:
+            dtype = settings.MODEL_DTYPE
+
         config = DistilBertConfig.from_pretrained(self.checkpoint)
         model = DistilBertForSequenceClassification.from_pretrained(self.checkpoint, torch_dtype=dtype, config=config).to(
             device).eval()

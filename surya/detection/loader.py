@@ -22,6 +22,11 @@ class DetectionModelLoader(ModelLoader):
             device: Optional[torch.device | str] = None,
             dtype: Optional[torch.dtype | str] = None
     ) -> EfficientViTForSemanticSegmentation:
+        if device is None:
+            device = settings.TORCH_DEVICE_MODEL
+        if dtype is None:
+            dtype = settings.MODEL_DTYPE
+
         config = EfficientViTConfig.from_pretrained(self.checkpoint)
         model = EfficientViTForSemanticSegmentation.from_pretrained(self.checkpoint, torch_dtype=dtype, config=config,
                                                                     ignore_mismatched_sizes=True)
