@@ -10,7 +10,7 @@ import os
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
-    IMAGE_DPI: int = 100 # Used for detection, layout, reading order
+    IMAGE_DPI: int = 124 # Used for detection, layout, reading order
     IMAGE_DPI_HIGHRES: int = 192  # Used for OCR, table rec
     IN_STREAMLIT: bool = False # Whether we're running in streamlit
     ENABLE_EFFICIENT_ATTENTION: bool = True # Usually keep True, but if you get CUDA errors, setting to False can help
