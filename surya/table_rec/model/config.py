@@ -27,11 +27,18 @@ ID_TO_CATEGORY = {
 }
 CATEGORY_TO_ID = {v: k for k, v in ID_TO_CATEGORY.items()}
 
+ID_TO_HEADER = {
+    0: "None",
+    1: "Header"
+}
+HEADER_TO_ID = {v: k for k, v in ID_TO_HEADER.items()}
+
 BOX_PROPERTIES = [
     ("bbox", 6, "regression"),
     ("category", len(ID_TO_CATEGORY), "classification"),
     ("merges", len(MERGE_KEYS), "classification"),
-    ("colspan", 1, "regression")
+    ("colspan", 1, "regression"),
+    ("is_header", len(ID_TO_HEADER), "classification")
 ]
 
 
@@ -132,7 +139,7 @@ class SuryaTableRecDecoderConfig(PretrainedConfig):
 
     def __init__(
         self,
-        num_hidden_layers=10,
+        num_hidden_layers=6,
         vocab_size=BOX_DIM + 1,
         bbox_size=BOX_DIM,
         hidden_size=512,

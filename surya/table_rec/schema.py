@@ -24,6 +24,7 @@ class TableCell(PolygonBox):
 
 class TableRow(PolygonBox):
     row_id: int
+    is_header: bool
 
     @property
     def label(self):
@@ -32,6 +33,7 @@ class TableRow(PolygonBox):
 
 class TableCol(PolygonBox):
     col_id: int
+    is_header: bool
 
     @property
     def label(self):

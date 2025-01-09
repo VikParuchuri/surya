@@ -138,6 +138,7 @@ class TableRecPredictor(BasePredictor):
                 "category": CATEGORY_TO_ID["Table"],
                 "colspan": 0,
                 "merges": 0,
+                "is_header": 0
             })
 
         output_order = []
@@ -184,6 +185,7 @@ class TableRecPredictor(BasePredictor):
                             "category": row_prediction["category"],
                             "colspan": 0,
                             "merges": 0,
+                            "is_header": row_prediction["is_header"]
                         })
                         row_encoder_hidden_states.append(encoder_hidden_states[j])
                         idx_map.append(j)
@@ -193,6 +195,7 @@ class TableRecPredictor(BasePredictor):
                             "category": row_prediction["category"],
                             "colspan": 0,
                             "merges": 0,
+                            "is_header": row_prediction["is_header"]
                         })
 
             # Re-inference to predict cells
@@ -234,7 +237,8 @@ class TableRecPredictor(BasePredictor):
                 columns.append(
                     TableCol(
                         polygon=polygon,
-                        col_id=z
+                        col_id=z,
+                        is_header=col_prediction["is_header"]
                     )
                 )
 
@@ -244,7 +248,8 @@ class TableRecPredictor(BasePredictor):
                 polygon = self.processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
                 row = TableRow(
                     polygon=polygon,
-                    row_id=z
+                    row_id=z,
+                    is_header=row_prediction["is_header"]
                 )
                 rows.append(row)
 
@@ -264,7 +269,7 @@ class TableRecPredictor(BasePredictor):
                             merge_up=spanning_cell["merges"] in [MERGE_KEYS["merge_up"], MERGE_KEYS["merge_both"]],
                             merge_down=spanning_cell["merges"] in [MERGE_KEYS["merge_down"],
                                                                    MERGE_KEYS["merge_both"]],
-                            is_header=z == 0
+                            is_header=row.is_header or z == 0
                         )
                     )
                     cell_id += 1
@@ -295,7 +300,7 @@ class TableRecPredictor(BasePredictor):
                                 merge_up=False,
                                 merge_down=False,
                                 col_id=l,
-                                is_header=z == 0
+                                is_header=row.is_header or col.is_header or z == 0
                             )
                         )
                         cell_id += 1
