@@ -8,7 +8,7 @@ from surya.common.cli.config import CLILoader
 from surya.layout import LayoutPredictor
 from surya.table_rec import TableRecPredictor
 from surya.debug.draw import draw_bboxes_on_image
-from surya.common.util import rescale_bbox
+from surya.common.util import rescale_bbox, expand_bbox
 
 
 @click.command(help="Detect layout of an input file or folder (PDFs or image).")
@@ -54,6 +54,7 @@ def main(input_path: str, detect_boxes: bool, skip_table_detection: bool, **kwar
             highres_bbox = []
             for bb in bbox:
                 highres_bb = rescale_bbox(bb, img.size, highres_img.size)
+                highres_bb = expand_bbox(highres_bb, expansion_factor=.01)
                 page_table_imgs.append(highres_img.crop(highres_bb))
                 highres_bbox.append(highres_bb)
 

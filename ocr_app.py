@@ -17,7 +17,7 @@ from surya.detection import TextDetectionResult
 from surya.recognition import OCRResult
 from surya.layout import LayoutResult
 from surya.settings import settings
-from surya.common.util import rescale_bbox
+from surya.common.util import rescale_bbox, expand_bbox
 from pdftext.extraction import plain_text_output
 
 
@@ -81,6 +81,8 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
         layout_tables = []
         for tb in layout_tables_lowres:
             highres_bbox = rescale_bbox(tb, img.size, highres_img.size)
+            # Slightly expand the box
+            highres_bbox = expand_bbox(highres_bbox, expansion_factor=.01)
             table_imgs.append(
                 highres_img.crop(highres_bbox)
             )

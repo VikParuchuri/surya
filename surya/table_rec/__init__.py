@@ -323,7 +323,7 @@ class TableRecPredictor(BasePredictor):
                         above_cell.merge_down,
                         cell.merge_up,
                         above_cell.col_id == cell.col_id,
-                        above_cell.colspan == cell.colspan
+                        above_cell.colspan == cell.colspan,
                     ]):
                         above_cell.merge(cell)
                         above_cell.rowspan += cell.rowspan

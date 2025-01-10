@@ -42,3 +42,13 @@ def rescale_bbox(bbox, processor_size, image_size):
     new_bbox[2] = int(new_bbox[2] * width_scaler)
     new_bbox[3] = int(new_bbox[3] * height_scaler)
     return new_bbox
+
+def expand_bbox(bbox, expansion_factor=.01):
+    expansion_low = 1 - expansion_factor
+    expansion_high = 1 + expansion_factor
+    return [
+        bbox[0] * expansion_low,
+        bbox[1] * expansion_low,
+        bbox[2] * expansion_high,
+        bbox[3] * expansion_high
+    ]
