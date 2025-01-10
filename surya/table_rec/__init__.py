@@ -203,7 +203,7 @@ class TableRecPredictor(BasePredictor):
             row_inputs = self.processor(images=None, query_items=row_query_items, columns=columns, convert_images=False)
             row_input_ids = row_inputs["input_ids"].to(self.model.device)
             cell_predictions = []
-            for j in tqdm(range(0, len(row_input_ids), batch_size), desc="Recognizing table cells"):
+            for j in range(0, len(row_input_ids), batch_size):
                 cell_batch_hidden_states = row_encoder_hidden_states[j:j + batch_size]
                 cell_batch_input_ids = row_input_ids[j:j + batch_size]
                 cell_batch_size = len(cell_batch_input_ids)

@@ -236,7 +236,7 @@ layout_predictions = layout_predictor([image])
 
 ## Table Recognition
 
-This command will write out a json file with the detected table cells and row/column ids, along with row/column bounding boxes.  If you want to get a formatted markdown table, check out the [tabled](https://www.github.com/VikParuchuri/tabled) repo.
+This command will write out a json file with the detected table cells and row/column ids, along with row/column bounding boxes.  If you want to get a formatted markdown or HTML table, check out the [marker](https://www.github.com/VikParuchuri/marker) repo.  You can use the `TableConverter` to detect and extract tables in images and PDFs.
 
 ```shell
 surya_table DATA_PATH
@@ -254,12 +254,19 @@ The `results.json` file will contain a json dictionary where the keys are the in
 - `rows` - detected table rows
   - `bbox` - the bounding box of the table row
   - `row_id` - the id of the row
+  - `is_header` - if it is a header row.
 - `cols` - detected table columns
   - `bbox` - the bounding box of the table column
   - `col_id`- the id of the column
+  - `is_header` - if it is a header column
 - `cells` - detected table cells
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
   - `text` - if text could be pulled out of the pdf, the text of this cell.
+  - `row_id` - the id of the row the cell belongs to.
+  - `col_id` - the id of the column the cell belongs to.
+  - `colspan` - the number of columns spanned by the cell.
+  - `rowspan` - the number of rows spanned by the cell.
+  - `is_header` - whether it is a header cell.
 - `page` - the page number in the file
 - `table_idx` - the index of the table on the page (sorted in vertical order)
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
@@ -395,12 +402,12 @@ The accuracy is computed by finding if each pair of layout boxes is in the corre
 
 ## Table Recognition
 
-| Model             | Row Intersection | Col Intersection |   Time Per Image |
-|-------------------|------------------|------------------|------------------|
-| Surya             | 0.97             | 0.93             |             0.03 |
-| Table transformer | 0.72             | 0.84             |             0.02 |
+| Model             |   Row Intersection |   Col Intersection |   Time Per Image |
+|-------------------|--------------------|--------------------|------------------|
+| Surya             |               1    |            0.98625 |          0.30202 |
+| Table transformer |               0.84 |            0.86857 |          0.08082 |
 
-Higher is better for intersection, which the percentage of the actual row/column overlapped by the predictions.
+Higher is better for intersection, which the percentage of the actual row/column overlapped by the predictions.  This benchmark is mostly a sanity check - there is a more rigorous one in [marker](https://www.github.com/VikParuchuri/marker)
 
 **Methodology**
 

@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     TABLE_REC_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     TABLE_REC_MAX_BOXES: int = 150
     TABLE_REC_BATCH_SIZE: Optional[int] = None
-    TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
+    TABLE_REC_BENCH_DATASET_NAME: str = "datalab-to/fintabnet_bench"
     COMPILE_TABLE_REC: bool = False
 
     # OCR Error Detection
