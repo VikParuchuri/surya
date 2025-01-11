@@ -425,10 +425,10 @@ You can benchmark the performance of surya on your machine.
 This will evaluate tesseract and surya for text line detection across a randomly sampled set of images from [doclaynet](https://huggingface.co/datasets/vikp/doclaynet_bench).
 
 ```shell
-python benchmark/detection.py --max 256
+python benchmark/detection.py --max_rows 256
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images and detected bboxes
 - `--pdf_path` will let you specify a pdf to benchmark instead of the default data
 - `--results_dir` will let you specify a directory to save results to instead of the default one
@@ -441,7 +441,7 @@ This will evaluate surya and optionally tesseract on multilingual pdfs from comm
 python benchmark/recognition.py --tesseract
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug 2` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
@@ -457,7 +457,7 @@ This will evaluate surya on the publaynet dataset.
 python benchmark/layout.py
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
@@ -467,17 +467,17 @@ python benchmark/layout.py
 python benchmark/ordering.py
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
 **Table Recognition**
 
 ```shell
-python benchmark/table_recognition.py --max 1024 --tatr
+python benchmark/table_recognition.py --max_rows 1024 --tatr
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tatr` specifies whether to also run table transformer

@@ -3,6 +3,8 @@ import collections
 import copy
 import json
 
+import click
+
 from benchmark.utils.bbox import get_pdf_lines
 from benchmark.utils.metrics import precision_recall
 from benchmark.utils.tesseract import tesseract_parallel
@@ -18,33 +20,31 @@ from tabulate import tabulate
 import datasets
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Detect bboxes in a PDF.")
-    parser.add_argument("--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None)
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
-    parser.add_argument("--max", type=int, help="Maximum number of pdf pages to OCR.", default=100)
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
-    parser.add_argument("--tesseract", action="store_true", help="Run tesseract as well.", default=False)
-    args = parser.parse_args()
-
+@click.command(help="Benchmark detection model.")
+@click.option("--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None)
+@click.option("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
+@click.option("--max_rows", type=int, help="Maximum number of pdf pages to OCR.", default=100)
+@click.option("--debug", is_flag=True, help="Enable debug mode.", default=False)
+@click.option("--tesseract", is_flag=True, help="Run tesseract as well.", default=False)
+def main(pdf_path: str, results_dir: str, max_rows: int, debug: bool, tesseract: bool):
     det_predictor = DetectionPredictor()
 
-    if args.pdf_path is not None:
-        pathname = args.pdf_path
-        doc = open_pdf(args.pdf_path)
+    if pdf_path is not None:
+        pathname = pdf_path
+        doc = open_pdf(pdf_path)
         page_count = len(doc)
         page_indices = list(range(page_count))
-        page_indices = page_indices[:args.max]
+        page_indices = page_indices[:max_rows]
 
         images = get_page_images(doc, page_indices)
         doc.close()
 
         image_sizes = [img.size for img in images]
-        correct_boxes = get_pdf_lines(args.pdf_path, image_sizes)
+        correct_boxes = get_pdf_lines(pdf_path, image_sizes)
     else:
         pathname = "det_bench"
         # These have already been shuffled randomly, so sampling from the start is fine
-        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+        dataset = datasets.load_dataset(settings.DETECTOR_BENCH_DATASET_NAME, split=f"train[:{max_rows}]")
         images = list(dataset["image"])
         images = convert_if_not_rgb(images)
         correct_boxes = []
@@ -61,7 +61,7 @@ def main():
     predictions = det_predictor(images)
     surya_time = time.time() - start
 
-    if args.tesseract:
+    if tesseract:
         start = time.time()
         tess_predictions = tesseract_parallel(images)
         tess_time = time.time() - start
@@ -70,7 +70,7 @@ def main():
         tess_time = None
 
     folder_name = os.path.basename(pathname).split(".")[0]
-    result_path = os.path.join(args.results_dir, folder_name)
+    result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
     page_metrics = collections.OrderedDict()
@@ -89,14 +89,14 @@ def main():
             "tesseract": tess_metrics
         }
 
-        if args.debug:
+        if debug:
             bbox_image = draw_polys_on_image(surya_polys, copy.deepcopy(images[idx]))
             bbox_image.save(os.path.join(result_path, f"{idx}_bbox.png"))
 
     mean_metrics = {}
     metric_types = sorted(page_metrics[0]["surya"].keys())
     models = ["surya"]
-    if args.tesseract:
+    if tesseract:
         models.append("tesseract")
 
     for k in models:
@@ -124,7 +124,7 @@ def main():
     table_data = [
         ["surya", surya_time, surya_time / len(images)] + [mean_metrics["surya"][m] for m in metric_types],
     ]
-    if args.tesseract:
+    if tesseract:
         table_data.append(
             ["tesseract", tess_time, tess_time / len(images)] + [mean_metrics["tesseract"][m] for m in metric_types]
         )

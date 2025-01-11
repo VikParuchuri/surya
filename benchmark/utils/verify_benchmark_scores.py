@@ -1,5 +1,5 @@
 import json
-import argparse
+import click
 
 
 def verify_layout(data):
@@ -38,7 +38,10 @@ def verify_table_rec(data):
         raise ValueError("Scores do not meet the required threshold")
 
 
-def verify_scores(file_path, bench_type):
+@click.command(help="Verify benchmark scores")
+@click.argument("file_path", type=str, help="Path to the json file")
+@click.option("--bench_type", type=str, help="Type of benchmark to verify", default="detection")
+def main(file_path, bench_type):
     with open(file_path, 'r') as file:
         data = json.load(file)
 
@@ -57,8 +60,4 @@ def verify_scores(file_path, bench_type):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Verify benchmark scores")
-    parser.add_argument("file_path", type=str, help="Path to the json file")
-    parser.add_argument("--bench_type", type=str, help="Type of benchmark to verify", default="detection")
-    args = parser.parse_args()
-    verify_scores(args.file_path, args.bench_type)
+    main()

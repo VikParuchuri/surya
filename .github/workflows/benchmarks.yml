@@ -20,21 +20,21 @@ jobs:
           poetry install
       - name: Run detection benchmark test
         run: |
-          poetry run python benchmark/detection.py --max 2
+          poetry run python benchmark/detection.py --max_rows 2
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/det_bench/results.json --bench_type detection
       - name: Run recognition benchmark test
         run: |
-          poetry run python benchmark/recognition.py --max 2
+          poetry run python benchmark/recognition.py --max_rows 2
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/rec_bench/results.json --bench_type recognition
       - name: Run layout benchmark test
         run: |
-          poetry run python benchmark/layout.py --max 5
+          poetry run python benchmark/layout.py --max_rows 5
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/layout_bench/results.json --bench_type layout
       - name: Run ordering benchmark
         run: |
-          poetry run python benchmark/ordering.py --max 5
+          poetry run python benchmark/ordering.py --max_rows 5
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/order_bench/results.json --bench_type ordering
       - name: Run table recognition benchmark
         run: |
-          poetry run python benchmark/table_recognition.py --max 5
+          poetry run python benchmark/table_recognition.py --max_rows 5
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/table_rec_bench/results.json --bench_type table_recognition
