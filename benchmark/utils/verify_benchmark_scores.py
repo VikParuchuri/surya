@@ -39,7 +39,7 @@ def verify_table_rec(data):
 
 
 @click.command(help="Verify benchmark scores")
-@click.option("--file_path", type=str, help="Path to the json file")
+@click.argument("file_path", type=str)
 @click.option("--bench_type", type=str, help="Type of benchmark to verify", default="detection")
 def main(file_path, bench_type):
     with open(file_path, 'r') as file:
