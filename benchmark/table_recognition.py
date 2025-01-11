@@ -1,63 +1,61 @@
 import argparse
+
+import click
+from PIL import ImageDraw
 import collections
 import json
 
+from surya.debug.draw import draw_bboxes_on_image
 from tabulate import tabulate
 
 from surya.input.processing import convert_if_not_rgb
-from surya.model.table_rec.model import load_model
-from surya.model.table_rec.processor import load_processor
-from surya.tables import batch_table_recognition
+from surya.table_rec import TableRecPredictor
 from surya.settings import settings
-from surya.benchmark.metrics import penalized_iou_score
-from surya.benchmark.tatr import load_tatr, batch_inference_tatr
+from benchmark.utils.metrics import penalized_iou_score
+from benchmark.utils.tatr import load_tatr, batch_inference_tatr
 import os
 import time
 import datasets
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Benchmark surya table recognition model.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
-    parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
-    parser.add_argument("--tatr", action="store_true", help="Run table transformer.", default=False)
-    args = parser.parse_args()
-
-    model = load_model()
-    processor = load_processor()
+@click.command(help="Benchmark table rec dataset")
+@click.option("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
+@click.option("--max_rows", type=int, help="Maximum number of images to run benchmark on.", default=512)
+@click.option("--tatr", is_flag=True, help="Run table transformer.", default=False)
+@click.option("--debug", is_flag=True, help="Enable debug mode.", default=False)
+def main(results_dir: str, max_rows: int, tatr: bool, debug: bool):
+    table_rec_predictor = TableRecPredictor()
 
     pathname = "table_rec_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
     split = "train"
-    if args.max is not None:
-        split = f"train[:{args.max}]"
+    if max_rows is not None:
+        split = f"train[:{max_rows}]"
     dataset = datasets.load_dataset(settings.TABLE_REC_BENCH_DATASET_NAME, split=split)
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
-    bboxes = list(dataset["bboxes"])
-    bboxes = [[{"bbox": b, "text": None} for b in bb] for bb in bboxes]
 
     if settings.TABLE_REC_STATIC_CACHE:
         # Run through one batch to compile the model
-        batch_table_recognition(images[:1], bboxes[:1], model, processor)
+        table_rec_predictor(images[:1])
 
     start = time.time()
-    table_rec_predictions = batch_table_recognition(images, bboxes, model, processor)
+    table_rec_predictions = table_rec_predictor(images)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]
-    result_path = os.path.join(args.results_dir, folder_name)
+    result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
     page_metrics = collections.OrderedDict()
     mean_col_iou = 0
     mean_row_iou = 0
-    for idx, pred in enumerate(table_rec_predictions):
+    for idx, (pred, image) in enumerate(zip(table_rec_predictions, images)):
         row = dataset[idx]
         pred_row_boxes = [p.bbox for p in pred.rows]
         pred_col_bboxes = [p.bbox for p in pred.cols]
-        actual_row_bboxes = row["rows"]
-        actual_col_bboxes = row["cols"]
+        actual_row_bboxes = [r["bbox"] for r in row["rows"]]
+        actual_col_bboxes = [c["bbox"] for c in row["columns"]]
         row_score = penalized_iou_score(pred_row_boxes, actual_row_bboxes)
         col_score = penalized_iou_score(pred_col_bboxes, actual_col_bboxes)
         page_results = {
@@ -72,6 +70,19 @@ def main():
 
         page_metrics[idx] = page_results
 
+        if debug:
+            # Save debug images
+            draw_img = image.copy()
+            draw_bboxes_on_image(pred_row_boxes, draw_img, [f"Row {i}" for i in range(len(pred_row_boxes))])
+            draw_bboxes_on_image(pred_col_bboxes, draw_img, [f"Col {i}" for i in range(len(pred_col_bboxes))], color="blue")
+            draw_img.save(os.path.join(result_path, f"{idx}_bbox.png"))
+
+            actual_draw_image = image.copy()
+            draw_bboxes_on_image(actual_row_bboxes, actual_draw_image, [f"Row {i}" for i in range(len(actual_row_bboxes))])
+            draw_bboxes_on_image(actual_col_bboxes, actual_draw_image, [f"Col {i}" for i in range(len(actual_col_bboxes))], color="blue")
+            actual_draw_image.save(os.path.join(result_path, f"{idx}_actual.png"))
+
+
     mean_col_iou /= len(table_rec_predictions)
     mean_row_iou /= len(table_rec_predictions)
 
@@ -82,7 +93,7 @@ def main():
         "page_metrics": page_metrics
     }}
 
-    if args.tatr:
+    if tatr:
         tatr_model = load_tatr()
         start = time.time()
         tatr_predictions = batch_inference_tatr(tatr_model, images, 1)
@@ -95,8 +106,8 @@ def main():
             row = dataset[idx]
             pred_row_boxes = [p["bbox"] for p in pred["rows"]]
             pred_col_bboxes = [p["bbox"] for p in pred["cols"]]
-            actual_row_bboxes = row["rows"]
-            actual_col_bboxes = row["cols"]
+            actual_row_bboxes = [r["bbox"] for r in row["rows"]]
+            actual_col_bboxes = [c["bbox"] for c in row["columns"]]
             row_score = penalized_iou_score(pred_row_boxes, actual_row_bboxes)
             col_score = penalized_iou_score(pred_col_bboxes, actual_col_bboxes)
             page_results = {
@@ -130,7 +141,7 @@ def main():
          f"{surya_time / len(images):.5f}"],
     ]
 
-    if args.tatr:
+    if tatr:
         table.append(["Table transformer", f"{out_data['tatr']['mean_row_iou']:.2f}", f"{out_data['tatr']['mean_col_iou']:.5f}",
          f"{tatr_time / len(images):.5f}"])
 

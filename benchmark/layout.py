@@ -1,14 +1,13 @@
-import argparse
 import collections
 import copy
 import json
 
-from surya.benchmark.metrics import precision_recall
-from surya.model.layout.model import load_model
-from surya.model.layout.processor import load_processor
+import click
+
+from benchmark.utils.metrics import precision_recall
+from surya.layout import LayoutPredictor
 from surya.input.processing import convert_if_not_rgb
-from surya.layout import batch_layout_detection
-from surya.postprocessing.heatmap import draw_bboxes_on_image
+from surya.debug.draw import draw_bboxes_on_image
 from surya.settings import settings
 import os
 import time
@@ -16,31 +15,28 @@ from tabulate import tabulate
 import datasets
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Benchmark surya layout model.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
-    parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=100)
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode.", default=False)
-    args = parser.parse_args()
-
-    model = load_model()
-    processor = load_processor()
+@click.command(help="Benchmark surya layout model.")
+@click.option("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
+@click.option("--max_rows", type=int, help="Maximum number of images to run benchmark on.", default=100)
+@click.option("--debug", is_flag=True, help="Run in debug mode.", default=False)
+def main(results_dir: str, max_rows: int, debug: bool):
+    layout_predictor = LayoutPredictor()
 
     pathname = "layout_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
-    dataset = datasets.load_dataset(settings.LAYOUT_BENCH_DATASET_NAME, split=f"train[:{args.max}]")
+    dataset = datasets.load_dataset(settings.LAYOUT_BENCH_DATASET_NAME, split=f"train[:{max_rows}]")
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
 
     if settings.LAYOUT_STATIC_CACHE:
-        batch_layout_detection(images[:1], model, processor)
+        layout_predictor(images[:1])
 
     start = time.time()
-    layout_predictions = batch_layout_detection(images, model, processor)
+    layout_predictions = layout_predictor(images)
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]
-    result_path = os.path.join(args.results_dir, folder_name)
+    result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
     label_alignment = { # First is publaynet, second is surya
@@ -69,7 +65,7 @@ def main():
 
         page_metrics[idx] = page_results
 
-        if args.debug:
+        if debug:
             bbox_image = draw_bboxes_on_image(all_correct_bboxes, copy.deepcopy(images[idx]))
             bbox_image.save(os.path.join(result_path, f"{idx}_layout.png"))
 

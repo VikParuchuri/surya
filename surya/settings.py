@@ -76,12 +76,11 @@ class Settings(BaseSettings):
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
-    TABLE_REC_MODEL_CHECKPOINT: str = "vikp/surya_tablerec"
-    TABLE_REC_IMAGE_SIZE: Dict = {"height": 640, "width": 640}
-    TABLE_REC_MAX_BOXES: int = 512
-    TABLE_REC_MAX_ROWS: int = 384
+    TABLE_REC_MODEL_CHECKPOINT: str = "datalab-to/surya_tablerec"
+    TABLE_REC_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
+    TABLE_REC_MAX_BOXES: int = 150
     TABLE_REC_BATCH_SIZE: Optional[int] = None
-    TABLE_REC_BENCH_DATASET_NAME: str = "vikp/fintabnet_bench"
+    TABLE_REC_BENCH_DATASET_NAME: str = "datalab-to/fintabnet_bench"
     COMPILE_TABLE_REC: bool = False
 
     # OCR Error Detection
