@@ -1,6 +1,7 @@
-import argparse
 import collections
 import json
+
+import click
 
 from surya.input.processing import convert_if_not_rgb
 from surya.layout import LayoutPredictor
@@ -12,18 +13,16 @@ import time
 import datasets
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Benchmark surya layout for reading order.")
-    parser.add_argument("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
-    parser.add_argument("--max", type=int, help="Maximum number of images to run benchmark on.", default=None)
-    args = parser.parse_args()
-
+@click.command(help="Benchmark surya layout for reading order.")
+@click.option("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
+@click.option("--max_rows", type=int, help="Maximum number of images to run benchmark on.", default=None)
+def main(results_dir: str, max_rows: int):
     layout_predictor = LayoutPredictor()
     pathname = "order_bench"
     # These have already been shuffled randomly, so sampling from the start is fine
     split = "train"
-    if args.max is not None:
-        split = f"train[:{args.max}]"
+    if max_rows is not None:
+        split = f"train[:{max_rows}]"
     dataset = datasets.load_dataset(settings.ORDER_BENCH_DATASET_NAME, split=split)
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
@@ -33,7 +32,7 @@ def main():
     surya_time = time.time() - start
 
     folder_name = os.path.basename(pathname).split(".")[0]
-    result_path = os.path.join(args.results_dir, folder_name)
+    result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
     page_metrics = collections.OrderedDict()
