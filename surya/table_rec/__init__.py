@@ -258,6 +258,11 @@ class TableRecPredictor(BasePredictor):
                 for l, spanning_cell in enumerate(row_cell_predictions[z]):
                     polygon = shaper.convert_bbox_to_polygon(spanning_cell["bbox"])
                     polygon = self.processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
+                    colspan = max(1, int(spanning_cell["colspan"]))
+                    if colspan == 1:
+                        # Skip single column cells
+                        continue
+
                     spanning_cells.append(
                         TableCell(
                             polygon=polygon,
@@ -265,7 +270,7 @@ class TableRecPredictor(BasePredictor):
                             rowspan=1,
                             cell_id=cell_id,
                             within_row_id=l,
-                            colspan=max(1, int(spanning_cell["colspan"])),
+                            colspan=colspan,
                             merge_up=spanning_cell["merges"] in [MERGE_KEYS["merge_up"], MERGE_KEYS["merge_both"]],
                             merge_down=spanning_cell["merges"] in [MERGE_KEYS["merge_down"],
                                                                    MERGE_KEYS["merge_both"]],

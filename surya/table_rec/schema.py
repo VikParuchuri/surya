@@ -15,7 +15,7 @@ class TableCell(PolygonBox):
     merge_up: bool = False
     merge_down: bool = False
     col_id: int | None = None
-    text: str | None = None
+    text_lines: List[dict] | None = None
 
     @property
     def label(self):
