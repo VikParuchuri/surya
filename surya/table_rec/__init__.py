@@ -185,7 +185,7 @@ class TableRecPredictor(BasePredictor):
                             "category": row_prediction["category"],
                             "colspan": 0,
                             "merges": 0,
-                            "is_header": row_prediction["is_header"]
+                            "is_header": int(row_prediction["is_header"] == 1)
                         })
                         row_encoder_hidden_states.append(encoder_hidden_states[j])
                         idx_map.append(j)
@@ -195,7 +195,7 @@ class TableRecPredictor(BasePredictor):
                             "category": row_prediction["category"],
                             "colspan": 0,
                             "merges": 0,
-                            "is_header": row_prediction["is_header"]
+                            "is_header": int(row_prediction["is_header"] == 1)
                         })
 
             # Re-inference to predict cells
@@ -238,7 +238,7 @@ class TableRecPredictor(BasePredictor):
                     TableCol(
                         polygon=polygon,
                         col_id=z,
-                        is_header=col_prediction["is_header"]
+                        is_header=col_prediction["is_header"] == 1
                     )
                 )
 
@@ -249,7 +249,7 @@ class TableRecPredictor(BasePredictor):
                 row = TableRow(
                     polygon=polygon,
                     row_id=z,
-                    is_header=row_prediction["is_header"]
+                    is_header=row_prediction["is_header"] == 1
                 )
                 rows.append(row)
 
