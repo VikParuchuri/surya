@@ -10,15 +10,6 @@ keywords = ["ocr", "pdf", "text detection", "text recognition", "tables"]
 packages = [
     {include = "surya"}
 ]
-include = [
-    "detect_text.py",
-    "ocr_text.py",
-    "ocr_app.py",
-    "run_ocr_app.py",
-    "detect_layout.py",
-    "reading_order.py",
-    "table_recognition.py"
-]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -49,12 +40,11 @@ pytest = "^8.3.4"
 pdftext = "^0.4.1"
 
 [tool.poetry.scripts]
-surya_detect = "detect_text:main"
-surya_ocr = "ocr_text:main"
-surya_layout = "detect_layout:main"
-surya_gui = "run_ocr_app:run_app"
-surya_order = "reading_order:main"
-surya_table = "table_recognition:main"
+surya_detect = "surya.scripts.detect_text:detect_text_cli"
+surya_ocr = "surya.scripts.ocr_text:ocr_text_cli"
+surya_layout = "surya.scripts.detect_layout:detect_layout_cli"
+surya_gui = "surya.scripts.run_streamlit_app:streamlit_app_cli"
+surya_table = "surya.scripts.table_recognition:table_recognition_cli"
 
 [build-system]
 requires = ["poetry-core"]
