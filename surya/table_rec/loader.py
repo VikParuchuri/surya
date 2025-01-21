@@ -16,6 +16,8 @@ class TableRecModelLoader(ModelLoader):
         if self.checkpoint is None:
             self.checkpoint = settings.TABLE_REC_MODEL_CHECKPOINT
 
+        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
+
     def model(
             self,
             device=settings.TORCH_DEVICE_MODEL,
@@ -25,7 +27,8 @@ class TableRecModelLoader(ModelLoader):
             device = settings.TORCH_DEVICE_MODEL
         if dtype is None:
             dtype = settings.MODEL_DTYPE
-        config = SuryaTableRecConfig.from_pretrained(self.checkpoint)
+
+        config = SuryaTableRecConfig.from_pretrained(self.checkpoint, revision=self.revision)
         decoder_config = config.decoder
         decoder = SuryaTableRecDecoderConfig(**decoder_config)
         config.decoder = decoder
@@ -34,7 +37,7 @@ class TableRecModelLoader(ModelLoader):
         encoder = DonutSwinTableRecConfig(**encoder_config)
         config.encoder = encoder
 
-        model = TableRecEncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
+        model = TableRecEncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype, revision=self.revision)
 
         model = model.to(device)
         model = model.eval()
@@ -52,7 +55,7 @@ class TableRecModelLoader(ModelLoader):
         return model
 
     def processor(self) -> SuryaProcessor:
-        processor = SuryaProcessor()
+        processor = SuryaProcessor(self.checkpoint, self.revision)
 
         processor.token_pad_id = 0
         processor.token_eos_id = 1

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det3"
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det3@467ee9ec33e6e6c5f73e57dbc1415b14032f5b95"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2"
+    RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
     RECOGNITION_MAX_TOKENS: int = 175
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
-    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout"
+    LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout@7ac8e390226ee5fa2125dd303d827f79d31d1a1f"
     LAYOUT_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     LAYOUT_SLICE_MIN: Dict = {"height": 1500, "width": 1500} # When to start slicing images
     LAYOUT_SLICE_SIZE: Dict = {"height": 1200, "width": 1200} # Size of slices
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
-    TABLE_REC_MODEL_CHECKPOINT: str = "datalab-to/surya_tablerec"
+    TABLE_REC_MODEL_CHECKPOINT: str = "datalab-to/surya_tablerec@af07666c4dc2215b45beaf79541c83706a25055a"
     TABLE_REC_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     TABLE_REC_MAX_BOXES: int = 150
     TABLE_REC_BATCH_SIZE: Optional[int] = None
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     COMPILE_TABLE_REC: bool = False
 
     # OCR Error Detection
-    OCR_ERROR_MODEL_CHECKPOINT: str = "datalab-to/ocr_error_detection"
+    OCR_ERROR_MODEL_CHECKPOINT: str = "datalab-to/ocr_error_detection@c1cbda3757670fd520553eaa5197656d331de414"
     OCR_ERROR_BATCH_SIZE: Optional[int] = None
     COMPILE_OCR_ERROR: bool = False
 

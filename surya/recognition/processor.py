@@ -6,8 +6,8 @@ from surya.settings import settings
 
 
 class SuryaProcessor(DonutProcessor):
-    def __init__(self, image_processor=None, tokenizer=None, **kwargs):
-        image_processor = SuryaEncoderImageProcessor.from_pretrained(settings.RECOGNITION_MODEL_CHECKPOINT)
+    def __init__(self, checkpoint, revision, image_processor=None, tokenizer=None, **kwargs):
+        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint, revision=revision)
         image_processor.do_align_long_axis = True
         image_processor.max_size = settings.RECOGNITION_IMAGE_SIZE
         tokenizer = Byt5LangTokenizer()

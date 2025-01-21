@@ -16,6 +16,8 @@ class LayoutModelLoader(ModelLoader):
         if self.checkpoint is None:
             self.checkpoint = settings.LAYOUT_MODEL_CHECKPOINT
 
+        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
+
     def model(
         self,
         device=settings.TORCH_DEVICE_MODEL,
@@ -26,7 +28,7 @@ class LayoutModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        config = SuryaLayoutConfig.from_pretrained(self.checkpoint)
+        config = SuryaLayoutConfig.from_pretrained(self.checkpoint, revision=self.revision)
         decoder_config = config.decoder
         decoder = SuryaLayoutDecoderConfig(**decoder_config)
         config.decoder = decoder
@@ -35,7 +37,7 @@ class LayoutModelLoader(ModelLoader):
         encoder = DonutSwinLayoutConfig(**encoder_config)
         config.encoder = encoder
 
-        model = SuryaLayoutModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
+        model = SuryaLayoutModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype, revision=self.revision)
         model = model.to(device)
         model = model.eval()
 

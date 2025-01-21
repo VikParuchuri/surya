@@ -16,6 +16,8 @@ class OCRErrorModelLoader(ModelLoader):
         if self.checkpoint is None:
             self.checkpoint = settings.OCR_ERROR_MODEL_CHECKPOINT
 
+        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
+
     def model(
         self,
         device=settings.TORCH_DEVICE_MODEL,
@@ -26,9 +28,13 @@ class OCRErrorModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        config = DistilBertConfig.from_pretrained(self.checkpoint)
-        model = DistilBertForSequenceClassification.from_pretrained(self.checkpoint, torch_dtype=dtype, config=config).to(
-            device).eval()
+        config = DistilBertConfig.from_pretrained(self.checkpoint, revision=self.revision)
+        model = DistilBertForSequenceClassification.from_pretrained(
+            self.checkpoint,
+            torch_dtype=dtype,
+            config=config,
+            revision=self.revision
+        ).to(device).eval()
 
         if settings.OCR_ERROR_STATIC_CACHE:
             torch.set_float32_matmul_precision('high')
@@ -43,4 +49,4 @@ class OCRErrorModelLoader(ModelLoader):
     def processor(
             self
     ) -> DistilBertTokenizer:
-        return DistilBertTokenizer.from_pretrained(self.checkpoint)
+        return DistilBertTokenizer.from_pretrained(self.checkpoint, revision=self.revision)

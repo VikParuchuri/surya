@@ -14,8 +14,8 @@ class SuryaProcessor(ProcessorMixin):
     attributes = ["image_processor"]
     image_processor_class = "AutoImageProcessor"
 
-    def __init__(self, **kwargs):
-        image_processor = SuryaEncoderImageProcessor.from_pretrained(settings.RECOGNITION_MODEL_CHECKPOINT)
+    def __init__(self, checkpoint, revision, **kwargs):
+        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint, revision=revision)
         image_processor.do_align_long_axis = False
         image_processor.max_size = settings.TABLE_REC_IMAGE_SIZE
         self.image_processor = image_processor
