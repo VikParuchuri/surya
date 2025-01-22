@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     ORDER_BENCH_DATASET_NAME: str = "vikp/order_bench"
 
     # Table Rec
-    TABLE_REC_MODEL_CHECKPOINT: str = "datalab-to/surya_tablerec@af07666c4dc2215b45beaf79541c83706a25055a"
+    TABLE_REC_MODEL_CHECKPOINT: str = "datalab-to/surya_tablerec@7327dac38c300b2f6cd0501ebc2347dd3ef7fcf2"
     TABLE_REC_IMAGE_SIZE: Dict = {"height": 768, "width": 768}
     TABLE_REC_MAX_BOXES: int = 150
     TABLE_REC_BATCH_SIZE: Optional[int] = None
