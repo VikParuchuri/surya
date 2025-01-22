@@ -82,7 +82,7 @@ Model weights will automatically download the first time you run surya.
 I've included a streamlit app that lets you interactively try Surya on images or PDF files.  Run it with:
 
 ```shell
-pip install streamlit
+pip install streamlit pdftext
 surya_gui
 ```
 
@@ -98,9 +98,8 @@ surya_ocr DATA_PATH
 - `--langs` is an optional (but recommended) argument that specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
 - `--lang_file` if you want to use a different language for different PDFs/images, you can optionally specify languages in a file.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
 - `--images` will save images of the pages and detected text lines (optional)
-- `--results_dir` specifies the directory to save results to instead of the default
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--start_page` specifies the page number to start processing from
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -121,17 +120,15 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 
 ```python
 from PIL import Image
-from surya.ocr import run_ocr
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
+from surya.recognition import RecognitionPredictor
+from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages - optional but recommended
-det_processor, det_model = load_det_processor(), load_det_model()
-rec_model, rec_processor = load_rec_model(), load_rec_processor()
+langs = ["en"] # Replace with your languages or pass None (recommended to use None)
+recognition_predictor = RecognitionPredictor()
+detection_predictor = DetectionPredictor()
 
-predictions = run_ocr([image], [langs], det_model, det_processor, rec_model, rec_processor)
+predictions = recognition_predictor([image], [langs], detection_predictor)
 ```
 
 ### Compilation
@@ -165,8 +162,8 @@ surya_detect DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected text lines (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -187,14 +184,13 @@ Setting the `DETECTOR_BATCH_SIZE` env var properly will make a big difference wh
 
 ```python
 from PIL import Image
-from surya.detection import batch_text_detection
-from surya.model.detection.model import load_model, load_processor
+from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-model, processor = load_model(), load_processor()
+det_predictor = DetectionPredictor()
 
 # predictions is a list of dicts, one per image
-predictions = batch_text_detection([image], model, processor)
+predictions = det_predictor([image])
 ```
 
 ## Layout and reading order
@@ -207,8 +203,8 @@ surya_layout DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected text lines (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -229,26 +225,18 @@ Setting the `LAYOUT_BATCH_SIZE` env var properly will make a big difference when
 
 ```python
 from PIL import Image
-from surya.detection import batch_text_detection
-from surya.layout import batch_layout_detection
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model as load_layout_model
-from surya.model.layout.processor import load_processor as load_layout_processor
+from surya.layout import LayoutPredictor
 
 image = Image.open(IMAGE_PATH)
-model = load_layout_model()
-processor = load_layout_processor()
-det_model = load_det_model()
-det_processor = load_det_processor()
+layout_predictor = LayoutPredictor()
 
 # layout_predictions is a list of dicts, one per image
-line_predictions = batch_text_detection([image], det_model, det_processor)
-layout_predictions = batch_layout_detection([image], model, processor, line_predictions)
+layout_predictions = layout_predictor([image])
 ```
 
 ## Table Recognition
 
-This command will write out a json file with the detected table cells and row/column ids, along with row/column bounding boxes.  If you want to get a formatted markdown table, check out the [tabled](https://www.github.com/VikParuchuri/tabled) repo.
+This command will write out a json file with the detected table cells and row/column ids, along with row/column bounding boxes.  If you want to get a formatted markdown or HTML table, check out the [marker](https://www.github.com/VikParuchuri/marker) repo.  You can use the `TableConverter` to detect and extract tables in images and PDFs.
 
 ```shell
 surya_table DATA_PATH
@@ -256,8 +244,8 @@ surya_table DATA_PATH
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
 - `--images` will save images of the pages and detected table cells + rows and columns (optional)
-- `--max` specifies the maximum number of pages to process if you don't want to process everything
-- `--results_dir` specifies the directory to save results to instead of the default
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 - `--detect_boxes` specifies if cells should be detected.  By default, they're pulled out of the PDF, but this is not always possible. 
 - `--skip_table_detection` tells table recognition not to detect tables first.  Use this if your image is already cropped to a table.
 
@@ -266,12 +254,19 @@ The `results.json` file will contain a json dictionary where the keys are the in
 - `rows` - detected table rows
   - `bbox` - the bounding box of the table row
   - `row_id` - the id of the row
+  - `is_header` - if it is a header row.
 - `cols` - detected table columns
   - `bbox` - the bounding box of the table column
   - `col_id`- the id of the column
+  - `is_header` - if it is a header column
 - `cells` - detected table cells
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
   - `text` - if text could be pulled out of the pdf, the text of this cell.
+  - `row_id` - the id of the row the cell belongs to.
+  - `col_id` - the id of the column the cell belongs to.
+  - `colspan` - the number of columns spanned by the cell.
+  - `rowspan` - the number of rows spanned by the cell.
+  - `is_header` - whether it is a header cell.
 - `page` - the page number in the file
 - `table_idx` - the index of the table on the page (sorted in vertical order)
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
@@ -282,7 +277,16 @@ Setting the `TABLE_REC_BATCH_SIZE` env var properly will make a big difference w
 
 ### From python
 
-See `table_recognition.py` for a code sample.  Table recognition depends on extracting cells, so it is a little more involved to setup than other model types.
+```python
+from PIL import Image
+from surya.table_rec import TableRecPredictor
+
+image = Image.open(IMAGE_PATH)
+table_rec_predictor = TableRecPredictor()
+
+# list of dicts, one per image
+table_predictions = table_rec_predictor([image])
+```
 
 # Limitations
 
@@ -398,12 +402,12 @@ The accuracy is computed by finding if each pair of layout boxes is in the corre
 
 ## Table Recognition
 
-| Model             | Row Intersection | Col Intersection |   Time Per Image |
-|-------------------|------------------|------------------|------------------|
-| Surya             | 0.97             | 0.93             |             0.03 |
-| Table transformer | 0.72             | 0.84             |             0.02 |
+| Model             |   Row Intersection |   Col Intersection |   Time Per Image |
+|-------------------|--------------------|--------------------|------------------|
+| Surya             |               1    |            0.98625 |          0.30202 |
+| Table transformer |               0.84 |            0.86857 |          0.08082 |
 
-Higher is better for intersection, which the percentage of the actual row/column overlapped by the predictions.
+Higher is better for intersection, which the percentage of the actual row/column overlapped by the predictions.  This benchmark is mostly a sanity check - there is a more rigorous one in [marker](https://www.github.com/VikParuchuri/marker)
 
 **Methodology**
 
@@ -421,10 +425,10 @@ You can benchmark the performance of surya on your machine.
 This will evaluate tesseract and surya for text line detection across a randomly sampled set of images from [doclaynet](https://huggingface.co/datasets/vikp/doclaynet_bench).
 
 ```shell
-python benchmark/detection.py --max 256
+python benchmark/detection.py --max_rows 256
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images and detected bboxes
 - `--pdf_path` will let you specify a pdf to benchmark instead of the default data
 - `--results_dir` will let you specify a directory to save results to instead of the default one
@@ -437,7 +441,7 @@ This will evaluate surya and optionally tesseract on multilingual pdfs from comm
 python benchmark/recognition.py --tesseract
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug 2` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tesseract` will run the benchmark with tesseract.  You have to run `sudo apt-get install tesseract-ocr-all` to install all tesseract data, and set `TESSDATA_PREFIX` to the path to the tesseract data folder.
@@ -453,7 +457,7 @@ This will evaluate surya on the publaynet dataset.
 python benchmark/layout.py
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
@@ -463,17 +467,17 @@ python benchmark/layout.py
 python benchmark/ordering.py
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 
 **Table Recognition**
 
 ```shell
-python benchmark/table_recognition.py --max 1024 --tatr
+python benchmark/table_recognition.py --max_rows 1024 --tatr
 ```
 
-- `--max` controls how many images to process for the benchmark
+- `--max_rows` controls how many images to process for the benchmark
 - `--debug` will render images with detected text
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tatr` specifies whether to also run table transformer

@@ -2,10 +2,8 @@ from typing import List
 
 import cv2
 import numpy as np
-import math
 import pypdfium2
-from PIL import Image, ImageOps, ImageDraw
-import torch
+from PIL import Image
 from surya.settings import settings
 
 
@@ -16,54 +14,6 @@ def convert_if_not_rgb(images: List[Image.Image]) -> List[Image.Image]:
             image = image.convert("RGB")
         new_images.append(image)
     return new_images
-
-
-def get_total_splits(image_size, processor):
-    img_height = list(image_size)[1]
-    max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
-    processor_height = processor.size["height"]
-    if img_height > max_height:
-        num_splits = math.ceil(img_height / processor_height)
-        return num_splits
-    return 1
-
-
-def split_image(img, processor):
-    # This will not modify/return the original image - it will either crop, or copy the image
-    img_height = list(img.size)[1]
-    max_height = settings.DETECTOR_IMAGE_CHUNK_HEIGHT
-    processor_height = processor.size["height"]
-    if img_height > max_height:
-        num_splits = math.ceil(img_height / processor_height)
-        splits = []
-        split_heights = []
-        for i in range(num_splits):
-            top = i * processor_height
-            bottom = (i + 1) * processor_height
-            if bottom > img_height:
-                bottom = img_height
-            cropped = img.crop((0, top, img.size[0], bottom))
-            height = bottom - top
-            if height < processor_height:
-                cropped = ImageOps.pad(cropped, (img.size[0], processor_height), color=255, centering=(0, 0))
-            splits.append(cropped)
-            split_heights.append(height)
-        return splits, split_heights
-    return [img.copy()], [img_height]
-
-
-def prepare_image_detection(img, processor):
-    new_size = (processor.size["width"], processor.size["height"])
-
-    # This double resize actually necessary for downstream accuracy
-    img.thumbnail(new_size, Image.Resampling.LANCZOS)
-    img = img.resize(new_size, Image.Resampling.LANCZOS) # Stretch smaller dimension to fit new size
-
-    img = np.asarray(img, dtype=np.uint8)
-    img = processor(img)["pixel_values"][0]
-    img = torch.from_numpy(img)
-    return img
-
 
 def open_pdf(pdf_filepath):
     return pypdfium2.PdfDocument(pdf_filepath)
