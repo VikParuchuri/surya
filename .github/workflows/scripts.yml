@@ -1,0 +1,32 @@
+name: Test CLI scripts
+
+on: [push]
+
+env:
+  TORCH_DEVICE: "cpu"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install python dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Download benchmark data
+        run: |
+          wget -O benchmark_data.zip "https://drive.google.com/uc?export=download&id=1NHrdYatR1rtqs2gPVfdvO0BAvocH8CJi"
+          unzip -o benchmark_data.zip
+      - name: Test detection
+        run: poetry run surya_detect benchmark_data/pdfs/switch_trans.pdf --page_range 0
+      - name: Test OCR
+        run: poetry run surya_ocr benchmark_data/pdfs/switch_trans.pdf --page_range 0
+      - name: Test layout
+        run: poetry run surya_layout benchmark_data/pdfs/switch_trans.pdf --page_range 0
+      - name: Test table
+        run: poetry run surya_table benchmark_data/pdfs/switch_trans.pdf --page_range 0

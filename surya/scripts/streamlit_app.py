@@ -18,7 +18,6 @@ from surya.recognition import OCRResult
 from surya.layout import LayoutResult
 from surya.settings import settings
 from surya.common.util import rescale_bbox, expand_bbox
-from pdftext.extraction import plain_text_output
 
 
 @st.cache_resource()
@@ -27,6 +26,7 @@ def load_predictors_cached():
 
 
 def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=15):
+    from pdftext.extraction import plain_text_output
     with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
         f.write(pdf_file.getvalue())
         f.seek(0)
@@ -82,7 +82,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
         for tb in layout_tables_lowres:
             highres_bbox = rescale_bbox(tb, img.size, highres_img.size)
             # Slightly expand the box
-            highres_bbox = expand_bbox(highres_bbox, expansion_factor=.01)
+            highres_bbox = expand_bbox(highres_bbox)
             table_imgs.append(
                 highres_img.crop(highres_bbox)
             )
