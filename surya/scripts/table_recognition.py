@@ -13,9 +13,8 @@ from surya.common.util import rescale_bbox, expand_bbox
 
 @click.command(help="Detect layout of an input file or folder (PDFs or image).")
 @CLILoader.common_options
-@click.option("--detect_boxes", is_flag=True, help="Detect table boxes.", default=False)
 @click.option("--skip_table_detection", is_flag=True, help="Tables are already cropped, so don't re-detect tables.", default=False)
-def table_recognition_cli(input_path: str, detect_boxes: bool, skip_table_detection: bool, **kwargs):
+def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs):
     loader = CLILoader(input_path, kwargs, highres=True)
 
     table_rec_predictor = TableRecPredictor()
@@ -54,7 +53,7 @@ def table_recognition_cli(input_path: str, detect_boxes: bool, skip_table_detect
             highres_bbox = []
             for bb in bbox:
                 highres_bb = rescale_bbox(bb, img.size, highres_img.size)
-                highres_bb = expand_bbox(highres_bb, expansion_factor=.01)
+                highres_bb = expand_bbox(highres_bb)
                 page_table_imgs.append(highres_img.crop(highres_bb))
                 highres_bbox.append(highres_bb)
 
