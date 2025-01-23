@@ -12,7 +12,8 @@ from surya.table_rec.schema import TableCell, TableRow, TableCol, TableResult
 from surya.common.polygon import PolygonBox
 from surya.settings import settings
 from surya.table_rec.loader import TableRecModelLoader
-from surya.table_rec.model.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM, CATEGORY_TO_ID, MERGE_KEYS
+from surya.table_rec.model.config import BOX_PROPERTIES, SPECIAL_TOKENS, BOX_DIM, CATEGORY_TO_ID, MERGE_KEYS, \
+    MERGE_VALUES
 from surya.table_rec.shaper import LabelShaper
 
 
@@ -259,10 +260,10 @@ class TableRecPredictor(BasePredictor):
                     polygon = shaper.convert_bbox_to_polygon(spanning_cell["bbox"])
                     polygon = self.processor.resize_polygon(polygon, (BOX_DIM, BOX_DIM), orig_size)
                     colspan = max(1, int(spanning_cell["colspan"]))
-                    if colspan == 1:
-                        # Skip single column cells
+                    if colspan == 1 and spanning_cell["merges"] not in MERGE_VALUES:
+                        # Skip single column cells if they don't merge
                         continue
-                    if PolygonBox(polygon=polygon).height < row.height * .9:
+                    if PolygonBox(polygon=polygon).height < row.height * .85:
                         # Spanning cell must cover most of the row
                         continue
 
