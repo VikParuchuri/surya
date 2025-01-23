@@ -19,7 +19,7 @@ class TableCell(PolygonBox):
 
     @property
     def label(self):
-        return f'{self.row_id} {self.rowspan}/{self.colspan}'
+        return f'Cell {self.cell_id} {self.rowspan}/{self.colspan}'
 
 
 class TableRow(PolygonBox):

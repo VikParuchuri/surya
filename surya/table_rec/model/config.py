@@ -17,6 +17,7 @@ MERGE_KEYS = {
     "merge_down": 2,
     "merge_both": 3
 }
+MERGE_VALUES = [MERGE_KEYS["merge_up"], MERGE_KEYS["merge_down"], MERGE_KEYS["merge_both"]]
 
 ID_TO_CATEGORY = {
     0: 'Blank',
