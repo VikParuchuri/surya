@@ -30,3 +30,5 @@ jobs:
         run: poetry run surya_layout benchmark_data/pdfs/switch_trans.pdf --page_range 0
       - name: Test table
         run: poetry run surya_table benchmark_data/pdfs/switch_trans.pdf --page_range 0
+      - name: Test detection folder
+        run: poetry run surya_detect benchmark_data/pdfs --page_range 0

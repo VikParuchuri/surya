@@ -81,6 +81,7 @@ def get_detected_lines(image, slope_tol_deg=2, vertical=False, horizontal=False)
                 bbox[1], bbox[3] = bbox[3], bbox[1]
             if bbox[2] < bbox[0]:
                 bbox[0], bbox[2] = bbox[2], bbox[0]
+            bbox = [float(b) for b in bbox]
             row = ColumnLine(polygon=bbox, vertical=vertical_line, horizontal=horizontal_line)
             line_info.append(row)
 
