@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import numpy as np
 from pydantic import BaseModel, field_validator, computed_field
+import numbers
 
 
 class PolygonBox(BaseModel):
@@ -13,7 +14,8 @@ class PolygonBox(BaseModel):
     @classmethod
     def convert_bbox_to_polygon(cls, value):
         if isinstance(value, (list, tuple)) and len(value) == 4:
-            if all(isinstance(x, (int, float, np.int32)) for x in value):
+            if all(isinstance(x, numbers.Number) for x in value):
+                value = [float(v) for v in value]
                 x_min, y_min, x_max, y_max = value
                 polygon = [
                     [x_min, y_min],
@@ -23,6 +25,7 @@ class PolygonBox(BaseModel):
                 ]
                 return polygon
             elif all(isinstance(point, (list, tuple)) and len(point) == 2 for point in value):
+                value = [[float(v) for v in point] for point in value]
                 return value
         elif isinstance(value, np.ndarray):
             if value.shape == (4, 2):
