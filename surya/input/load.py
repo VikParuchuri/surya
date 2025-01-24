@@ -51,12 +51,12 @@ def load_from_folder(folder_path, page_range: List[int] | None = None, dpi=setti
     for path in image_paths:
         extension = filetype.guess(path)
         if extension and extension.extension == "pdf":
-            image, name, text_line = load_pdf(path, page_range, dpi=dpi)
+            image, name = load_pdf(path, page_range, dpi=dpi)
             images.extend(image)
             names.extend(name)
         else:
             try:
-                image, name, text_line = load_image(path)
+                image, name = load_image(path)
                 images.extend(image)
                 names.extend(name)
             except PIL.UnidentifiedImageError:

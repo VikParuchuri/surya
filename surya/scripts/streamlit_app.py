@@ -76,7 +76,7 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
         table_imgs = [highres_img]
     else:
         _, layout_pred = layout_detection(img)
-        layout_tables_lowres = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+        layout_tables_lowres = [l.bbox for l in layout_pred.bboxes if l.label in ["Table", "TableOfContents"]]
         table_imgs = []
         layout_tables = []
         for tb in layout_tables_lowres:

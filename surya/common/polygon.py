@@ -32,7 +32,7 @@ class PolygonBox(BaseModel):
                 return value.tolist()
 
         raise ValueError(
-            f"Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)].  You passed {value}.")
+            f"Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)].  All values must be numeric. You passed {value} of type {type(value)}.  The first value is of type {type(value[0])}.")
 
     @property
     def height(self):

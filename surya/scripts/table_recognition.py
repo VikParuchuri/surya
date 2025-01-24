@@ -42,7 +42,7 @@ def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs)
             table_counts.append(1)
         else:
             # The bbox for the entire table
-            bbox = [l.bbox for l in layout_pred.bboxes if l.label == "Table"]
+            bbox = [l.bbox for l in layout_pred.bboxes if l.label in ["Table", "TableOfContents"]]
             # Number of tables per page
             table_counts.append(len(bbox))
 
