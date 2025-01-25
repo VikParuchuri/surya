@@ -47,6 +47,7 @@ class PolygonBox(BaseModel):
         return self.width * self.height
 
     @computed_field
+    @property
     def bbox(self) -> List[float]:
         x_coords = [point[0] for point in self.polygon]
         y_coords = [point[1] for point in self.polygon]
