@@ -1,5 +1,6 @@
 from typing import Optional
 import torch
+import torch.nn.functional as F
 
 from surya.common.load import ModelLoader
 from surya.settings import settings
@@ -35,6 +36,17 @@ class BasePredictor:
             if settings.TORCH_DEVICE_MODEL in self.default_batch_sizes:
                 batch_size = self.default_batch_sizes[settings.TORCH_DEVICE_MODEL]
         return batch_size
+
+    @staticmethod
+    def pad_to_batch_size(tensor: torch.Tensor, batch_size: int):
+        current_batch_size = tensor.shape[0]
+        if current_batch_size >= batch_size:
+            return tensor
+
+        pad_size = batch_size - current_batch_size
+        padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
+
+        return F.pad(tensor, padding, mode='constant', value=0)
 
     def __call__(self, *args, **kwargs):
         raise NotImplementedError()

@@ -42,16 +42,6 @@ class DetectionPredictor(BasePredictor):
 
         return [future.result() for future in postprocessing_futures]
 
-    def pad_to_batch_size(self, tensor, batch_size):
-        current_batch_size = tensor.shape[0]
-        if current_batch_size >= batch_size:
-            return tensor
-
-        pad_size = batch_size - current_batch_size
-        padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
-
-        return F.pad(tensor, padding, mode='constant', value=0)
-
     def prepare_image(self, img):
         new_size = (self.processor.size["width"], self.processor.size["height"])
 
