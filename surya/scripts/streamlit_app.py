@@ -18,8 +18,6 @@ from surya.recognition import OCRResult
 from surya.layout import LayoutResult
 from surya.settings import settings
 from surya.common.util import rescale_bbox, expand_bbox
-from surya.texify import TexifyResult
-from surya.texify.util import convert_math_delimiters
 
 
 @st.cache_resource()
@@ -124,10 +122,6 @@ def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
     rec_img = draw_text_on_image(bboxes, text, img.size, langs)
     return rec_img, img_pred
 
-def texify(highres_img) -> (Image.Image, OCRResult):
-    img_pred: TexifyResult = predictors["texify"]([highres_img])[0]
-    return convert_math_delimiters(img_pred.text)
-
 def open_pdf(pdf_file):
     stream = io.BytesIO(pdf_file.getvalue())
     return pypdfium2.PdfDocument(stream)
@@ -181,7 +175,6 @@ if in_file is None:
     st.stop()
 
 filetype = in_file.type
-whole_image = False
 page_count = None
 if "pdf" in filetype:
     page_count = page_counter(in_file)
@@ -199,7 +192,6 @@ run_text_rec = st.sidebar.button("Run OCR")
 run_layout_det = st.sidebar.button("Run Layout Analysis")
 run_table_rec = st.sidebar.button("Run Table Rec")
 run_ocr_errors = st.sidebar.button("Run bad PDF text detection")
-run_texify = st.sidebar.button("Run LaTeX OCR")
 use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
 
@@ -246,11 +238,6 @@ if run_ocr_errors:
     with col1:
         st.write(label)
         st.json(results)
-
-if run_texify:
-    equation = texify(pil_image_highres)
-    with col1:
-        st.markdown(equation)
 
 with col2:
     st.image(pil_image, caption="Uploaded Image", use_container_width=True)
