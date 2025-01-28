@@ -62,7 +62,6 @@ class Settings(BaseSettings):
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
     RECOGNITION_PAD_VALUE: int = 255 # Should be 0 or 255
     COMPILE_RECOGNITION: bool = False # Static cache for torch compile
-    RECOGNITION_ENCODER_BATCH_DIVISOR: int = 1 # Divisor for batch size in decoder
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "datalab-to/surya_layout@7ac8e390226ee5fa2125dd303d827f79d31d1a1f"
@@ -82,6 +81,13 @@ class Settings(BaseSettings):
     TABLE_REC_BATCH_SIZE: Optional[int] = None
     TABLE_REC_BENCH_DATASET_NAME: str = "datalab-to/fintabnet_bench"
     COMPILE_TABLE_REC: bool = False
+
+    # Texify
+    TEXIFY_MODEL_CHECKPOINT: str = "datalab-to/texify@ee63647a66edfd1fd45d39ff0b034ddb2e8d252c"
+    TEXIFY_IMAGE_SIZE: Dict = {"height": 480, "width": 480}
+    TEXIFY_MAX_TOKENS: int = 768
+    TEXIFY_BATCH_SIZE: Optional[int] = None
+    COMPILE_TEXIFY: bool = False
 
     # OCR Error Detection
     OCR_ERROR_MODEL_CHECKPOINT: str = "datalab-to/ocr_error_detection@c1cbda3757670fd520553eaa5197656d331de414"
@@ -112,6 +118,10 @@ class Settings(BaseSettings):
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
+
+    @computed_field
+    def TEXIFY_STATIC_CACHE(self) -> bool:
+        return self.COMPILE_ALL or self.COMPILE_TEXIFY
 
     @computed_field
     @property

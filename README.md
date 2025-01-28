@@ -7,6 +7,7 @@ Surya is a document OCR toolkit that does:
 - Layout analysis (table, image, header, etc detection)
 - Reading order detection
 - Table recognition (detecting rows/columns)
+- LaTeX OCR
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
@@ -19,9 +20,9 @@ It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmar
 |:------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
 | <img src="static/images/excerpt_layout.png" width="500px"/> | <img src="static/images/excerpt_reading.jpg" width="500px"/> |
 
-|                       Table Recognition                       |     |
-|:-------------------------------------------------------------:|:----------------:|
-| <img src="static/images/scanned_tablerec.png" width="500px"/> | <img width="500px"/> |
+|                       Table Recognition                       |                       LaTeX OCR                        |
+|:-------------------------------------------------------------:|:------------------------------------------------------:|
+| <img src="static/images/scanned_tablerec.png" width="500px"/> | <img src="static/images/latex_ocr.png" width="500px"/> |
 
 
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
@@ -284,8 +285,46 @@ from surya.table_rec import TableRecPredictor
 image = Image.open(IMAGE_PATH)
 table_rec_predictor = TableRecPredictor()
 
-# list of dicts, one per image
 table_predictions = table_rec_predictor([image])
+```
+
+## LaTeX OCR
+
+This command will write out a json file with the LaTeX of the equations.  You must pass in images that are already cropped to the equations.  You can do this by running the layout model, then cropping, if you want.
+
+```shell
+surya_latex_ocr DATA_PATH
+```
+
+- `DATA_PATH` can be an image, pdf, or folder of images/pdfs
+- `--output_dir` specifies the directory to save results to instead of the default
+- `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
+
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
+
+- `text` - the detected LaTeX text - it will be in KaTeX compatible LaTeX, with `<math display="block">...</math>` and `<math>...</math>` as delimiters.
+- `confidence` - the prediction confidence from 0-1.
+- `page` - the page number in the file
+
+### From python
+
+```python
+from PIL import Image
+from surya.texify import TexifyPredictor
+
+image = Image.open(IMAGE_PATH)
+predictor = TexifyPredictor()
+
+predictor([image])
+```
+
+### Interactive app
+
+You can also run a special interactive app that lets you select equations and OCR them (kind of like MathPix snip) with:
+
+```shell
+pip install streamlit==1.40 streamlit-drawable-canvas-jsretry
+texify_gui
 ```
 
 # Limitations

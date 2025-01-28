@@ -9,6 +9,7 @@ from surya.ocr_error import OCRErrorPredictor
 from surya.layout import LayoutPredictor
 from surya.recognition import RecognitionPredictor
 from surya.table_rec import TableRecPredictor
+from surya.texify import TexifyPredictor
 
 
 @pytest.fixture(scope="session")
@@ -41,6 +42,12 @@ def table_rec_predictor() -> TableRecPredictor:
     table_rec_predictor = TableRecPredictor()
     yield table_rec_predictor
     del table_rec_predictor
+
+@pytest.fixture(scope="session")
+def texify_predictor() -> TexifyPredictor:
+    texify_predictor = TexifyPredictor()
+    yield texify_predictor
+    del texify_predictor
 
 @pytest.fixture()
 def test_image():
