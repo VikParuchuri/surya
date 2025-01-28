@@ -7,6 +7,7 @@ Surya is a document OCR toolkit that does:
 - Layout analysis (table, image, header, etc detection)
 - Reading order detection
 - Table recognition (detecting rows/columns)
+- LaTeX OCR
 
 It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmarks) for more details).
 
@@ -19,9 +20,9 @@ It works on a range of documents (see [usage](#usage) and [benchmarks](#benchmar
 |:------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
 | <img src="static/images/excerpt_layout.png" width="500px"/> | <img src="static/images/excerpt_reading.jpg" width="500px"/> |
 
-|                       Table Recognition                       |     |
-|:-------------------------------------------------------------:|:----------------:|
-| <img src="static/images/scanned_tablerec.png" width="500px"/> | <img width="500px"/> |
+|                       Table Recognition                       |                       LaTeX OCR                        |
+|:-------------------------------------------------------------:|:------------------------------------------------------:|
+| <img src="static/images/scanned_tablerec.png" width="500px"/> | <img src="static/images/latex_ocr.png" width="500px"/> |
 
 
 Surya is named for the [Hindu sun god](https://en.wikipedia.org/wiki/Surya), who has universal vision.
