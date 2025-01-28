@@ -521,6 +521,15 @@ python benchmark/table_recognition.py --max_rows 1024 --tatr
 - `--results_dir` will let you specify a directory to save results to instead of the default one
 - `--tatr` specifies whether to also run table transformer
 
+**LaTeX OCR**
+
+```shell
+python benchmark/texify.py --max_rows 128
+```
+
+- `--max_rows` controls how many images to process for the benchmark
+- `--results_dir` will let you specify a directory to save results to instead of the default one
+
 # Training
 
 Text detection was trained on 4x A6000s for 3 days.  It used a diverse set of images as training data.  It was trained from scratch using a modified efficientvit architecture for semantic segmentation.

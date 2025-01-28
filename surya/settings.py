@@ -84,6 +84,7 @@ class Settings(BaseSettings):
 
     # Texify
     TEXIFY_MODEL_CHECKPOINT: str = "datalab-to/texify@ee63647a66edfd1fd45d39ff0b034ddb2e8d252c"
+    TEXIFY_BENCHMARK_DATASET: str = "datalab-to/texify_bench"
     TEXIFY_IMAGE_SIZE: Dict = {"height": 480, "width": 480}
     TEXIFY_MAX_TOKENS: int = 768
     TEXIFY_BATCH_SIZE: Optional[int] = None
