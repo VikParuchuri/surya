@@ -37,6 +37,11 @@ def verify_table_rec(data):
     if row_score < 0.75 or col_score < 0.75:
         raise ValueError("Scores do not meet the required threshold")
 
+def verify_texify(data):
+    edit_dist = data["scores"]
+    if edit_dist > .2:
+        raise ValueError("Scores do not meet the required threshold")
+
 
 @click.command(help="Verify benchmark scores")
 @click.argument("file_path", type=str)
@@ -55,6 +60,8 @@ def main(file_path, bench_type):
         verify_order(data)
     elif bench_type == "table_recognition":
         verify_table_rec(data)
+    elif bench_type == "texify":
+        verify_texify(data)
     else:
         raise ValueError("Invalid benchmark type")
 
