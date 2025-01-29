@@ -205,7 +205,6 @@ def split_text_and_inline_boxes(
             if text_overlap_ratio == 1:
                 # Fully covered text box: Remove it and retain only the inline box
                 if text_box in horizontal_text_boxes:
-                    print(f'Removing {text_box}')
                     horizontal_text_boxes.remove(text_box)
                 inline_assignments[inline_box] = None
             elif inline_overlap_ratio > max_overlap_ratio:
