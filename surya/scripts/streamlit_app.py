@@ -122,7 +122,6 @@ def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
     rec_img = draw_text_on_image(bboxes, text, img.size, langs)
     return rec_img, img_pred
 
-
 def open_pdf(pdf_file):
     stream = io.BytesIO(pdf_file.getvalue())
     return pypdfium2.PdfDocument(stream)
@@ -176,7 +175,6 @@ if in_file is None:
     st.stop()
 
 filetype = in_file.type
-whole_image = False
 page_count = None
 if "pdf" in filetype:
     page_count = page_counter(in_file)
@@ -189,11 +187,11 @@ else:
     pil_image_highres = pil_image
     page_number = None
 
-text_det = st.sidebar.button("Run Text Detection")
-text_rec = st.sidebar.button("Run OCR")
-layout_det = st.sidebar.button("Run Layout Analysis")
-table_rec = st.sidebar.button("Run Table Rec")
-ocr_errors = st.sidebar.button("Run bad PDF text detection")
+run_text_det = st.sidebar.button("Run Text Detection")
+run_text_rec = st.sidebar.button("Run OCR")
+run_layout_det = st.sidebar.button("Run Layout Analysis")
+run_table_rec = st.sidebar.button("Run Table Rec")
+run_ocr_errors = st.sidebar.button("Run bad PDF text detection")
 use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
 
@@ -201,7 +199,7 @@ if pil_image is None:
     st.stop()
 
 # Run Text Detection
-if text_det:
+if run_text_det:
     det_img, pred = text_detection(pil_image)
     with col1:
         st.image(det_img, caption="Detected Text", use_container_width=True)
@@ -209,14 +207,14 @@ if text_det:
 
 
 # Run layout
-if layout_det:
+if run_layout_det:
     layout_img, pred = layout_detection(pil_image)
     with col1:
         st.image(layout_img, caption="Detected Layout", use_container_width=True)
         st.json(pred.model_dump(exclude=["segmentation_map"]), expanded=True)
 
 # Run OCR
-if text_rec:
+if run_text_rec:
     rec_img, pred = ocr(pil_image, pil_image_highres, languages)
     with col1:
         st.image(rec_img, caption="OCR Result", use_container_width=True)
@@ -227,13 +225,13 @@ if text_rec:
             st.text("\n".join([p.text for p in pred.text_lines]))
 
 
-if table_rec:
+if run_table_rec:
     table_img, pred = table_recognition(pil_image, pil_image_highres, skip_table_detection)
     with col1:
         st.image(table_img, caption="Table Recognition", use_container_width=True)
         st.json([p.model_dump() for p in pred], expanded=True)
 
-if ocr_errors:
+if run_ocr_errors:
     if "pdf" not in filetype:
         st.error("This feature only works with PDFs.")
     label, results = run_ocr_errors(in_file, page_count)

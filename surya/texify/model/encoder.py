@@ -1,12 +1,12 @@
 from typing import Optional, Union, Tuple
 
+from torch import nn
 import torch
-import torch.nn as nn
 
-from surya.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinModelOutput, DonutSwinEmbeddings, DonutSwinEncoder
+from surya.common.donut.encoder import DonutSwinPreTrainedModel, DonutSwinEmbeddings, DonutSwinEncoder, \
+    DonutSwinModelOutput
 
-
-class DonutSwinModel(DonutSwinPreTrainedModel):
+class TexifyEncoder(DonutSwinPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
@@ -73,12 +73,12 @@ class DonutSwinModel(DonutSwinPreTrainedModel):
             input_dimensions,
             head_mask=head_mask,
             output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            output_hidden_states=True,
+            output_hidden_states_before_downsampling=True,
         )
 
         last_hidden_state = encoder_outputs[0]
-
         if self.position_embeddings is not None:
             last_hidden_state += self.position_embeddings[:, :last_hidden_state.size(1), :]
 
