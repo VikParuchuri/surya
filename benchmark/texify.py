@@ -4,6 +4,7 @@ import random
 import re
 import time
 from functools import partial
+from pathlib import Path
 from typing import List
 
 import click
@@ -84,8 +85,9 @@ def main(ds_name: str, results_dir: str, max_rows: int):
     print()
     print(tabulate(score_table, headers=["Method", *score_headers]))
 
-    result_path = os.path.join(results_dir, f"texify.json")
-    with open(result_path, "w") as f:
+    result_path = Path(results_dir) / "texify_bench"
+    result_path.mkdir(parents=True, exist_ok=True)
+    with open(result_path / "results.json", "w") as f:
         json.dump(write_data, f, indent=4)
 
 

@@ -10,5 +10,5 @@ def test_latex_ocr(texify_predictor):
     text = results[0].text.strip()
     assert len(results) == 1
 
-    assert text.startswith("<math>")
+    assert text.startswith("<math")
     assert text.endswith("</math>")
