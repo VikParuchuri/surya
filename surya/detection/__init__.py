@@ -27,7 +27,7 @@ class DetectionPredictor(BasePredictor):
         "cuda": 36
     }
 
-    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False, split_inline_math=False) -> List[TextDetectionResult]:
+    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False, detect_inline_math=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=False)
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
@@ -40,33 +40,31 @@ class DetectionPredictor(BasePredictor):
 
         text_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
 
-        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=True)
-        postprocessing_futures = []
-        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
-        parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-        executor = ThreadPoolExecutor if parallelize else FakeExecutor
-        with executor(max_workers=max_workers) as e:
-            for preds, orig_sizes in detection_generator:
-                for pred, orig_size in zip(preds, orig_sizes):
-                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
+        if detect_inline_math:
+            detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=True)
+            postprocessing_futures = []
+            max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+            parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+            executor = ThreadPoolExecutor if parallelize else FakeExecutor
+            with executor(max_workers=max_workers) as e:
+                for preds, orig_sizes in detection_generator:
+                    for pred, orig_size in zip(preds, orig_sizes):
+                        postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
 
-        inline_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
+            inline_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
 
-        results = []
-        for text_result, inline_result in zip(text_results, inline_results):
-            if split_inline_math:
+            results = []
+            for text_result, inline_result in zip(text_results, inline_results):
                 final_boxes = split_text_and_inline_boxes(text_result.bboxes, inline_result.bboxes)
-            else:
-                for b in inline_result.bboxes:
-                    b.math = True
-                final_boxes = text_result.bboxes + inline_result.bboxes
-            results.append(TextDetectionResult(
-                bboxes=final_boxes,
-                vertical_lines=text_result.vertical_lines,
-                heatmap=text_result.affinity_map,
-                affinity_map=text_result.affinity_map,
-                image_bbox=text_result.image_bbox
-            ))
+                results.append(TextDetectionResult(
+                    bboxes=final_boxes,
+                    vertical_lines=text_result.vertical_lines,
+                    heatmap=text_result.affinity_map,
+                    affinity_map=text_result.affinity_map,
+                    image_bbox=text_result.image_bbox
+                ))
+        else:
+            results = text_results
 
         return results
 

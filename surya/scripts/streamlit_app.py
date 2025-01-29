@@ -56,7 +56,7 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
 
 
 def text_detection(img) -> (Image.Image, TextDetectionResult):
-    pred = predictors["detection"]([img], split_inline_math=True)[0]
+    pred = predictors["detection"]([img], detect_inline_math=True)[0]
     text_polygons = [p.polygon for p in pred.bboxes if not p.math]
     inline_polygons = [p.polygon for p in pred.bboxes if p.math]
     det_img = draw_polys_on_image(text_polygons, img.copy())
