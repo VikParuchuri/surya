@@ -27,7 +27,7 @@ class DetectionPredictor(BasePredictor):
         "cuda": 36
     }
 
-    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False, split_inline_math=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=False)
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
@@ -54,7 +54,12 @@ class DetectionPredictor(BasePredictor):
 
         results = []
         for text_result, inline_result in zip(text_results, inline_results):
-            final_boxes = split_text_and_inline_boxes(text_result.bboxes, inline_result.bboxes)
+            if split_inline_math:
+                final_boxes = split_text_and_inline_boxes(text_result.bboxes, inline_result.bboxes)
+            else:
+                for b in inline_result.bboxes:
+                    b.math = True
+                final_boxes = text_result.bboxes + inline_result.bboxes
             results.append(TextDetectionResult(
                 bboxes=final_boxes,
                 vertical_lines=text_result.vertical_lines,
