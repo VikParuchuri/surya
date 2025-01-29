@@ -1,6 +1,7 @@
 import argparse
 import os.path
 import random
+import re
 import time
 from functools import partial
 from typing import List
@@ -8,6 +9,7 @@ from typing import List
 import click
 import datasets
 from tabulate import tabulate
+from bs4 import BeautifulSoup
 
 from surya.settings import settings
 from surya.texify import TexifyPredictor, TexifyResult
@@ -16,12 +18,18 @@ import io
 from rapidfuzz.distance import Levenshtein
 
 def normalize_text(text):
+    soup = BeautifulSoup(text, "html.parser")
+    text = soup.get_text()
+    text = re.sub(r"\n", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def score_text(predictions, references):
     lev_dist = []
     for p, r in zip(predictions, references):
+        p = normalize_text(p)
+        r = normalize_text(r)
         lev_dist.append(Levenshtein.normalized_distance(p, r))
 
     return sum(lev_dist) / len(lev_dist)
@@ -57,8 +65,8 @@ def main(ds_name: str, results_dir: str, max_rows: int):
     predictions = inference_texify(ds, predictor)
     time_taken = time.time() - start
 
-    text = [normalize_text(p["text"]) for p in predictions]
-    references = [normalize_text(p["equation"]) for p in predictions]
+    text = [p["text"] for p in predictions]
+    references = [p["equation"] for p in predictions]
     scores = score_text(text, references)
 
     write_data = {

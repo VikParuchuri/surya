@@ -1,3 +1,4 @@
+import re
 from typing import List, Tuple
 
 import torch
@@ -22,7 +23,7 @@ class TexifyPredictor(BasePredictor):
 
     def __call__(self, images: List[Image.Image], batch_size: int | None = None) -> List[TexifyResult]:
         text, confidences = self.batch_texify(images, batch_size=batch_size)
-        return [TexifyResult(text=t, confidence=c) for t, c in zip(text, confidences)]
+        return [TexifyResult(text=self.fix_fences(t), confidence=c) for t, c in zip(text, confidences)]
 
     def prepare_input(self, images: List[Image.Image], batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_images = [img.convert("RGB") for img in images]
@@ -35,6 +36,14 @@ class TexifyPredictor(BasePredictor):
             batch_input_ids = self.pad_to_batch_size(batch_input_ids, batch_size)
 
         return batch_pixel_values, batch_input_ids
+
+    def fix_fences(self, text: str) -> str:
+        if text.count("$") % 2 != 0:
+            return text
+
+        text = re.sub(r'\$\$(.*?)\$\$', r'<math display="block">\1</math>', text)
+        text = re.sub(r'\$(.*?)\$', r'<math>\1</math>', text)
+        return text
 
 
     def batch_texify(self, images: List[Image.Image], batch_size: int | None) -> Tuple[List[str], List[float]]:
