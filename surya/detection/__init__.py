@@ -12,11 +12,10 @@ from surya.common.predictor import BasePredictor
 
 from surya.detection.loader import DetectionModelLoader
 from surya.detection.parallel import FakeExecutor
-from surya.detection.processor import SegformerImageProcessor
 from surya.detection.util import get_total_splits, split_image
 from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
-from surya.detection.heatmap import parallel_get_lines
+from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines, split_text_and_inline_boxes
 
 
 class DetectionPredictor(BasePredictor):
@@ -29,8 +28,7 @@ class DetectionPredictor(BasePredictor):
     }
 
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
-        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
-
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=False)
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
         parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
@@ -40,7 +38,32 @@ class DetectionPredictor(BasePredictor):
                 for pred, orig_size in zip(preds, orig_sizes):
                     postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
 
-        return [future.result() for future in postprocessing_futures]
+        text_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
+
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=True)
+        postprocessing_futures = []
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+        executor = ThreadPoolExecutor if parallelize else FakeExecutor
+        with executor(max_workers=max_workers) as e:
+            for preds, orig_sizes in detection_generator:
+                for pred, orig_size in zip(preds, orig_sizes):
+                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
+
+        inline_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
+
+        results = []
+        for text_result, inline_result in zip(text_results, inline_results):
+            final_boxes = split_text_and_inline_boxes(text_result.bboxes, inline_result.bboxes)
+            results.append(TextDetectionResult(
+                bboxes=final_boxes,
+                vertical_lines=text_result.vertical_lines,
+                heatmap=text_result.affinity_map,
+                affinity_map=text_result.affinity_map,
+                image_bbox=text_result.image_bbox
+            ))
+
+        return results
 
     def pad_to_batch_size(self, tensor, batch_size):
         current_batch_size = tensor.shape[0]
@@ -68,12 +91,13 @@ class DetectionPredictor(BasePredictor):
             self,
             images: List,
             batch_size=None,
-            static_cache=False
+            static_cache=False,
+            inline=False
     ) -> Generator[Tuple[List[List[np.ndarray]], List[Tuple[int, int]]], None, None]:
         assert all([isinstance(image, Image.Image) for image in images])
         if batch_size is None:
             batch_size = self.get_batch_size()
-        heatmap_count = self.model.config.num_labels
+        heatmap_count = self.model['inline' if inline else 'text'].config.num_labels
 
         orig_sizes = [image.size for image in images]
         splits_per_image = [get_total_splits(size, self.processor.size["height"]) for size in orig_sizes]
@@ -108,12 +132,12 @@ class DetectionPredictor(BasePredictor):
 
             image_splits = [self.prepare_image(image) for image in image_splits]
             # Batch images in dim 0
-            batch = torch.stack(image_splits, dim=0).to(self.model.dtype).to(self.model.device)
+            batch = torch.stack(image_splits, dim=0).to(self.model['inline' if inline else 'text'].dtype).to(self.model['inline' if inline else 'text'].device)
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
             with torch.inference_mode():
-                pred = self.model(pixel_values=batch)
+                pred = self.model['inline' if inline else 'text'](pixel_values=batch)
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]

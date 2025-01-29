@@ -9,9 +9,13 @@ class ColumnLine(PolygonBox):
     vertical: bool
     horizontal: bool
 
+class TextBox(PolygonBox):
+    math: bool = False
+    def __hash__(self):
+        return hash(tuple(self.bbox))
 
 class TextDetectionResult(BaseModel):
-    bboxes: List[PolygonBox]
+    bboxes: List[TextBox]
     vertical_lines: List[ColumnLine]
     heatmap: Optional[Any]
     affinity_map: Optional[Any]
