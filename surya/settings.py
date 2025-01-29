@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     COMPILE_TABLE_REC: bool = False
 
     # Texify
-    TEXIFY_MODEL_CHECKPOINT: str = "datalab-to/texify@a55b84af55995c0a2a961f75e4f2dadc504d95c9"
+    TEXIFY_MODEL_CHECKPOINT: str = "datalab-to/texify@8f1d761762b3e977e9e62cebfca487d489556abc"
     TEXIFY_BENCHMARK_DATASET: str = "datalab-to/texify_bench"
     TEXIFY_IMAGE_SIZE: Dict = {"height": 480, "width": 480}
     TEXIFY_MAX_TOKENS: int = 768
