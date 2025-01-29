@@ -7,7 +7,7 @@ from PIL import Image
 from surya.common.util import clean_boxes
 from surya.detection.affinity import get_vertical_lines
 from surya.detection import TextDetectionResult, TextBox
-from surya.common.polygon import PolygonBox, TextBox
+from surya.common.polygon import PolygonBox
 from surya.settings import settings
 
 

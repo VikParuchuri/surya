@@ -13,7 +13,7 @@ from surya.common.predictor import BasePredictor
 from surya.detection.loader import DetectionModelLoader
 from surya.detection.parallel import FakeExecutor
 from surya.detection.util import get_total_splits, split_image
-from surya.detection.schema import TextDetectionResult
+from surya.detection.schema import TextDetectionResult, TextBox
 from surya.settings import settings
 from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines, split_text_and_inline_boxes
 
