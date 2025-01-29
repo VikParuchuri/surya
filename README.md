@@ -452,6 +452,14 @@ Higher is better for intersection, which the percentage of the actual row/column
 
 The benchmark uses a subset of [Fintabnet](https://developer.ibm.com/exchanges/data/all/fintabnet/) from IBM.  It has labeled rows and columns.  After table recognition is run, the predicted rows and columns are compared to the ground truth.  There is an additional penalty for predicting too many or too few rows/columns.
 
+## LaTeX OCR
+
+| Method | edit ⬇   | time taken (s) ⬇ |
+|--------|----------|------------------|
+| texify | 0.122617 | 35.6345          |
+
+This inferences texify on a ground truth set of LaTeX, then does edit distance.  This is a bit noisy, since 2 LaTeX strings that render the same can have different symbols in them.
+
 ## Running your own benchmarks
 
 You can benchmark the performance of surya on your machine.  
