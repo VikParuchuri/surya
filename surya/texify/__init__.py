@@ -41,8 +41,8 @@ class TexifyPredictor(BasePredictor):
         if text.count("$") % 2 != 0:
             return text
 
-        text = re.sub(r'\$\$(.*?)\$\$', r'<math display="block">\1</math>', text)
-        text = re.sub(r'\$(.*?)\$', r'<math>\1</math>', text)
+        text = re.sub(r'\$\$(.*?)\$\$', r'<math display="block">\1</math>', text, flags=re.DOTALL)
+        text = re.sub(r'\$(.*?)\$', r'<math>\1</math>', text, flags=re.DOTALL)
         return text
 
 
