@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Inline math detection
-    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0"
+    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@75fbf7c4f022ffb1bad1e7ec7c9c7a2a1c499042"
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
