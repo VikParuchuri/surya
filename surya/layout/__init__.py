@@ -88,6 +88,9 @@ class LayoutPredictor(BasePredictor):
             batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long,
                                                device=self.model.device)
             inference_token_count = batch_decoder_input.shape[1]
+            if settings.LAYOUT_STATIC_CACHE:
+                batch_pixel_values = self.pad_to_batch_size(batch_pixel_values, batch_size)
+                batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
 
             decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64,
                                                    device=self.model.device).cumsum(0) - 1
@@ -100,6 +103,8 @@ class LayoutPredictor(BasePredictor):
 
                 token_count = 0
                 all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
+                if settings.LAYOUT_STATIC_CACHE:
+                    encoder_hidden_states = self.pad_to_batch_size(encoder_hidden_states, batch_size)
 
                 while token_count < settings.LAYOUT_MAX_BOXES:
                     is_prefill = token_count == 0
@@ -127,6 +132,8 @@ class LayoutPredictor(BasePredictor):
 
                     batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)],
                                                     dim=-1)
+                    if settings.LAYOUT_STATIC_CACHE:
+                        batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
 
                     for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
                         if not status:
