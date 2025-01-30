@@ -6,7 +6,7 @@ from PIL import Image
 
 from surya.common.util import clean_boxes
 from surya.detection.affinity import get_vertical_lines
-from surya.detection import TextDetectionResult, TextBox
+from surya.detection import TextDetectionResult
 from surya.common.polygon import PolygonBox
 from surya.settings import settings
 
@@ -110,7 +110,7 @@ def get_detected_boxes(textmap, text_threshold=None, low_text=None) -> List[Poly
 
     boxes, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    return [TextBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
+    return [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
 
 
 def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None, low_text=None) -> List[PolygonBox]:

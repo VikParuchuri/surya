@@ -10,13 +10,12 @@ from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
 
-from surya.detection.loader import DetectionModelLoader
+from surya.detection.loader import DetectionModelLoader, InlineDetectionModelLoader
 from surya.detection.parallel import FakeExecutor
 from surya.detection.util import get_total_splits, split_image
-from surya.detection.schema import TextDetectionResult, TextBox
+from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
 from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines
-
 
 class DetectionPredictor(BasePredictor):
     model_loader_cls = DetectionModelLoader
@@ -27,8 +26,9 @@ class DetectionPredictor(BasePredictor):
         "cuda": 36
     }
 
-    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False, detect_inline_math=False) -> List[TextDetectionResult]:
-        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=False)
+    def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
+
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
         parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
@@ -38,46 +38,7 @@ class DetectionPredictor(BasePredictor):
                 for pred, orig_size in zip(preds, orig_sizes):
                     postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
 
-        text_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
-
-        if detect_inline_math:
-            detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE, inline=True)
-            postprocessing_futures = []
-            max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
-            parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
-            executor = ThreadPoolExecutor if parallelize else FakeExecutor
-            with executor(max_workers=max_workers) as e:
-                for preds, orig_sizes in detection_generator:
-                    for pred, orig_size in zip(preds, orig_sizes):
-                        postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
-
-            inline_results: List[TextDetectionResult] = [future.result() for future in postprocessing_futures]
-
-            results = []
-            for text_result, inline_result in zip(text_results, inline_results):
-                for box in inline_result.bboxes:
-                    box.math = True
-                results.append(TextDetectionResult(
-                    bboxes=text_result.bboxes+inline_result.bboxes,
-                    vertical_lines=text_result.vertical_lines,
-                    heatmap=text_result.affinity_map,
-                    affinity_map=text_result.affinity_map,
-                    image_bbox=text_result.image_bbox
-                ))
-        else:
-            results = text_results
-
-        return results
-
-    def pad_to_batch_size(self, tensor, batch_size):
-        current_batch_size = tensor.shape[0]
-        if current_batch_size >= batch_size:
-            return tensor
-
-        pad_size = batch_size - current_batch_size
-        padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
-
-        return F.pad(tensor, padding, mode='constant', value=0)
+        return [future.result() for future in postprocessing_futures]
 
     def prepare_image(self, img):
         new_size = (self.processor.size["width"], self.processor.size["height"])
@@ -95,13 +56,12 @@ class DetectionPredictor(BasePredictor):
             self,
             images: List,
             batch_size=None,
-            static_cache=False,
-            inline=False
+            static_cache=False
     ) -> Generator[Tuple[List[List[np.ndarray]], List[Tuple[int, int]]], None, None]:
         assert all([isinstance(image, Image.Image) for image in images])
         if batch_size is None:
             batch_size = self.get_batch_size()
-        heatmap_count = self.model['inline' if inline else 'text'].config.num_labels
+        heatmap_count = self.model.config.num_labels
 
         orig_sizes = [image.size for image in images]
         splits_per_image = [get_total_splits(size, self.processor.size["height"]) for size in orig_sizes]
@@ -136,12 +96,12 @@ class DetectionPredictor(BasePredictor):
 
             image_splits = [self.prepare_image(image) for image in image_splits]
             # Batch images in dim 0
-            batch = torch.stack(image_splits, dim=0).to(self.model['inline' if inline else 'text'].dtype).to(self.model['inline' if inline else 'text'].device)
+            batch = torch.stack(image_splits, dim=0).to(self.model.dtype).to(self.model.device)
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
             with torch.inference_mode():
-                pred = self.model['inline' if inline else 'text'](pixel_values=batch)
+                pred = self.model(pixel_values=batch)
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]
@@ -169,3 +129,19 @@ class DetectionPredictor(BasePredictor):
                     preds[idx] = heatmaps
 
             yield preds, [orig_sizes[j] for j in batch_image_idxs]
+
+class InlineDetectionPredictor(DetectionPredictor):
+    model_loader_cls = InlineDetectionModelLoader
+    def __call__(self, images, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
+
+        postprocessing_futures = []
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+        executor = ThreadPoolExecutor if parallelize else FakeExecutor
+        with executor(max_workers=max_workers) as e:
+            for preds, orig_sizes in detection_generator:
+                for pred, orig_size in zip(preds, orig_sizes):
+                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
+
+        return [future.result() for future in postprocessing_futures]

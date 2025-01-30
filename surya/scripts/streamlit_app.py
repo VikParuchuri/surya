@@ -56,12 +56,14 @@ def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pag
 
 
 def text_detection(img) -> (Image.Image, TextDetectionResult):
-    pred = predictors["detection"]([img], detect_inline_math=True)[0]
-    text_polygons = [p.polygon for p in pred.bboxes if not p.math]
-    inline_polygons = [p.polygon for p in pred.bboxes if p.math]
+    text_pred = predictors["detection"]([img])[0]
+    text_polygons = [p.polygon for p in text_pred.bboxes]
     det_img = draw_polys_on_image(text_polygons, img.copy())
+    
+    inline_pred = predictors["inline_detection"]([img])[0]
+    inline_polygons = [p.polygon for p in inline_pred.bboxes]
     det_img = draw_polys_on_image(inline_polygons, det_img, color='blue')
-    return det_img, pred
+    return det_img, text_pred, inline_pred
 
 
 def layout_detection(img) -> (Image.Image, LayoutResult):
@@ -204,10 +206,11 @@ if pil_image is None:
 
 # Run Text Detection
 if text_det:
-    det_img, pred = text_detection(pil_image)
+    det_img, text_pred, inline_pred = text_detection(pil_image)
     with col1:
         st.image(det_img, caption="Detected Text", use_container_width=True)
-        st.json(pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
+        st.json(text_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
+        st.json(inline_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
 
 
 # Run layout
