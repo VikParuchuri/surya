@@ -68,7 +68,7 @@ def main(results_dir: str, max_rows: int):
         "page_metrics": page_metrics
     }
 
-    with open(os.path.join(result_path, "results.json"), "w+") as f:
+    with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(out_data, f, indent=4)
 
     print(f"Mean accuracy is {mean_accuracy:.2f}.")

@@ -87,7 +87,7 @@ def main(ds_name: str, results_dir: str, max_rows: int):
 
     result_path = Path(results_dir) / "texify_bench"
     result_path.mkdir(parents=True, exist_ok=True)
-    with open(result_path / "results.json", "w") as f:
+    with open(result_path / "results.json", "w", encoding="utf-8") as f:
         json.dump(write_data, f, indent=4)
 
 
