@@ -15,7 +15,7 @@ from surya.detection.parallel import FakeExecutor
 from surya.detection.util import get_total_splits, split_image
 from surya.detection.schema import TextDetectionResult, TextBox
 from surya.settings import settings
-from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines, split_text_and_inline_boxes
+from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines
 
 
 class DetectionPredictor(BasePredictor):
@@ -55,9 +55,10 @@ class DetectionPredictor(BasePredictor):
 
             results = []
             for text_result, inline_result in zip(text_results, inline_results):
-                final_boxes = split_text_and_inline_boxes(text_result.bboxes, inline_result.bboxes)
+                for box in inline_result.bboxes:
+                    box.math = True
                 results.append(TextDetectionResult(
-                    bboxes=final_boxes,
+                    bboxes=text_result.bboxes+inline_result.bboxes,
                     vertical_lines=text_result.vertical_lines,
                     heatmap=text_result.affinity_map,
                     affinity_map=text_result.affinity_map,
