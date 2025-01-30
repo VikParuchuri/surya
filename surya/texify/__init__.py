@@ -73,7 +73,7 @@ class TexifyPredictor(BasePredictor):
             sequence_scores = None
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
                 while token_count < settings.TEXIFY_MAX_TOKENS - 1:

@@ -49,7 +49,7 @@ class TableRecPredictor(BasePredictor):
 
         self.model.decoder.model._setup_cache(self.model.config, batch_size, self.model.device, self.model.dtype)
 
-        with torch.inference_mode():
+        with settings.INFERENCE_MODE():
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool)
 
@@ -149,7 +149,7 @@ class TableRecPredictor(BasePredictor):
             shaper = LabelShaper()
 
             # We only need to process each image once
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
             # Inference to get rows and columns

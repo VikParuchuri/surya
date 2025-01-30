@@ -44,7 +44,7 @@ class OCRErrorPredictor(BasePredictor):
             batch_input_ids = texts_processed.input_ids[start_idx:end_idx].to(self.model.device)
             batch_attention_mask = texts_processed.attention_mask[start_idx:end_idx].to(self.model.device)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 pred = self.model(batch_input_ids, attention_mask=batch_attention_mask)
                 logits = pred.logits.detach().cpu().numpy().astype(np.float32)
                 predictions.extend(np.argmax(logits, axis=1).tolist())

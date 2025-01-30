@@ -247,7 +247,7 @@ class RecognitionPredictor(BasePredictor):
             sequence_scores = None
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
                 text_encoder_input_ids = torch.arange(

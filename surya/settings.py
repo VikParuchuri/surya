@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     FONT_DIR: str = os.path.join(BASE_DIR, "static", "fonts")
 
+    @property
     @computed_field
     def TORCH_DEVICE_MODEL(self) -> str:
         if self.TORCH_DEVICE is not None:
@@ -33,6 +34,13 @@ class Settings(BaseSettings):
 
         if torch.backends.mps.is_available():
             return "mps"
+
+        try:
+            import torch_xla
+            if len(torch_xla.devices()) > 0:
+                return "xla"
+        except:
+            pass
 
         return "cpu"
 
@@ -100,34 +108,51 @@ class Settings(BaseSettings):
     
     COMPILE_ALL: bool = False
 
+    @property
     @computed_field
     def DETECTOR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_DETECTOR
 
+    @property
     @computed_field
     def RECOGNITION_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_RECOGNITION
 
+    @property
     @computed_field
     def LAYOUT_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_LAYOUT
 
+    @property
     @computed_field
     def TABLE_REC_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_TABLE_REC
 
+    @property
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
 
+    @property
     @computed_field
     def TEXIFY_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_TEXIFY
 
-    @computed_field
     @property
+    @computed_field
     def MODEL_DTYPE(self) -> torch.dtype:
-        return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
+        if self.TORCH_DEVICE_MODEL == "cpu":
+            return torch.float32
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.bfloat16
+        return torch.float16
+
+    @property
+    @computed_field
+    def INFERENCE_MODE(self):
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.no_grad
+        return torch.inference_mode
 
     class Config:
         env_file = find_dotenv("local.env")

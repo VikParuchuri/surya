@@ -102,7 +102,7 @@ class DetectionPredictor(BasePredictor):
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 pred = self.model(pixel_values=batch)
 
             logits = pred.logits

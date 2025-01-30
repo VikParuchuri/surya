@@ -95,7 +95,7 @@ class LayoutPredictor(BasePredictor):
 
             batch_predictions = [[] for _ in range(current_batch_size)]
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values)[0]
 
                 token_count = 0
