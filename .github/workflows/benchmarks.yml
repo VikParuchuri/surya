@@ -2,9 +2,6 @@ name: Integration test
 
 on: [push]
 
-env:
-  TORCH_DEVICE: "cpu"
-
 jobs:
   build:
     runs-on: ${{ matrix.os }}
