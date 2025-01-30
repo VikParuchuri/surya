@@ -1,10 +1,10 @@
-from typing import Dict, Optional
+import os
+from typing import Callable, Dict, Optional
 
+import torch
 from dotenv import find_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
-import torch
-import os
 
 
 class Settings(BaseSettings):
@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     FONT_DIR: str = os.path.join(BASE_DIR, "static", "fonts")
 
-    @property
     @computed_field
     def TORCH_DEVICE_MODEL(self) -> str:
         if self.TORCH_DEVICE is not None:
@@ -108,37 +107,30 @@ class Settings(BaseSettings):
     
     COMPILE_ALL: bool = False
 
-    @property
     @computed_field
     def DETECTOR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_DETECTOR
 
-    @property
     @computed_field
     def RECOGNITION_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_RECOGNITION
 
-    @property
     @computed_field
     def LAYOUT_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_LAYOUT
 
-    @property
     @computed_field
     def TABLE_REC_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_TABLE_REC
 
-    @property
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
 
-    @property
     @computed_field
     def TEXIFY_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_TEXIFY
 
-    @property
     @computed_field
     def MODEL_DTYPE(self) -> torch.dtype:
         if self.TORCH_DEVICE_MODEL == "cpu":
@@ -147,9 +139,8 @@ class Settings(BaseSettings):
             return torch.bfloat16
         return torch.float16
 
-    @property
     @computed_field
-    def INFERENCE_MODE(self):
+    def INFERENCE_MODE(self) -> Callable:
         if self.TORCH_DEVICE_MODEL == "xla":
             return torch.no_grad
         return torch.inference_mode
