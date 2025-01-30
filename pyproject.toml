@@ -47,3 +47,19 @@ texify_gui = "surya.scripts.run_texify_app:texify_app_cli"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[[tool.poetry.source]]
+name = "libtpu-releases"
+url = "https://storage.googleapis.com/libtpu-releases/index.html"
+priority = "supplemental"
+
+[[tool.poetry.source]]
+name = "libtpu-wheels"
+url = "https://storage.googleapis.com/libtpu-wheels/index.html"
+priority = "supplemental"
+
+[tool.poetry.group.xla]
+optional = true
+
+[tool.poetry.group.xla.dependencies]
+torch-xla = {version = "^2.4.1", extras = ["tpu"]}
