@@ -82,8 +82,9 @@ def main(ds_name: str, results_dir: str, max_rows: int):
     score_dirs = ["⬇", "⬇"]
 
     score_headers = [f"{h} {d}" for h, d in zip(score_headers, score_dirs)]
+    table = tabulate(score_table, headers=["Method", *score_headers])
     print()
-    print(tabulate(score_table, headers=["Method", *score_headers]))
+    print(table)
 
     result_path = Path(results_dir) / "texify_bench"
     result_path.mkdir(parents=True, exist_ok=True)

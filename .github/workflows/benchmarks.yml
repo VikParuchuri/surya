@@ -2,6 +2,9 @@ name: Integration test
 
 on: [push]
 
+env:
+  PYTHONIOENCODING: "utf-8"
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
