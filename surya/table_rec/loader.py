@@ -48,8 +48,9 @@ class TableRecModelLoader(ModelLoader):
             torch._dynamo.config.suppress_errors = False
 
             print(f"Compiling table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
-            model.encoder = torch.compile(model.encoder)
-            model.decoder = torch.compile(model.decoder)
+            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
+            model.encoder = torch.compile(model.encoder, **compile_args)
+            model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
         return model
