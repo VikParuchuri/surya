@@ -10,7 +10,7 @@ from surya.layout.loader import LayoutModelLoader
 from surya.layout.model.config import ID_TO_LABEL
 from surya.layout.slicer import ImageSlicer
 from surya.layout.util import prediction_to_polygon
-from surya.common.util import clean_boxes
+from surya.common.util import clean_boxes, mark_step
 from surya.layout.schema import LayoutBox, LayoutResult
 from surya.settings import settings
 
@@ -136,7 +136,9 @@ class LayoutPredictor(BasePredictor):
                         batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
 
                     for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
+                        mark_step()
                         if not status:
+                            mark_step()
                             preds = pred[0].detach().cpu()
                             prediction = {
                                 "preds": preds,
