@@ -357,6 +357,8 @@ class DonutSwinSelfAttention(nn.Module):
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1
         )
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous().unsqueeze(0)
+        relative_position_bias = relative_position_bias.repeat(batch_size, 1, 1, 1)
+
         if attention_mask is None:
             attention_mask = relative_position_bias
         else:
