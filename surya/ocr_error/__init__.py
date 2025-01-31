@@ -46,7 +46,7 @@ class OCRErrorPredictor(BasePredictor):
 
             with settings.INFERENCE_MODE():
                 pred = self.model(batch_input_ids, attention_mask=batch_attention_mask)
-                logits = pred.logits.detach().cpu().numpy().astype(np.float32)
+                logits = pred.logits.to(torch.float32).cpu().detach().numpy()
                 predictions.extend(np.argmax(logits, axis=1).tolist())
 
         return OCRErrorDetectionResult(
