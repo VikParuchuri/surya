@@ -90,20 +90,18 @@ class TableRecPredictor(BasePredictor):
                             k_logits = torch.clamp(k_logits, min=1)
                             processed_logits[k] = torch.round(k_logits)
 
-                # Convert processed tensors to Python objects
+                mark_step()
+                items = {k: processed_logits[k].cpu() for k, _, _ in BOX_PROPERTIES}
                 for j in range(current_batch_size):
                     box_property = {}
                     for k, _, mode in BOX_PROPERTIES:
                         if mode == "classification":
-                            mark_step()
-                            box_property[k] = int(processed_logits[k][j].item())
+                            box_property[k] = int(items[k][j].item())
                         elif mode == "regression":
                             if k == "bbox":
-                                mark_step()
-                                box_property[k] = processed_logits[k][j].tolist()
+                                box_property[k] = items[k][j].tolist()
                             elif k == "colspan":
-                                mark_step()
-                                box_property[k] = int(processed_logits[k][j].item())
+                                box_property[k] = int(items[k][j].item())
                     box_properties.append(box_property)
 
                 all_done = all_done | done
