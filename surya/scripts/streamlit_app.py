@@ -25,7 +25,7 @@ def load_predictors_cached():
     return load_predictors()
 
 
-def run_ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=15):
+def ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=15):
     from pdftext.extraction import plain_text_output
     with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
         f.write(pdf_file.getvalue())
@@ -234,7 +234,7 @@ if run_table_rec:
 if run_ocr_errors:
     if "pdf" not in filetype:
         st.error("This feature only works with PDFs.")
-    label, results = run_ocr_errors(in_file, page_count)
+    label, results = ocr_errors(in_file, page_count)
     with col1:
         st.write(label)
         st.json(results)
