@@ -100,6 +100,7 @@ class LayoutPredictor(BasePredictor):
 
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values)[0]
+                mark_step()
 
                 token_count = 0
                 all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
@@ -115,6 +116,7 @@ class LayoutPredictor(BasePredictor):
                         use_cache=True,
                         prefill=is_prefill
                     )
+                    mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
                     box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
@@ -127,6 +129,7 @@ class LayoutPredictor(BasePredictor):
                                 class_preds == self.model.decoder.config.pad_token_id)
 
                     all_done = all_done | done
+                    mark_step()
                     if all_done.all():
                         break
 
@@ -174,9 +177,12 @@ class LayoutPredictor(BasePredictor):
                             batch_predictions[j].append(prediction)
 
                     token_count += inference_token_count
+
+                    mark_step()
                     inference_token_count = batch_decoder_input.shape[1]
                     batch_decoder_input = batch_decoder_input.to(torch.long)
 
+            mark_step()
             for j, (pred_dict, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
                 boxes = []
                 preds = [p for p in pred_dict if
