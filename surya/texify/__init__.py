@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from PIL import Image
 from tqdm import tqdm
 
+from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
 from surya.settings import settings
 from surya.texify.loader import TexifyModelLoader
@@ -75,6 +76,7 @@ class TexifyPredictor(BasePredictor):
 
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
+                mark_step()
 
                 while token_count < settings.TEXIFY_MAX_TOKENS - 1:
                     is_prefill = token_count == 0
@@ -86,6 +88,7 @@ class TexifyPredictor(BasePredictor):
                         use_cache=True,
                         prefill=is_prefill
                     )
+                    mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
                     logits = return_dict["logits"][:current_batch_size]  # Ignore batch padding
@@ -101,17 +104,23 @@ class TexifyPredictor(BasePredictor):
                         scores = scores.masked_fill(all_done, 0)
                         sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
+                    mark_step()
                     if all_done.all():
                         break
 
                     batch_input_ids = preds.unsqueeze(1)
 
                     for j, (pred, status) in enumerate(zip(preds, all_done)):
+                        mark_step()
                         if not status:
                             batch_predictions[j].append(int(pred))
 
                     token_count += inference_token_count
+
+                    mark_step()
                     inference_token_count = batch_input_ids.shape[-1]
+
+                    mark_step()
                     max_position_id = torch.max(decoder_position_ids).item()
                     decoder_position_ids = torch.ones_like(batch_input_ids[0, :], dtype=torch.int64,
                                                            device=self.model.device).cumsum(0) - 1 + max_position_id
@@ -119,9 +128,11 @@ class TexifyPredictor(BasePredictor):
                     if settings.TEXIFY_STATIC_CACHE:
                         batch_input_ids = self.pad_to_batch_size(batch_input_ids, batch_size)
 
+            mark_step()
             batch_confidences = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
             detected_text = self.processor.tokenizer.batch_decode(batch_predictions)
 
+            mark_step()
             batch_confidences = batch_confidences.tolist()
 
             if settings.TEXIFY_STATIC_CACHE:
