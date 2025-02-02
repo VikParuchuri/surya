@@ -3,11 +3,14 @@ name: Integration test
 on: [push]
 
 env:
-  TORCH_DEVICE: "cpu"
+  PYTHONIOENCODING: "utf-8"
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -38,3 +41,7 @@ jobs:
         run: |
           poetry run python benchmark/table_recognition.py --max_rows 5
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/table_rec_bench/results.json --bench_type table_recognition
+      - name: Run texify benchmark
+        run: |
+          poetry run python benchmark/texify.py --max_rows 5
+          poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/texify_bench/results.json --bench_type texify

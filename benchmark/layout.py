@@ -92,7 +92,7 @@ def main(results_dir: str, max_rows: int, debug: bool):
         "page_metrics": page_metrics
     }
 
-    with open(os.path.join(result_path, "results.json"), "w+") as f:
+    with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(out_data, f, indent=4)
 
     table_headers = ["Layout Type", ] + metric_types

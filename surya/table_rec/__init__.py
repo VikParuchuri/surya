@@ -29,19 +29,6 @@ class TableRecPredictor(BasePredictor):
     def __call__(self, images: List[Image.Image], batch_size: int | None = None) -> List[TableResult]:
         return self.batch_table_recognition(images, batch_size)
 
-    @staticmethod
-    def pad_to_batch_size(tensor: torch.Tensor, batch_size: int) -> torch.Tensor:
-        current_batch_size = tensor.shape[0]
-        if current_batch_size >= batch_size:
-            return tensor
-
-        pad_size = batch_size - current_batch_size
-        repeats = (pad_size + current_batch_size - 1) // current_batch_size
-        repeated_rows = tensor.repeat((repeats, *[1] * (tensor.dim() - 1)))
-        pad_tensor = repeated_rows[:pad_size]
-
-        return torch.cat([tensor, pad_tensor], dim=0)
-
     def inference_loop(
             self,
             encoder_hidden_states: torch.Tensor,

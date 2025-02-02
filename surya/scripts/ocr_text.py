@@ -12,7 +12,7 @@ from surya.recognition import RecognitionPredictor
 from surya.scripts.config import CLILoader
 
 
-@click.command(help="Detect bboxes in an input file or folder (PDFs or image).")
+@click.command(help="OCR text.")
 @CLILoader.common_options
 @click.option("--langs", type=str, help="Optional language(s) to use for OCR. Comma separate for multiple. Can be a capitalized language name, or a 2-letter ISO 639 code.", default=None)
 @click.option("--lang_file", type=str, help="Optional path to file with languages to use for OCR. Should be a JSON dict with file names as keys, and the value being a list of language codes/names.", default=None)

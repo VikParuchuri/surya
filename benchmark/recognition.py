@@ -121,7 +121,7 @@ def main(results_dir: str, max_rows: int, debug: bool, tesseract: bool, langs: s
         with open(os.path.join(result_path, "tesseract_scores.json"), "w+") as f:
             json.dump(tess_scores, f)
 
-    with open(os.path.join(result_path, "results.json"), "w+") as f:
+    with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(benchmark_stats, f)
 
     key_languages = [k for k in KEY_LANGUAGES if k in surya_scores]

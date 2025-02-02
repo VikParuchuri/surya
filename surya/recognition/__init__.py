@@ -176,16 +176,6 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons
         }
 
-    def pad_to_batch_size(self, tensor, batch_size):
-        current_batch_size = tensor.shape[0]
-        if current_batch_size >= batch_size:
-            return tensor
-
-        pad_size = batch_size - current_batch_size
-        padding = (0, 0) * (tensor.dim() - 1) + (0, pad_size)
-
-        return F.pad(tensor, padding, mode='constant', value=0)
-
     def prepare_input(self, batch_langs, batch_pixel_values, batch_size):
         batch_decoder_input = [[self.model.config.decoder_start_token_id] + lang for lang in batch_langs]
         max_input_length = max(len(tokens) for tokens in batch_decoder_input)
@@ -256,18 +246,9 @@ class RecognitionPredictor(BasePredictor):
 
             sequence_scores = None
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
-            encoder_hidden_states = None
 
             with torch.inference_mode():
-                encoder_batch_size = batch_size // settings.RECOGNITION_ENCODER_BATCH_DIVISOR
-                for z in range(0, batch_pixel_values.shape[0], encoder_batch_size):
-                    encoder_pixel_values = batch_pixel_values[
-                                           z:min(z + encoder_batch_size, batch_pixel_values.shape[0])]
-                    encoder_hidden_states_batch = self.model.encoder(pixel_values=encoder_pixel_values).last_hidden_state
-                    if encoder_hidden_states is None:
-                        encoder_hidden_states = encoder_hidden_states_batch
-                    else:
-                        encoder_hidden_states = torch.cat([encoder_hidden_states, encoder_hidden_states_batch], dim=0)
+                encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
                 text_encoder_input_ids = torch.arange(
                     self.model.text_encoder.config.query_token_count,
@@ -335,7 +316,6 @@ class RecognitionPredictor(BasePredictor):
 
             sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
             detected_text = self.processor.tokenizer.batch_decode(batch_predictions)
-            detected_text = [truncate_repetitions(dt) for dt in detected_text]
 
             # Convert sequence_scores to list for the current batch
             batch_confidences = sequence_scores.tolist()
