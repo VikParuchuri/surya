@@ -20,11 +20,6 @@ def load_predictors(
         "ocr_error": OCRErrorPredictor(device=device, dtype=dtype),
         "recognition": RecognitionPredictor(device=device, dtype=dtype),
         "detection": DetectionPredictor(device=device, dtype=dtype),
-<<<<<<< HEAD
         "inline_detection": InlineDetectionPredictor(device=device, dtype=dtype),
-        "table_rec": TableRecPredictor(device=device, dtype=dtype)
-=======
-        "table_rec": TableRecPredictor(device=device, dtype=dtype),
         "texify": TexifyPredictor(device=device, dtype=dtype)
->>>>>>> be8bc79f8e3eb1f8f5f2d708597842b116d0010a
     }
