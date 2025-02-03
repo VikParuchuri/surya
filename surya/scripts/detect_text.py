@@ -22,7 +22,7 @@ def detect_text_cli(input_path: str, **kwargs):
     if loader.debug:
         print(f"Detection took {end - start} seconds")
 
-    if loader.images:
+    if loader.save_images:
         for idx, (image, pred, name) in enumerate(zip(loader.images, predictions, loader.names)):
             polygons = [p.polygon for p in pred.bboxes]
             bbox_image = draw_polys_on_image(polygons, copy.deepcopy(image))

@@ -49,7 +49,7 @@ def ocr_text_cli(input_path: str, langs: str, lang_file: str, **kwargs):
         max_chars = max([len(l.text) for p in predictions_by_image for l in p.text_lines])
         print(f"Max chars: {max_chars}")
 
-    if loader.images:
+    if loader.save_images:
         for idx, (name, image, pred, langs) in enumerate(zip(loader.names, loader.images, predictions_by_image, image_langs)):
             bboxes = [l.bbox for l in pred.text_lines]
             pred_text = [l.text for l in pred.text_lines]

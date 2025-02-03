@@ -22,7 +22,7 @@ def detect_layout_cli(input_path: str, **kwargs):
     if loader.debug:
         print(f"Layout took {time.time() - start} seconds")
 
-    if loader.images:
+    if loader.save_images:
         for idx, (image, layout_pred, name) in enumerate(zip(loader.images, layout_predictions, loader.names)):
             polygons = [p.polygon for p in layout_pred.bboxes]
             labels = [f"{p.label}-{p.position}" for p in layout_pred.bboxes]
