@@ -36,7 +36,7 @@ class OCRErrorModelLoader(ModelLoader):
             revision=self.revision
         ).to(device).eval()
 
-        if settings.OCR_ERROR_STATIC_CACHE:
+        if settings.COMPILE_ALL or settings.COMPILE_OCR_ERROR:
             torch.set_float32_matmul_precision('high')
             torch._dynamo.config.cache_size_limit = 1
             torch._dynamo.config.suppress_errors = False

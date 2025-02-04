@@ -51,7 +51,7 @@ class RecognitionModelLoader(ModelLoader):
         model = model.to(device)
         model = model.eval()
 
-        if settings.RECOGNITION_STATIC_CACHE:
+        if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch.set_float32_matmul_precision('high')
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
