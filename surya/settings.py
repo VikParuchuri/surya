@@ -112,27 +112,27 @@ class Settings(BaseSettings):
 
     @computed_field
     def DETECTOR_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_DETECTOR
+        return self.COMPILE_ALL or self.COMPILE_DETECTOR or self.TORCH_DEVICE_MODEL == "xla" # We need to static cache and pad to batch size for XLA, since it will recompile otherwise
 
     @computed_field
     def RECOGNITION_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_RECOGNITION
+        return self.COMPILE_ALL or self.COMPILE_RECOGNITION or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def LAYOUT_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_LAYOUT
+        return self.COMPILE_ALL or self.COMPILE_LAYOUT or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def TABLE_REC_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_TABLE_REC
+        return self.COMPILE_ALL or self.COMPILE_TABLE_REC or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
+        return self.COMPILE_ALL or self.COMPILE_OCR_ERROR or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def TEXIFY_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_TEXIFY
+        return self.COMPILE_ALL or self.COMPILE_TEXIFY or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def MODEL_DTYPE(self) -> torch.dtype:
