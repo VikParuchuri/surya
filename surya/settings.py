@@ -1,10 +1,10 @@
-from typing import Dict, Optional
+import os
+from typing import Callable, Dict, Optional
 
+import torch
 from dotenv import find_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
-import torch
-import os
 
 
 class Settings(BaseSettings):
@@ -33,6 +33,13 @@ class Settings(BaseSettings):
 
         if torch.backends.mps.is_available():
             return "mps"
+
+        try:
+            import torch_xla
+            if len(torch_xla.devices()) > 0:
+                return "xla"
+        except:
+            pass
 
         return "cpu"
 
@@ -125,9 +132,18 @@ class Settings(BaseSettings):
         return self.COMPILE_ALL or self.COMPILE_TEXIFY
 
     @computed_field
-    @property
     def MODEL_DTYPE(self) -> torch.dtype:
-        return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
+        if self.TORCH_DEVICE_MODEL == "cpu":
+            return torch.float32
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.bfloat16
+        return torch.float16
+
+    @computed_field
+    def INFERENCE_MODE(self) -> Callable:
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.no_grad
+        return torch.inference_mode
 
     class Config:
         env_file = find_dotenv("local.env")

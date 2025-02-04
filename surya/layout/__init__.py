@@ -10,7 +10,7 @@ from surya.layout.loader import LayoutModelLoader
 from surya.layout.model.config import ID_TO_LABEL
 from surya.layout.slicer import ImageSlicer
 from surya.layout.util import prediction_to_polygon
-from surya.common.util import clean_boxes
+from surya.common.util import clean_boxes, mark_step
 from surya.layout.schema import LayoutBox, LayoutResult
 from surya.settings import settings
 
@@ -88,6 +88,9 @@ class LayoutPredictor(BasePredictor):
             batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long,
                                                device=self.model.device)
             inference_token_count = batch_decoder_input.shape[1]
+            if settings.LAYOUT_STATIC_CACHE:
+                batch_pixel_values = self.pad_to_batch_size(batch_pixel_values, batch_size)
+                batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
 
             decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64,
                                                    device=self.model.device).cumsum(0) - 1
@@ -95,11 +98,14 @@ class LayoutPredictor(BasePredictor):
 
             batch_predictions = [[] for _ in range(current_batch_size)]
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values)[0]
+                mark_step()
 
                 token_count = 0
                 all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
+                if settings.LAYOUT_STATIC_CACHE:
+                    encoder_hidden_states = self.pad_to_batch_size(encoder_hidden_states, batch_size)
 
                 while token_count < settings.LAYOUT_MAX_BOXES:
                     is_prefill = token_count == 0
@@ -110,6 +116,7 @@ class LayoutPredictor(BasePredictor):
                         use_cache=True,
                         prefill=is_prefill
                     )
+                    mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
                     box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
@@ -122,14 +129,19 @@ class LayoutPredictor(BasePredictor):
                                 class_preds == self.model.decoder.config.pad_token_id)
 
                     all_done = all_done | done
+                    mark_step()
                     if all_done.all():
                         break
 
                     batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)],
                                                     dim=-1)
+                    if settings.LAYOUT_STATIC_CACHE:
+                        batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
 
                     for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
+                        mark_step()
                         if not status:
+                            mark_step()
                             preds = pred[0].detach().cpu()
                             prediction = {
                                 "preds": preds,
@@ -165,9 +177,12 @@ class LayoutPredictor(BasePredictor):
                             batch_predictions[j].append(prediction)
 
                     token_count += inference_token_count
+
+                    mark_step()
                     inference_token_count = batch_decoder_input.shape[1]
                     batch_decoder_input = batch_decoder_input.to(torch.long)
 
+            mark_step()
             for j, (pred_dict, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
                 boxes = []
                 preds = [p for p in pred_dict if

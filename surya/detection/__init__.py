@@ -102,7 +102,7 @@ class DetectionPredictor(BasePredictor):
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 pred = self.model(pixel_values=batch)
 
             logits = pred.logits
@@ -111,7 +111,7 @@ class DetectionPredictor(BasePredictor):
             if current_shape != correct_shape:
                 logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
 
-            logits = logits.cpu().detach().numpy().astype(np.float32)
+            logits = logits.to(torch.float32).cpu().detach().numpy()
             preds = []
             for i, (idx, height) in enumerate(zip(split_index, split_heights)):
                 # If our current prediction length is below the image idx, that means we have a new image

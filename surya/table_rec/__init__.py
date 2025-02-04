@@ -7,6 +7,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
+from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
 from surya.table_rec.schema import TableCell, TableRow, TableCol, TableResult
 from surya.common.polygon import PolygonBox
@@ -49,7 +50,7 @@ class TableRecPredictor(BasePredictor):
 
         self.model.decoder.model._setup_cache(self.model.config, batch_size, self.model.device, self.model.dtype)
 
-        with torch.inference_mode():
+        with settings.INFERENCE_MODE():
             token_count = 0
             all_done = torch.zeros(current_batch_size, dtype=torch.bool)
 
@@ -68,36 +69,53 @@ class TableRecPredictor(BasePredictor):
                 # Get predictions for each box element
                 box_properties = []
                 done = []
+
+                # Pre-process all logits at once
+                processed_logits = {}
+                for k, _, mode in BOX_PROPERTIES:
+                    k_logits = return_dict["box_property_logits"][k][:, -1, :]  # Get all batch logits at once
+                    
+                    if mode == "classification":
+                        # Process all classification logits in one operation
+                        items = torch.argmax(k_logits, dim=-1)
+                        if k == "category":
+                            done = (items == self.model.decoder.config.eos_token_id) | (items == self.model.decoder.config.pad_token_id)
+                        items = items - SPECIAL_TOKENS
+                        processed_logits[k] = items
+                    elif mode == "regression":
+                        if k == "bbox":
+                            k_logits = k_logits * BOX_DIM
+                            processed_logits[k] = k_logits
+                        elif k == "colspan":
+                            k_logits = torch.clamp(k_logits, min=1)
+                            processed_logits[k] = torch.round(k_logits)
+
+                mark_step()
+                items = {k: processed_logits[k].cpu() for k, _, _ in BOX_PROPERTIES}
                 for j in range(current_batch_size):
                     box_property = {}
-                    for (k, kcount, mode) in BOX_PROPERTIES:
-                        k_logits = return_dict["box_property_logits"][k][j, -1, :]
+                    for k, _, mode in BOX_PROPERTIES:
                         if mode == "classification":
-                            item = int(torch.argmax(k_logits, dim=-1).item())
-                            if k == "category":
-                                done.append(
-                                    item == self.model.decoder.config.eos_token_id or item == self.model.decoder.config.pad_token_id)
-                            item -= SPECIAL_TOKENS
-                            box_property[k] = item
+                            box_property[k] = int(items[k][j].item())
                         elif mode == "regression":
                             if k == "bbox":
-                                k_logits *= BOX_DIM
-                                k_logits = k_logits.tolist()
+                                box_property[k] = items[k][j].tolist()
                             elif k == "colspan":
-                                k_logits = k_logits.clamp(min=1)
-                                k_logits = int(k_logits.round().item())
-                            box_property[k] = k_logits
+                                box_property[k] = int(items[k][j].item())
                     box_properties.append(box_property)
 
-                all_done = all_done | torch.tensor(done, dtype=torch.bool)
+                all_done = all_done | done
 
+                mark_step()
                 if all_done.all():
                     break
+
 
                 batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long).to(self.model.device)
                 batch_input_ids = batch_input_ids.unsqueeze(1)  # Add sequence length dimension
 
                 for j, (box_property, status) in enumerate(zip(box_properties, all_done)):
+                    mark_step()
                     if not status:
                         batch_predictions[j].append(box_property)
 
@@ -149,7 +167,7 @@ class TableRecPredictor(BasePredictor):
             shaper = LabelShaper()
 
             # We only need to process each image once
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
 
             # Inference to get rows and columns

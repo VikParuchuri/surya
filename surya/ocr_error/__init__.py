@@ -10,7 +10,7 @@ from surya.ocr_error.loader import OCRErrorModelLoader
 from surya.ocr_error.model.config import ID2LABEL
 from surya.ocr_error.schema import OCRErrorDetectionResult
 from surya.settings import settings
-
+from surya.common.util import mark_step
 
 class OCRErrorPredictor(BasePredictor):
     model_loader_cls = OCRErrorModelLoader
@@ -44,9 +44,11 @@ class OCRErrorPredictor(BasePredictor):
             batch_input_ids = texts_processed.input_ids[start_idx:end_idx].to(self.model.device)
             batch_attention_mask = texts_processed.attention_mask[start_idx:end_idx].to(self.model.device)
 
-            with torch.inference_mode():
+            with settings.INFERENCE_MODE():
                 pred = self.model(batch_input_ids, attention_mask=batch_attention_mask)
-                logits = pred.logits.detach().cpu().numpy().astype(np.float32)
+
+                mark_step()
+                logits = pred.logits.to(torch.float32).cpu().detach().numpy()
                 predictions.extend(np.argmax(logits, axis=1).tolist())
 
         return OCRErrorDetectionResult(

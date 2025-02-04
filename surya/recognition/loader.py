@@ -57,9 +57,10 @@ class RecognitionModelLoader(ModelLoader):
             torch._dynamo.config.suppress_errors = False
 
             print(f"Compiling recognition model {self.checkpoint} on device {device} with dtype {dtype}")
-            model.encoder = torch.compile(model.encoder)
-            model.decoder = torch.compile(model.decoder)
-            model.text_encoder = torch.compile(model.text_encoder)
+            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
+            model.encoder = torch.compile(model.encoder, **compile_args)
+            model.decoder = torch.compile(model.decoder, **compile_args)
+            model.text_encoder = torch.compile(model.text_encoder, **compile_args)
 
         print(f"Loaded recognition model {self.checkpoint} on device {device} with dtype {dtype}")
         return model

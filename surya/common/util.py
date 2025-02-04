@@ -2,6 +2,7 @@ import copy
 from typing import List
 
 from surya.common.polygon import PolygonBox
+from surya.settings import settings
 
 
 def clean_boxes(boxes: List[PolygonBox]) -> List[PolygonBox]:
@@ -43,6 +44,7 @@ def rescale_bbox(bbox, processor_size, image_size):
     new_bbox[3] = int(new_bbox[3] * height_scaler)
     return new_bbox
 
+
 def expand_bbox(bbox, expansion_factor=.01):
     expansion_low = 1 - expansion_factor
     expansion_high = 1 + expansion_factor
@@ -52,3 +54,14 @@ def expand_bbox(bbox, expansion_factor=.01):
         bbox[2] * expansion_high,
         bbox[3] * expansion_high
     ]
+
+
+if settings.TORCH_DEVICE_MODEL == 'xla':
+    import torch_xla.core.xla_model as xm
+else:
+    xm = None
+
+
+def mark_step():
+    if xm is not None:
+        xm.mark_step()

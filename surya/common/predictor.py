@@ -8,7 +8,7 @@ from surya.settings import settings
 
 class BasePredictor:
     model_loader_cls = ModelLoader
-    batch_size = None
+    batch_size: Optional[int] = None
     default_batch_sizes = {
         "cpu": 1,
         "mps": 1,
