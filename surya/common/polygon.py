@@ -132,3 +132,6 @@ class PolygonBox(BaseModel):
         if y_shift is not None:
             for corner in self.polygon:
                 corner[1] += y_shift
+
+    def __hash__(self):
+        return hash(tuple(self.bbox))

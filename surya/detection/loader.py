@@ -53,3 +53,9 @@ class DetectionModelLoader(ModelLoader):
 
     def processor(self) -> SegformerImageProcessor:
         return SegformerImageProcessor.from_pretrained(self.checkpoint, revision=self.revision)
+
+class InlineDetectionModelLoader(DetectionModelLoader):
+    def __init__(self, checkpoint: Optional[str] = None):
+        if checkpoint is None:
+            checkpoint = settings.INLINE_MATH_MODEL_CHECKPOINT
+        super().__init__(checkpoint)

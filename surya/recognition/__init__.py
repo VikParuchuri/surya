@@ -37,7 +37,8 @@ class RecognitionPredictor(BasePredictor):
             recognition_batch_size: int | None = None,
             highres_images: List[Image.Image] | None = None,
             bboxes: List[List[List[int]]] | None = None,
-            polygons: List[List[List[List[int]]]] | None = None
+            polygons: List[List[List[List[int]]]] | None = None,
+            sort_lines: bool = True
     ) -> List[OCRResult]:
             assert len(images) == len(langs), "You need to pass in one list of languages for each image"
             images = convert_if_not_rgb(images)
@@ -93,7 +94,8 @@ class RecognitionPredictor(BasePredictor):
                         confidence=confidence
                     ))
 
-                lines = sort_text_lines(lines)
+                if sort_lines:
+                    lines = sort_text_lines(lines)
                 predictions_by_image.append(OCRResult(
                     text_lines=lines,
                     languages=lang,

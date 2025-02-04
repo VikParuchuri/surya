@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
     COMPILE_DETECTOR: bool = False
 
+    # Inline math detection
+    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@84d301aca4271042cfd523da34497bb3ef2dd400"
+
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
     RECOGNITION_MAX_TOKENS: int = 175

@@ -10,14 +10,12 @@ from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
 
-from surya.detection.loader import DetectionModelLoader
+from surya.detection.loader import DetectionModelLoader, InlineDetectionModelLoader
 from surya.detection.parallel import FakeExecutor
-from surya.detection.processor import SegformerImageProcessor
 from surya.detection.util import get_total_splits, split_image
 from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
-from surya.detection.heatmap import parallel_get_lines
-
+from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines
 
 class DetectionPredictor(BasePredictor):
     model_loader_cls = DetectionModelLoader
@@ -131,3 +129,19 @@ class DetectionPredictor(BasePredictor):
                     preds[idx] = heatmaps
 
             yield preds, [orig_sizes[j] for j in batch_image_idxs]
+
+class InlineDetectionPredictor(DetectionPredictor):
+    model_loader_cls = InlineDetectionModelLoader
+    def __call__(self, images, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
+
+        postprocessing_futures = []
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+        executor = ThreadPoolExecutor if parallelize else FakeExecutor
+        with executor(max_workers=max_workers) as e:
+            for preds, orig_sizes in detection_generator:
+                for pred, orig_size in zip(preds, orig_sizes):
+                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
+
+        return [future.result() for future in postprocessing_futures]
