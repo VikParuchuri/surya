@@ -36,7 +36,7 @@ class DetectionPredictor(BasePredictor):
         with executor(max_workers=max_workers) as e:
             for preds, orig_sizes in detection_generator:
                 for pred, orig_size in zip(preds, orig_sizes):
-                    postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
+                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
 
         return [future.result() for future in postprocessing_futures]
 
