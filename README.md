@@ -388,7 +388,7 @@ For Google Cloud, I aligned the output from Google Cloud with the ground truth. 
 
 | Model     | Time (s)   | Time per page (s)   | precision   |   recall |
 |-----------|------------|---------------------|-------------|----------|
-| surya     | 50.2099    | 0.196133            | 0.821061    | 0.956556 |
+| surya     | 47.2285    | 0.094452            | 0.835857    | 0.960807 |
 | tesseract | 74.4546    | 0.290838            | 0.631498    | 0.997694 |
 
 
