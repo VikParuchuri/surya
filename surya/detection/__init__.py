@@ -9,6 +9,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
+from surya.common.util import mark_step
 
 from surya.detection.loader import DetectionModelLoader, InlineDetectionModelLoader
 from surya.detection.parallel import FakeExecutor
@@ -96,12 +97,13 @@ class DetectionPredictor(BasePredictor):
 
             image_splits = [self.prepare_image(image) for image in image_splits]
             # Batch images in dim 0
-            batch = torch.stack(image_splits, dim=0).to(self.model.dtype).to(self.model.device)
+            batch = torch.stack(image_splits, dim=0).to(self.model.dtype)
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
             with settings.INFERENCE_MODE():
-                pred = self.model(pixel_values=batch)
+                pred = self.model(pixel_values=batch.to(self.model.device)) # Moving the to device here fixes issues with xla recompilation
+                mark_step()
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]
