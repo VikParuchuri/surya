@@ -18,7 +18,8 @@ class OCRErrorPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 64
+        "cuda": 64,
+        "xla": 32
     }
 
     def __call__(

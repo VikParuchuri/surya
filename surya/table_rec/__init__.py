@@ -24,7 +24,8 @@ class TableRecPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 64
+        "cuda": 32,
+        "xla": 16
     }
 
     def __call__(self, images: List[Image.Image], batch_size: int | None = None) -> List[TableResult]:
@@ -48,11 +49,15 @@ class TableRecPredictor(BasePredictor):
             encoder_hidden_states = self.pad_to_batch_size(encoder_hidden_states, batch_size)
             batch_input_ids = self.pad_to_batch_size(batch_input_ids, batch_size)
 
+        # Move to device after padding for XLA
+        encoder_hidden_states = encoder_hidden_states.to(self.model.device)
+        batch_input_ids = batch_input_ids.to(self.model.device)
+
         self.model.decoder.model._setup_cache(self.model.config, batch_size, self.model.device, self.model.dtype)
 
         with settings.INFERENCE_MODE():
             token_count = 0
-            all_done = torch.zeros(current_batch_size, dtype=torch.bool)
+            all_done = torch.zeros(encoder_hidden_states.shape[0], dtype=torch.bool, device=self.model.device)
 
             while token_count < max_tokens:
                 is_prefill = token_count == 0
@@ -105,17 +110,15 @@ class TableRecPredictor(BasePredictor):
                     box_properties.append(box_property)
 
                 all_done = all_done | done
+                all_done_cpu = all_done.cpu()
 
-                mark_step()
-                if all_done.all():
+                if all_done_cpu[:current_batch_size].all():
                     break
 
-
-                batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long).to(self.model.device)
+                batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long)
                 batch_input_ids = batch_input_ids.unsqueeze(1)  # Add sequence length dimension
 
-                for j, (box_property, status) in enumerate(zip(box_properties, all_done)):
-                    mark_step()
+                for j, (box_property, status) in enumerate(zip(box_properties, all_done_cpu)):
                     if not status:
                         batch_predictions[j].append(box_property)
 
@@ -124,6 +127,9 @@ class TableRecPredictor(BasePredictor):
 
                 if settings.TABLE_REC_STATIC_CACHE:
                     batch_input_ids = self.pad_to_batch_size(batch_input_ids, batch_size)
+
+                # Move to device after padding for XLA
+                batch_input_ids = batch_input_ids.to(self.model.device)
         return batch_predictions
 
     def batch_table_recognition(
@@ -161,8 +167,14 @@ class TableRecPredictor(BasePredictor):
 
             batch_pixel_values = model_inputs["pixel_values"]
 
-            batch_input_ids = model_inputs["input_ids"].to(self.model.device)
-            batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=self.model.dtype).to(self.model.device)
+            batch_input_ids = model_inputs["input_ids"]
+            batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=self.model.dtype)
+
+            if settings.TABLE_REC_STATIC_CACHE:
+                batch_pixel_values = self.pad_to_batch_size(batch_pixel_values, batch_size)
+
+            # Move to device after padding for XLA
+            batch_pixel_values = batch_pixel_values.to(self.model.device)
 
             shaper = LabelShaper()
 
@@ -207,7 +219,7 @@ class TableRecPredictor(BasePredictor):
             # Re-inference to predict cells
             row_encoder_hidden_states = torch.stack(row_encoder_hidden_states)
             row_inputs = self.processor(images=None, query_items=row_query_items, columns=columns, convert_images=False)
-            row_input_ids = row_inputs["input_ids"].to(self.model.device)
+            row_input_ids = row_inputs["input_ids"]
             cell_predictions = []
             for j in range(0, len(row_input_ids), batch_size):
                 cell_batch_hidden_states = row_encoder_hidden_states[j:j + batch_size]

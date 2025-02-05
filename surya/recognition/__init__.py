@@ -271,8 +271,6 @@ class RecognitionPredictor(BasePredictor):
                     encoder_attention_mask=None,
                     use_cache=False
                 ).hidden_states
-
-                print(encoder_text_hidden_states.shape)
                 mark_step()
 
                 while token_count < settings.RECOGNITION_MAX_TOKENS - 1:

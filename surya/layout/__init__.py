@@ -133,7 +133,7 @@ class LayoutPredictor(BasePredictor):
 
                     # Move to CPU to avoid XLA issue
                     all_done_cpu = all_done.cpu()
-                    if all_done_cpu.all():
+                    if all_done_cpu[:current_batch_size].all():
                         break
 
                     batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
