@@ -21,7 +21,8 @@ class LayoutPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 4,
         "mps": 4,
-        "cuda": 32
+        "cuda": 32,
+        "xla": 16
     }
 
     def __call__(
@@ -77,7 +78,7 @@ class LayoutPredictor(BasePredictor):
             model_inputs = self.processor(batch_images)
 
             batch_pixel_values = model_inputs["pixel_values"]
-            batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=self.model.dtype).to(self.model.device)
+            batch_pixel_values = torch.tensor(np.array(batch_pixel_values), dtype=self.model.dtype)
 
             pause_token = [self.model.config.decoder.pause_token_id] * 7
             start_token = [self.model.config.decoder.bos_token_id] * 7
@@ -85,12 +86,15 @@ class LayoutPredictor(BasePredictor):
                 [start_token] + [pause_token] * self.model.config.decoder.pause_token_count
                 for _ in range(current_batch_size)
             ]
-            batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long,
-                                               device=self.model.device)
+            batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long)
             inference_token_count = batch_decoder_input.shape[1]
             if settings.LAYOUT_STATIC_CACHE:
                 batch_pixel_values = self.pad_to_batch_size(batch_pixel_values, batch_size)
                 batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
+
+            # Move to device after static cache
+            batch_pixel_values = batch_pixel_values.to(self.model.device)
+            batch_decoder_input = batch_decoder_input.to(self.model.device)
 
             decoder_position_ids = torch.ones_like(batch_decoder_input[0, :, 0], dtype=torch.int64,
                                                    device=self.model.device).cumsum(0) - 1
@@ -104,9 +108,6 @@ class LayoutPredictor(BasePredictor):
 
                 token_count = 0
                 all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
-                if settings.LAYOUT_STATIC_CACHE:
-                    encoder_hidden_states = self.pad_to_batch_size(encoder_hidden_states, batch_size)
-
                 while token_count < settings.LAYOUT_MAX_BOXES:
                     is_prefill = token_count == 0
                     return_dict = self.model.decoder(
@@ -119,62 +120,61 @@ class LayoutPredictor(BasePredictor):
                     mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
-                    box_logits = return_dict["bbox_logits"][:current_batch_size, -1, :].detach()
-                    class_logits = return_dict["class_logits"][:current_batch_size, -1, :].detach()
+                    box_logits = return_dict["bbox_logits"][:, -1, :]
+                    class_logits = return_dict["class_logits"][:, -1, :]
+                    class_logits_cpu = class_logits.cpu()
 
                     class_preds = class_logits.argmax(-1)
                     box_preds = box_logits * self.model.config.decoder.bbox_size
 
-                    done = (class_preds == self.model.decoder.config.eos_token_id) | (
-                                class_preds == self.model.decoder.config.pad_token_id)
-
+                    done = (class_preds == self.model.decoder.config.eos_token_id) | (class_preds == self.model.decoder.config.pad_token_id)
                     all_done = all_done | done
-                    mark_step()
-                    if all_done.all():
+
+                    # Move to CPU to avoid XLA issue
+                    all_done_cpu = all_done.cpu()
+                    if all_done_cpu.all():
                         break
 
-                    batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)],
-                                                    dim=-1)
-                    if settings.LAYOUT_STATIC_CACHE:
-                        batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
+                    batch_decoder_input = torch.cat([box_preds.unsqueeze(1), class_preds.unsqueeze(1).unsqueeze(1)], dim=-1)
+                    batch_decoder_input_cpu = batch_decoder_input.cpu()
 
-                    for j, (pred, status) in enumerate(zip(batch_decoder_input, all_done)):
-                        mark_step()
-                        if not status:
-                            mark_step()
-                            preds = pred[0].detach().cpu()
-                            prediction = {
-                                "preds": preds,
-                                "token": preds,
-                                "polygon": prediction_to_polygon(
-                                    preds,
-                                    orig_sizes[j],
-                                    self.model.config.decoder.bbox_size,
-                                    self.model.config.decoder.skew_scaler
-                                ),
-                                "label": preds[6].item() - self.model.decoder.config.special_token_count,
-                                "class_logits": class_logits[j].detach().cpu(),
-                                "orig_size": orig_sizes[j]
-                            }
-                            prediction["text_label"] = ID_TO_LABEL.get(int(prediction["label"]), None)
-                            if all([
-                                prediction["text_label"] in ["PageHeader", "PageFooter"],
-                                prediction["polygon"][0][1] < prediction["orig_size"][1] * .8,
-                                prediction["polygon"][2][1] > prediction["orig_size"][1] * .2,
-                                prediction["polygon"][0][0] < prediction["orig_size"][0] * .8,
-                                prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
-                            ]):
-                                # Ensure page footers only occur at the bottom of the page, headers only at top
-                                prediction["class_logits"][int(preds[6].item())] = 0
-                                new_prediction = prediction["class_logits"].argmax(-1).item()
-                                prediction["label"] = new_prediction - self.model.decoder.config.special_token_count
-                                prediction["token"][6] = new_prediction
-                                batch_decoder_input[j, -1, 6] = new_prediction
+                    for j, (pred, status) in enumerate(zip(batch_decoder_input_cpu, all_done_cpu)):
+                        if j >= current_batch_size or status:
+                            break
 
-                            prediction["top_k_probs"], prediction["top_k_indices"] = torch.topk(
-                                torch.nn.functional.softmax(prediction["class_logits"], dim=-1), k=top_k, dim=-1)
-                            del prediction["class_logits"]
-                            batch_predictions[j].append(prediction)
+                        preds = pred[0]
+                        prediction = {
+                            "preds": preds,
+                            "token": preds,
+                            "polygon": prediction_to_polygon(
+                                preds,
+                                orig_sizes[j],
+                                self.model.config.decoder.bbox_size,
+                                self.model.config.decoder.skew_scaler
+                            ),
+                            "label": preds[6].item() - self.model.decoder.config.special_token_count,
+                            "class_logits": class_logits_cpu[j],
+                            "orig_size": orig_sizes[j]
+                        }
+                        prediction["text_label"] = ID_TO_LABEL.get(int(prediction["label"]), None)
+                        if all([
+                            prediction["text_label"] in ["PageHeader", "PageFooter"],
+                            prediction["polygon"][0][1] < prediction["orig_size"][1] * .8,
+                            prediction["polygon"][2][1] > prediction["orig_size"][1] * .2,
+                            prediction["polygon"][0][0] < prediction["orig_size"][0] * .8,
+                            prediction["polygon"][2][0] > prediction["orig_size"][0] * .2
+                        ]):
+                            # Ensure page footers only occur at the bottom of the page, headers only at top
+                            prediction["class_logits"][int(preds[6].item())] = 0
+                            new_prediction = prediction["class_logits"].argmax(-1).item()
+                            prediction["label"] = new_prediction - self.model.decoder.config.special_token_count
+                            prediction["token"][6] = new_prediction
+                            batch_decoder_input[j, -1, 6] = new_prediction
+
+                        prediction["top_k_probs"], prediction["top_k_indices"] = torch.topk(
+                            torch.nn.functional.softmax(prediction["class_logits"], dim=-1), k=top_k, dim=-1)
+                        del prediction["class_logits"]
+                        batch_predictions[j].append(prediction)
 
                     token_count += inference_token_count
 

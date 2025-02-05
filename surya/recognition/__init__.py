@@ -26,7 +26,7 @@ class RecognitionPredictor(BasePredictor):
         "cpu": 32,
         "mps": 64,
         "cuda": 256,
-        "xla": 256
+        "xla": 128
     }
 
     def __call__(

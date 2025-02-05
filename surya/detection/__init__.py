@@ -24,7 +24,8 @@ class DetectionPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 36
+        "cuda": 36,
+        "xla": 18
     }
 
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
