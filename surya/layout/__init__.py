@@ -181,12 +181,9 @@ class LayoutPredictor(BasePredictor):
                         batch_predictions[j].append(prediction)
 
                     token_count += inference_token_count
-
-                    mark_step()
                     inference_token_count = batch_decoder_input.shape[1]
                     batch_decoder_input = batch_decoder_input.to(torch.long)
 
-            mark_step()
             for j, (pred_dict, orig_size) in enumerate(zip(batch_predictions, orig_sizes)):
                 boxes = []
                 preds = [p for p in pred_dict if

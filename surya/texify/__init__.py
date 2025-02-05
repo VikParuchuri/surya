@@ -97,7 +97,7 @@ class TexifyPredictor(BasePredictor):
                     mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
-                    logits = return_dict["logits"][:current_batch_size]  # Ignore batch padding
+                    logits = return_dict["logits"] # Ignore batch padding
 
                     preds = torch.argmax(logits[:, -1], dim=-1)
                     scores = torch.max(F.softmax(logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
@@ -108,7 +108,6 @@ class TexifyPredictor(BasePredictor):
                     scores = scores.masked_fill(all_done, 0)
                     sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
-                    mark_step()
                     if all_done_cpu[:current_batch_size].all():
                         break
 
@@ -127,7 +126,6 @@ class TexifyPredictor(BasePredictor):
                     decoder_position_ids = torch.ones_like(batch_input_ids[0, :], dtype=torch.int64,
                                                            device=self.model.device).cumsum(0) - 1 + max_position_id
 
-            mark_step()
             batch_confidences = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
             batch_confidences = batch_confidences.cpu()[:current_batch_size]
             batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:] # Cut off initial token

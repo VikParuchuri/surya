@@ -1,11 +1,9 @@
-from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from transformers import PretrainedConfig
-from transformers.utils import ModelOutput
 
 from transformers import PreTrainedModel
 from transformers.activations import ACT2FN

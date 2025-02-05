@@ -68,6 +68,7 @@ class TableRecPredictor(BasePredictor):
                     use_cache=True,
                     prefill=is_prefill
                 )
+                mark_step()
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
 
@@ -95,7 +96,6 @@ class TableRecPredictor(BasePredictor):
                             k_logits = torch.clamp(k_logits, min=1)
                             processed_logits[k] = torch.round(k_logits)
 
-                mark_step()
                 items = {k: processed_logits[k].cpu() for k, _, _ in BOX_PROPERTIES}
                 for j in range(current_batch_size):
                     box_property = {}
@@ -181,6 +181,7 @@ class TableRecPredictor(BasePredictor):
             # We only need to process each image once
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
+                mark_step()
 
             # Inference to get rows and columns
             rowcol_predictions = self.inference_loop(

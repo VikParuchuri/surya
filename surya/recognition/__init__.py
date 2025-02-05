@@ -321,7 +321,6 @@ class RecognitionPredictor(BasePredictor):
             batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:] # Remove the start token
             detected_text = self.processor.tokenizer.batch_decode(batch_predictions)
 
-            mark_step()
             # Convert sequence_scores to list for the current batch
             batch_confidences = sequence_scores.tolist()
 
