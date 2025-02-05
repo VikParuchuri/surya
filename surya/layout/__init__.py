@@ -107,7 +107,8 @@ class LayoutPredictor(BasePredictor):
                 mark_step()
 
                 token_count = 0
-                all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
+                # Set to the actual batch size (accounts for padding if needed)
+                all_done = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device)
                 while token_count < settings.LAYOUT_MAX_BOXES:
                     is_prefill = token_count == 0
                     return_dict = self.model.decoder(
@@ -139,8 +140,11 @@ class LayoutPredictor(BasePredictor):
                     batch_decoder_input_cpu = batch_decoder_input.cpu()
 
                     for j, (pred, status) in enumerate(zip(batch_decoder_input_cpu, all_done_cpu)):
-                        if j >= current_batch_size or status:
+                        if j >= current_batch_size:
                             break
+
+                        if status:
+                            continue
 
                         preds = pred[0]
                         prediction = {
