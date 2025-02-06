@@ -68,7 +68,6 @@ class TableRecPredictor(BasePredictor):
                     use_cache=True,
                     prefill=is_prefill
                 )
-                mark_step()
 
                 decoder_position_ids = decoder_position_ids[-1:] + 1
 
@@ -181,7 +180,6 @@ class TableRecPredictor(BasePredictor):
             # We only need to process each image once
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
-                mark_step()
 
             # Inference to get rows and columns
             rowcol_predictions = self.inference_loop(
@@ -190,6 +188,7 @@ class TableRecPredictor(BasePredictor):
                 current_batch_size,
                 batch_size
             )
+            mark_step()
 
             row_query_items = []
             row_encoder_hidden_states = []
@@ -229,6 +228,7 @@ class TableRecPredictor(BasePredictor):
                 cell_predictions.extend(
                     self.inference_loop(cell_batch_hidden_states, cell_batch_input_ids, cell_batch_size, batch_size)
                 )
+                mark_step()
 
             result = self.decode_batch_predictions(rowcol_predictions, cell_predictions, orig_sizes, idx_map, shaper)
             output_order.extend(result)

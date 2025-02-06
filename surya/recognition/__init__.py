@@ -255,7 +255,6 @@ class RecognitionPredictor(BasePredictor):
 
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
-                mark_step()
 
                 text_encoder_input_ids = torch.arange(
                     self.model.text_encoder.config.query_token_count,
@@ -271,7 +270,6 @@ class RecognitionPredictor(BasePredictor):
                     encoder_attention_mask=None,
                     use_cache=False
                 ).hidden_states
-                mark_step()
 
                 while token_count < settings.RECOGNITION_MAX_TOKENS - 1:
                     is_prefill = token_count == 0
@@ -283,7 +281,6 @@ class RecognitionPredictor(BasePredictor):
                         use_cache=True,
                         prefill=is_prefill
                     )
-                    mark_step()
 
                     decoder_position_ids = decoder_position_ids[-1:] + 1
                     logits = return_dict["logits"]  # Ignore batch padding
@@ -314,6 +311,7 @@ class RecognitionPredictor(BasePredictor):
                     max_position_id = torch.max(decoder_position_ids).item()
                     decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64,
                                                            device=self.model.device).cumsum(0) - 1 + max_position_id
+                    mark_step()
 
             sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
 

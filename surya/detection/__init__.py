@@ -104,13 +104,13 @@ class DetectionPredictor(BasePredictor):
 
             with settings.INFERENCE_MODE():
                 pred = self.model(pixel_values=batch.to(self.model.device)) # Moving the to device here fixes issues with xla recompilation
-                mark_step()
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]
             current_shape = list(logits.shape[2:])
             if current_shape != correct_shape:
                 logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
+            mark_step()
 
             logits = logits.to(torch.float32).cpu().detach().numpy()
             preds = []

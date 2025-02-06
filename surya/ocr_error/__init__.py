@@ -54,9 +54,9 @@ class OCRErrorPredictor(BasePredictor):
             with settings.INFERENCE_MODE():
                 pred = self.model(batch_input_ids, attention_mask=batch_attention_mask)
 
-                mark_step()
                 logits = pred.logits.argmax(dim=1).cpu().tolist()[:current_batch_size]
                 predictions.extend(logits)
+            mark_step()
 
         return OCRErrorDetectionResult(
             texts=texts,
