@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_detector0@885c16e02c4d89113f904991ed88c48c461d0724"
+    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_detector0@5b7f57b471c54026adb9726ab527c9fbbedac1b7"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
