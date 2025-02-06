@@ -74,7 +74,7 @@ class TableRecPredictor(BasePredictor):
                 processed_logits = {}
                 for k, _, mode in BOX_PROPERTIES:
                     k_logits = return_dict["box_property_logits"][k][:, -1, :]  # Get all batch logits at once
-                    
+
                     if mode == "classification":
                         # Process all classification logits in one operation
                         items = torch.argmax(k_logits, dim=-1)
@@ -104,12 +104,11 @@ class TableRecPredictor(BasePredictor):
                                 box_property[k] = int(items[k][j].item())
                     box_properties.append(box_property)
 
-                all_done = all_done | done
+                all_done = all_done | done.cpu()
 
                 mark_step()
                 if all_done.all():
                     break
-
 
                 batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long).to(self.model.device)
                 batch_input_ids = batch_input_ids.unsqueeze(1)  # Add sequence length dimension
@@ -222,7 +221,6 @@ class TableRecPredictor(BasePredictor):
 
         return output_order
 
-
     def decode_batch_predictions(self, rowcol_predictions, cell_predictions, orig_sizes, idx_map, shaper):
         results = []
         for j, (img_predictions, orig_size) in enumerate(zip(rowcol_predictions, orig_sizes)):
@@ -309,9 +307,9 @@ class TableRecPredictor(BasePredictor):
                                     used_spanning_cells.add(zz)
                                     spanning_cell.col_id = l
                                     cells.append(spanning_cell)
-                                    skip_columns = spanning_cell.colspan - 1 # Skip columns that are part of the spanning cell
+                                    skip_columns = spanning_cell.colspan - 1  # Skip columns that are part of the spanning cell
                             else:
-                                used_spanning_cells.add(zz) # Skip this spanning cell
+                                used_spanning_cells.add(zz)  # Skip this spanning cell
 
                     if not cell_added:
                         cells.append(
