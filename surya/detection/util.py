@@ -27,10 +27,10 @@ def split_image(img, height):
             if bottom > img_height:
                 bottom = img_height
             cropped = img.crop((0, top, img.size[0], bottom))
-            height = bottom - top
-            if height < height:
+            chunk_height = bottom - top
+            if chunk_height < height:
                 cropped = ImageOps.pad(cropped, (img.size[0], height), color=255, centering=(0, 0))
             splits.append(cropped)
-            split_heights.append(height)
+            split_heights.append(chunk_height)
         return splits, split_heights
     return [img.copy()], [img_height]
