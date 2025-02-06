@@ -15,7 +15,7 @@ from surya.detection.parallel import FakeExecutor
 from surya.detection.util import get_total_splits, split_image
 from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
-from surya.detection.heatmap import parallel_get_boxes, parallel_get_lines
+from surya.detection.heatmap import parallel_get_boxes, parallel_get_inline_boxes
 
 class DetectionPredictor(BasePredictor):
     model_loader_cls = DetectionModelLoader
@@ -132,16 +132,25 @@ class DetectionPredictor(BasePredictor):
 
 class InlineDetectionPredictor(DetectionPredictor):
     model_loader_cls = InlineDetectionModelLoader
-    def __call__(self, images, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+    
+    def batch_generator(self, iterable, batch_size=None):
+        if batch_size is None:
+            batch_size = self.get_batch_size()
+
+        for i in range(0, len(iterable), batch_size):
+            yield iterable[i:i+batch_size]
+
+    def __call__(self, images, text_boxes, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
+        text_box_generator = self.batch_generator(text_boxes)
 
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
         parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
         executor = ThreadPoolExecutor if parallelize else FakeExecutor
         with executor(max_workers=max_workers) as e:
-            for preds, orig_sizes in detection_generator:
-                for pred, orig_size in zip(preds, orig_sizes):
-                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
+            for (preds, orig_sizes), batch_text_boxes in zip(detection_generator, text_box_generator):
+                for pred, orig_size, text_boxes in zip(preds, orig_sizes, batch_text_boxes):
+                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes, include_maps))
 
         return [future.result() for future in postprocessing_futures]
