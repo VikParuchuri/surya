@@ -79,6 +79,7 @@ class TexifyPredictor(BasePredictor):
             sequence_scores = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device).unsqueeze(1)
             all_done = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device)
             batch_predictions = torch.zeros(batch_pixel_values.shape[0], dtype=torch.int64, device=self.model.device).unsqueeze(1)
+            device_pad_token = torch.tensor(self.processor.tokenizer.pad_token_id, device=self.model.device)
 
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
@@ -112,17 +113,13 @@ class TexifyPredictor(BasePredictor):
                     batch_input_ids = preds.unsqueeze(1)
 
                     # If this batch item is done, input a pad token
-                    batch_input_ids = torch.where(all_done.unsqueeze(1), torch.tensor(self.processor.tokenizer.pad_token_id, device=self.model.device), batch_input_ids)
+                    batch_input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, batch_input_ids)
 
                     batch_predictions = torch.cat([batch_predictions, batch_input_ids], dim=1)
 
                     token_count += inference_token_count
 
                     inference_token_count = batch_input_ids.shape[-1]
-
-                    max_position_id = torch.max(decoder_position_ids).item()
-                    decoder_position_ids = torch.ones_like(batch_input_ids[0, :], dtype=torch.int64,
-                                                           device=self.model.device).cumsum(0) - 1 + max_position_id
                     mark_step()
 
             batch_confidences = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)

@@ -112,7 +112,7 @@ class DetectionPredictor(BasePredictor):
                 logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
             mark_step()
 
-            logits = logits.to(torch.float32).cpu().detach().numpy()
+            logits = logits.to(torch.float32).cpu().numpy()
             preds = []
             for i, (idx, height) in enumerate(zip(split_index, split_heights)):
                 # If our current prediction length is below the image idx, that means we have a new image

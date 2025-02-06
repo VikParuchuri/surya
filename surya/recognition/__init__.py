@@ -252,6 +252,7 @@ class RecognitionPredictor(BasePredictor):
             sequence_scores = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device).unsqueeze(1)
             all_done = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device)
             batch_predictions = torch.zeros(batch_pixel_values.shape[0], dtype=torch.int64, device=self.model.device).unsqueeze(1)
+            device_pad_token = torch.tensor(self.processor.tokenizer.pad_token_id, device=self.model.device)
 
             with settings.INFERENCE_MODE():
                 encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
@@ -289,28 +290,25 @@ class RecognitionPredictor(BasePredictor):
                     scores = torch.max(F.softmax(logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
                     done = (preds == self.processor.tokenizer.eos_id) | (preds == self.processor.tokenizer.pad_id)
                     all_done = all_done | done
+                    all_done_cpu = all_done.cpu()
 
                     # Confidence score for the current token
                     scores = scores.masked_fill(all_done, 0)
                     sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
                     # Account for possible padding
-                    if all_done.cpu()[:current_batch_size].all():
+                    if all_done_cpu[:current_batch_size].all():
                         break
 
                     batch_decoder_input = preds.unsqueeze(1)
 
                     # If this batch item is done, input a pad token
-                    batch_decoder_input = torch.where(all_done.unsqueeze(1), torch.tensor(self.processor.tokenizer.pad_id, device=self.model.device), batch_decoder_input)
+                    batch_decoder_input = torch.where(all_done.unsqueeze(1), device_pad_token, batch_decoder_input)
 
                     batch_predictions = torch.cat([batch_predictions, batch_decoder_input], dim=1)
                     token_count += inference_token_count
 
                     inference_token_count = batch_decoder_input.shape[-1]
-
-                    max_position_id = torch.max(decoder_position_ids).item()
-                    decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64,
-                                                           device=self.model.device).cumsum(0) - 1 + max_position_id
                     mark_step()
 
             sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
