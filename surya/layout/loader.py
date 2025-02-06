@@ -41,7 +41,7 @@ class LayoutModelLoader(ModelLoader):
         model = model.to(device)
         model = model.eval()
 
-        if settings.LAYOUT_STATIC_CACHE:
+        if settings.COMPILE_ALL or settings.COMPILE_LAYOUT:
             torch.set_float32_matmul_precision('high')
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False

@@ -1,11 +1,9 @@
-from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from transformers import PretrainedConfig
-from transformers.utils import ModelOutput
 
 from transformers import PreTrainedModel
 from transformers.activations import ACT2FN
@@ -41,10 +39,11 @@ class SuryaADETRDecoderRMSNorm(nn.Module):
         # See https://github.com/huggingface/transformers/pull/29402
         output = output * (1.0 + self.weight.float())
         # Clamp to float16 range
-        mark_step()
         f16_info = torch.finfo(x.dtype)
         output = output.clamp(min=f16_info.min, max=f16_info.max)
-        output[output.isnan()] = 0.0
+        output = torch.where(torch.isnan(output),
+                             torch.tensor(0.0, device=output.device),
+                             output)
         return output.type_as(x)
 
     def extra_repr(self):
@@ -260,18 +259,13 @@ class SuryaADETRDecoderSdpaAttention(nn.Module):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        mark_step()
         causal_mask = attention_mask
         if attention_mask is not None:
             # Mask is batch, head, seq_len, kv_len
             causal_mask = causal_mask[:, :, :, :key_states.shape[-2]]
-            current_cache_position = cache_position[-1] if cache_position is not None else torch.tensor(0, dtype=torch.long, device=causal_mask.device)
-            if current_cache_position and self.static_cache:
-                # Mask out future cache positions
-                position_mask = torch.ones_like(causal_mask, dtype=torch.bool, device=causal_mask.device)
-                mark_step()
-                position_mask[:, :, :, :current_cache_position + 1] = False
-                causal_mask = torch.where(position_mask, torch.finfo(causal_mask.dtype).min, causal_mask)
+            if cache_position is not None and self.static_cache:
+                current_pos = cache_position[-1]
+                causal_mask[:, :, :, current_pos + 1:] = torch.finfo(causal_mask.dtype).min
 
         mark_step()
         attn_output = torch.nn.functional.scaled_dot_product_attention(

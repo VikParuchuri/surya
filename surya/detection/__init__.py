@@ -9,6 +9,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
+from surya.common.util import mark_step
 
 from surya.detection.loader import DetectionModelLoader, InlineDetectionModelLoader
 from surya.detection.parallel import FakeExecutor
@@ -23,7 +24,8 @@ class DetectionPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 36
+        "cuda": 36,
+        "xla": 18
     }
 
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
@@ -96,20 +98,21 @@ class DetectionPredictor(BasePredictor):
 
             image_splits = [self.prepare_image(image) for image in image_splits]
             # Batch images in dim 0
-            batch = torch.stack(image_splits, dim=0).to(self.model.dtype).to(self.model.device)
+            batch = torch.stack(image_splits, dim=0).to(self.model.dtype)
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
             with settings.INFERENCE_MODE():
-                pred = self.model(pixel_values=batch)
+                pred = self.model(pixel_values=batch.to(self.model.device)) # Moving the to device here fixes issues with xla recompilation
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]
             current_shape = list(logits.shape[2:])
             if current_shape != correct_shape:
                 logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
+            mark_step()
 
-            logits = logits.to(torch.float32).cpu().detach().numpy()
+            logits = logits.to(torch.float32).cpu().numpy()
             preds = []
             for i, (idx, height) in enumerate(zip(split_index, split_heights)):
                 # If our current prediction length is below the image idx, that means we have a new image
