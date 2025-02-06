@@ -58,3 +58,11 @@ def test_image():
               font_size=24)
     return image
 
+@pytest.fixture()
+def test_image_tall():
+    image = Image.new("RGB", (4096, 4096), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((10, 10), "Hello World", fill="black", font_size=72)
+    draw.text((4000, 4000), "This is a sentence of text.\n\nNow it is a paragraph.\n\nA three-line one.", fill="black",  font_size=24)
+    return image
+
