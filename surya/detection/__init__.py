@@ -143,7 +143,7 @@ class InlineDetectionPredictor(DetectionPredictor):
         for i in range(0, len(iterable), batch_size):
             yield iterable[i:i+batch_size]
 
-    def __call__(self, images, text_boxes, batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+    def __call__(self, images, text_boxes: List[List[List[float]]], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
         text_box_generator = self.batch_generator(text_boxes)
 

@@ -45,17 +45,17 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_detector0@885c16e02c4d89113f904991ed88c48c461d0724"
+    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_detector0@5b7f57b471c54026adb9726ab527c9fbbedac1b7"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
-    DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
+    DETECTOR_BLANK_THRESHOLD: float = 0.425 # Threshold for blank space (below this is considered blank)
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
     COMPILE_DETECTOR: bool = False
 
     # Inline math detection
-    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@84d301aca4271042cfd523da34497bb3ef2dd400"
+    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@75aafc7aa3d494ece6496d28038c91f0d2518a43"
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
