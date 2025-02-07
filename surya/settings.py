@@ -45,11 +45,11 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_detector0@5b7f57b471c54026adb9726ab527c9fbbedac1b7"
+    DETECTOR_MODEL_CHECKPOINT: str = "vikp/surya_det3@467ee9ec33e6e6c5f73e57dbc1415b14032f5b95"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
-    DETECTOR_BLANK_THRESHOLD: float = 0.425 # Threshold for blank space (below this is considered blank)
+    DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
     COMPILE_DETECTOR: bool = False

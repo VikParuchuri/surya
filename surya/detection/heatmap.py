@@ -143,7 +143,7 @@ def parallel_get_lines(preds, orig_sizes, include_maps=False):
     return result
 
 def parallel_get_boxes(preds, orig_sizes, include_maps=False):
-    heatmap, = preds
+    heatmap, _ = preds
     heat_img, aff_img = None, None
     if include_maps:
         heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
