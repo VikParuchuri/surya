@@ -14,6 +14,7 @@ class BasePredictor:
         "mps": 1,
         "cuda": 1
     }
+    disable_tqdm: bool = settings.DISABLE_TQDM
 
     def __init__(self, checkpoint: Optional[str] = None, device: torch.device | str | None = settings.TORCH_DEVICE_MODEL, dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE):
         self.model = None

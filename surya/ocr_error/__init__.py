@@ -40,7 +40,7 @@ class OCRErrorPredictor(BasePredictor):
         num_batches = math.ceil(len(texts) / batch_size)
         texts_processed = self.processor(texts, padding='longest', truncation=True, return_tensors='pt')
         predictions = []
-        for batch_idx in tqdm(range(num_batches)):
+        for batch_idx in tqdm(range(num_batches), desc="Running OCR Error Detection", disable=self.disable_tqdm):
             start_idx, end_idx = batch_idx * batch_size, (batch_idx + 1) * batch_size
             batch_input_ids = texts_processed.input_ids[start_idx:end_idx].to(self.model.device)
             batch_attention_mask = texts_processed.attention_mask[start_idx:end_idx].to(self.model.device)

@@ -153,7 +153,7 @@ class TableRecPredictor(BasePredictor):
             })
 
         output_order = []
-        for i in tqdm(range(0, len(images), batch_size), desc="Recognizing tables"):
+        for i in tqdm(range(0, len(images), batch_size), desc="Recognizing tables", disable=self.disable_tqdm):
             batch_query_items = query_items[i:i + batch_size]
 
             batch_images = images[i:i + batch_size]

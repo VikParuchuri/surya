@@ -67,7 +67,7 @@ class LayoutPredictor(BasePredictor):
             batches.append((start_idx, len(img_counts)))
 
         results = []
-        for (start_idx, end_idx) in tqdm(batches, desc="Recognizing layout"):
+        for (start_idx, end_idx) in tqdm(batches, desc="Recognizing layout", disable=self.disable_tqdm):
             batch_results = []
             batch_images = images[start_idx:end_idx]
             batch_images = [image.convert("RGB") for image in batch_images]  # also copies the image

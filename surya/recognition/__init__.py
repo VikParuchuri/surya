@@ -225,7 +225,7 @@ class RecognitionPredictor(BasePredictor):
 
         output_text = []
         confidences = []
-        for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text"):
+        for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text", disable=self.disable_tqdm):
             batch_images = images[i:i + batch_size]
             batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
             current_batch_size = len(batch_images)

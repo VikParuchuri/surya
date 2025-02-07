@@ -64,7 +64,7 @@ class TexifyPredictor(BasePredictor):
 
         output_text = []
         confidences = []
-        for i in tqdm(range(0, len(images), batch_size), desc="Texify inference"):
+        for i in tqdm(range(0, len(images), batch_size), desc="Texify inference", disable=self.disable_tqdm):
             batch = images[i:i+batch_size]
             current_batch_size = len(batch)
 

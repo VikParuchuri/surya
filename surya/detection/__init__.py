@@ -83,7 +83,7 @@ class DetectionPredictor(BasePredictor):
         if len(current_batch) > 0:
             batches.append(current_batch)
 
-        for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
+        for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes", disable=self.disable_tqdm):
             batch_image_idxs = batches[batch_idx]
             batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
 
