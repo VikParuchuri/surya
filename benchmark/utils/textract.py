@@ -6,9 +6,7 @@ import traceback
 from surya.input.processing import slice_bboxes_from_image
 from surya.recognition import RecognitionPredictor
 
-from textractor import Textractor
-
-def textract_ocr(extractor:Textractor, img):
+def textract_ocr(extractor, img):
     try:
         document = extractor.detect_document_text(file_source=img)
         return [line.text for line in document.lines]
@@ -17,6 +15,8 @@ def textract_ocr(extractor:Textractor, img):
         return [None]
 
 def textract_ocr_parallel(imgs, cpus=None):
+    from textractor import Textractor # Optional dependency
+
     extractor = Textractor(profile_name='default')
     parallel_cores = min(len(imgs), RecognitionPredictor().get_batch_size())
     if not cpus:
