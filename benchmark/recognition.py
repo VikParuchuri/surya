@@ -10,6 +10,7 @@ from surya.recognition import RecognitionPredictor
 from surya.settings import settings
 from surya.recognition.languages import CODE_TO_LANGUAGE
 from benchmark.utils.tesseract import tesseract_ocr_parallel, surya_lang_to_tesseract, TESS_CODE_TO_LANGUAGE
+from benchmark.utils.textract import textract_ocr_parallel
 import os
 import datasets
 import json
@@ -22,22 +23,24 @@ KEY_LANGUAGES = ["Chinese", "Spanish", "English", "Arabic", "Hindi", "Bengali", 
 @click.option("--results_dir", type=str, help="Path to JSON file with OCR results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
 @click.option("--max_rows", type=int, help="Maximum number of pdf pages to OCR.", default=None)
 @click.option("--debug", is_flag=True, help="Enable debug mode.", default=False)
-@click.option("--tesseract", is_flag=True, help="Run tesseract instead of surya.", default=False)
+@click.option("--tesseract", is_flag=True, help="Run benchmarks on tesseract.", default=False)
+@click.option("--textract", is_flag=True, help="Run benchmarks on textract.", default=False)
 @click.option("--langs", type=str, help="Specify certain languages to benchmark.", default=None)
 @click.option("--tess_cpus", type=int, help="Number of CPUs to use for tesseract.", default=28)
+@click.option("--textract_cpus", type=int, help="Number of CPUs to use for textract.", default=28)
 @click.option("--specify_language", is_flag=True, help="Pass language codes into the model.", default=False)
-def main(results_dir: str, max_rows: int, debug: bool, tesseract: bool, langs: str, tess_cpus: int, specify_language: bool):
+def main(results_dir: str, max_rows: int, debug: bool, tesseract: bool, textract: bool, langs: str, tess_cpus: int, textract_cpus:int, specify_language: bool):
     rec_predictor = RecognitionPredictor()
 
     split = "train"
-    if max_rows:
-        split = f"train[:{max_rows}]"
-
     dataset = datasets.load_dataset(settings.RECOGNITION_BENCH_DATASET_NAME, split=split)
 
     if langs:
         langs = langs.split(",")
         dataset = dataset.filter(lambda x: x["language"] in langs, num_proc=4)
+    
+    if max_rows and max_rows<len(dataset):
+        dataset = dataset.shuffle().select(range(max_rows))
 
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
@@ -121,6 +124,28 @@ def main(results_dir: str, max_rows: int, debug: bool, tesseract: bool, langs: s
         with open(os.path.join(result_path, "tesseract_scores.json"), "w+") as f:
             json.dump(tess_scores, f)
 
+    if textract:
+        start = time.time()
+        textract_predictions = textract_ocr_parallel(images, cpus=textract_cpus)
+        textract_time = time.time()-start
+
+        textract_scores = defaultdict(list)
+        for idx, (pred, ref_text, lang) in enumerate(zip(textract_predictions, line_text, lang_list)):
+            image_score = overlap_score(pred, ref_text)
+            for l in lang:
+                textract_scores[CODE_TO_LANGUAGE[l]].append(image_score)
+
+        flat_textract_scores = [s for l in textract_scores for s in textract_scores[l]]
+        benchmark_stats["textract"] = {
+            "avg_score": sum(flat_textract_scores) / len(flat_textract_scores),
+            "lang_scores": {l: sum(scores) / len(scores) for l, scores in textract_scores.items()},
+            "time_per_img": textract_time / len(images)
+        }
+        print(len(flat_textract_scores))
+
+        with open(os.path.join(result_path, "textract_scores.json"), "w+") as f:
+            json.dump(textract_scores, f)
+
     with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(benchmark_stats, f)
 
@@ -132,6 +157,10 @@ def main(results_dir: str, max_rows: int, debug: bool, tesseract: bool, langs: s
     if tesseract:
         table_data.append(
             ["tesseract", benchmark_stats["tesseract"]["time_per_img"], benchmark_stats["tesseract"]["avg_score"]] + [benchmark_stats["tesseract"]["lang_scores"].get(l, 0) for l in key_languages]
+        )
+    if textract:
+        table_data.append(
+            ["textract", benchmark_stats["textract"]["time_per_img"], benchmark_stats["textract"]["avg_score"]] + [benchmark_stats["textract"]["lang_scores"][l] for l in key_languages],
         )
 
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
