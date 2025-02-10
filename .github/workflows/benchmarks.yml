@@ -25,7 +25,7 @@ jobs:
         run: |
           poetry run python benchmark/detection.py --max_rows 2
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/det_bench/results.json --bench_type detection
-      - name: Run inline detection benchmarj
+      - name: Run inline detection benchmark
         run: |
           poetry run python benchmark/inline_detection.py --max_rows 5
           poetry run python benchmark/utils/verify_benchmark_scores.py results/benchmark/inline_math_bench/results.json --bench_type inline_detection

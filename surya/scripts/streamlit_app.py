@@ -55,15 +55,20 @@ def ocr_errors(pdf_file, page_count, sample_len=512, max_samples=10, max_pages=1
     return label, results.labels
 
 
+def inline_detection(img) -> (Image.Image, TextDetectionResult):
+    text_pred = predictors["detection"]([img])[0]
+    text_boxes = [p.bbox for p in text_pred.bboxes]
+
+    inline_pred = predictors["inline_detection"]([img], [text_boxes], include_maps=True)[0]
+    inline_polygons = [p.polygon for p in inline_pred.bboxes]
+    det_img = draw_polys_on_image(inline_polygons, img.copy(), color='blue')
+    return det_img, text_pred, inline_pred
+
+
 def text_detection(img) -> (Image.Image, TextDetectionResult):
     text_pred = predictors["detection"]([img])[0]
     text_polygons = [p.polygon for p in text_pred.bboxes]
-    text_boxes = [p.bbox for p in text_pred.bboxes]
     det_img = draw_polys_on_image(text_polygons, img.copy())
-    
-    inline_pred = predictors["inline_detection"]([img], [text_boxes], include_maps=True)[0]
-    inline_polygons = [p.polygon for p in inline_pred.bboxes]
-    det_img = draw_polys_on_image(inline_polygons, det_img, color='blue')
     return det_img, text_pred, inline_pred
 
 
@@ -193,6 +198,7 @@ else:
     page_number = None
 
 run_text_det = st.sidebar.button("Run Text Detection")
+run_inline_det = st.sidebar.button("Run Inline Math Detection")
 run_text_rec = st.sidebar.button("Run OCR")
 run_layout_det = st.sidebar.button("Run Layout Analysis")
 run_table_rec = st.sidebar.button("Run Table Rec")
@@ -208,6 +214,13 @@ if run_text_det:
     det_img, text_pred, inline_pred = text_detection(pil_image)
     with col1:
         st.image(det_img, caption="Detected Text", use_container_width=True)
+        st.json(text_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
+        st.json(inline_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
+
+if run_inline_det:
+    det_img, text_pred, inline_pred = inline_detection(pil_image)
+    with col1:
+        st.image(det_img, caption="Detected Inline Math", use_container_width=True)
         st.json(text_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
         st.json(inline_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
 

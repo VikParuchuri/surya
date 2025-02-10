@@ -57,8 +57,11 @@ class Settings(BaseSettings):
 
     # Inline math detection
     INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@75aafc7aa3d494ece6496d28038c91f0d2518a43"
-    INLINE_MATH_THRESHOLD: float = 0.9 #Threshold for inline math detection (above this is considered inline-math)
+    INLINE_MATH_THRESHOLD: float = 0.8 #Threshold for inline math detection (above this is considered inline-math)
+    INLINE_MATH_BLANK_THRESHOLD: float = 0.5 # Threshold for blank space (below this is considered blank)
     INLINE_MATH_BENCH_DATASET_NAME: str = "datalab-to/inline_detection_bench"
+    INLINE_MATH_TEXT_BLANK_PX: int = 2 # How many pixels to blank out at the botton of each text line
+    INLINE_MATH_MIN_AREA: int = 100 # Minimum area for inline math detection
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
