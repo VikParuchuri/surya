@@ -166,8 +166,22 @@ def parallel_get_inline_boxes(preds, orig_sizes, text_boxes, include_maps=False)
     for text_box in text_boxes:
         text_box_reshaped = rescale_bbox(text_box, orig_sizes, heatmap_size)
         x1, y1, x2, y2 = text_box_reshaped
-        heatmap[y2:y2+3, x1:x2] = 0
-    bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes, text_threshold=settings.INLINE_MATH_THRESHOLD)
+
+        # Blank out above and below text boxes, so we avoid merging inline math blocks together
+        heatmap[y2:y2+settings.INLINE_MATH_TEXT_BLANK_PX, x1:x2] = 0
+        heatmap[y1-settings.INLINE_MATH_TEXT_BLANK_PX:y1, x1:x2] = 0
+        heatmap[y1:y2, x2:x2+settings.INLINE_MATH_TEXT_BLANK_PX] = 0
+        heatmap[y1:y2, x1-settings.INLINE_MATH_TEXT_BLANK_PX:x1] = 0
+
+    bboxes = get_and_clean_boxes(
+        heatmap,
+        heatmap_size,
+        orig_sizes,
+        text_threshold=settings.INLINE_MATH_THRESHOLD,
+        low_text=settings.INLINE_MATH_BLANK_THRESHOLD
+    )
+
+    bboxes = [bbox for bbox in bboxes if bbox.area > settings.INLINE_MATH_MIN_AREA]
 
     heat_img, aff_img = None, None
     if include_maps:

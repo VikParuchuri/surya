@@ -125,7 +125,7 @@ class TexifyPredictor(BasePredictor):
             batch_confidences = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
             batch_confidences = batch_confidences.cpu()[:current_batch_size]
             batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:] # Cut off initial token
-            detected_text = self.processor.tokenizer.batch_decode(batch_predictions)
+            detected_text = self.processor.tokenizer.batch_decode(batch_predictions, skip_special_tokens=True)
 
             batch_confidences = batch_confidences.tolist()
 
