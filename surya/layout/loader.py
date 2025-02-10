@@ -41,14 +41,15 @@ class LayoutModelLoader(ModelLoader):
         model = model.to(device)
         model = model.eval()
 
-        if settings.LAYOUT_STATIC_CACHE:
+        if settings.COMPILE_ALL or settings.COMPILE_LAYOUT:
             torch.set_float32_matmul_precision('high')
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
 
             print(f"Compiling layout model {self.checkpoint} on device {device} with dtype {dtype}")
-            model.encoder = torch.compile(model.encoder)
-            model.decoder = torch.compile(model.decoder)
+            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
+            model.encoder = torch.compile(model.encoder, **compile_args)
+            model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(f"Loaded layout model {self.checkpoint} on device {device} with dtype {dtype}")
         return model

@@ -1,10 +1,10 @@
-from typing import Dict, Optional
+import os
+from typing import Callable, Dict, Optional
 
+import torch
 from dotenv import find_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
-import torch
-import os
 
 
 class Settings(BaseSettings):
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ENABLE_EFFICIENT_ATTENTION: bool = True # Usually keep True, but if you get CUDA errors, setting to False can help
     ENABLE_CUDNN_ATTENTION: bool = False # Causes issues on many systems when set to True, but can improve performance on certain GPUs
     FLATTEN_PDF: bool = True # Flatten PDFs by merging form fields before processing
+    DISABLE_TQDM: bool = False # Disable tqdm progress bars
 
     # Paths
     DATA_DIR: str = "data"
@@ -34,6 +35,13 @@ class Settings(BaseSettings):
         if torch.backends.mps.is_available():
             return "mps"
 
+        try:
+            import torch_xla
+            if len(torch_xla.devices()) > 0:
+                return "xla"
+        except:
+            pass
+
         return "cpu"
 
     # Text detection
@@ -46,6 +54,11 @@ class Settings(BaseSettings):
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
     COMPILE_DETECTOR: bool = False
+
+    # Inline math detection
+    INLINE_MATH_MODEL_CHECKPOINT: str = "datalab-to/inline_math_det0@75aafc7aa3d494ece6496d28038c91f0d2518a43"
+    INLINE_MATH_THRESHOLD: float = 0.9 #Threshold for inline math detection (above this is considered inline-math)
+    INLINE_MATH_BENCH_DATASET_NAME: str = "datalab-to/inline_detection_bench"
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2@6611509b2c3a32c141703ce19adc899d9d0abf41"
@@ -102,32 +115,41 @@ class Settings(BaseSettings):
 
     @computed_field
     def DETECTOR_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_DETECTOR
+        return self.COMPILE_ALL or self.COMPILE_DETECTOR or self.TORCH_DEVICE_MODEL == "xla" # We need to static cache and pad to batch size for XLA, since it will recompile otherwise
 
     @computed_field
     def RECOGNITION_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_RECOGNITION
+        return self.COMPILE_ALL or self.COMPILE_RECOGNITION or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def LAYOUT_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_LAYOUT
+        return self.COMPILE_ALL or self.COMPILE_LAYOUT or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def TABLE_REC_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_TABLE_REC
+        return self.COMPILE_ALL or self.COMPILE_TABLE_REC or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_OCR_ERROR
+        return self.COMPILE_ALL or self.COMPILE_OCR_ERROR or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def TEXIFY_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_TEXIFY
+        return self.COMPILE_ALL or self.COMPILE_TEXIFY or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
-    @property
     def MODEL_DTYPE(self) -> torch.dtype:
-        return torch.float32 if self.TORCH_DEVICE_MODEL == "cpu" else torch.float16
+        if self.TORCH_DEVICE_MODEL == "cpu":
+            return torch.float32
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.bfloat16
+        return torch.float16
+
+    @computed_field
+    def INFERENCE_MODE(self) -> Callable:
+        if self.TORCH_DEVICE_MODEL == "xla":
+            return torch.no_grad
+        return torch.inference_mode
 
     class Config:
         env_file = find_dotenv("local.env")

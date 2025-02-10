@@ -9,15 +9,14 @@ from PIL import Image
 from tqdm import tqdm
 
 from surya.common.predictor import BasePredictor
+from surya.common.util import mark_step
 
-from surya.detection.loader import DetectionModelLoader
+from surya.detection.loader import DetectionModelLoader, InlineDetectionModelLoader
 from surya.detection.parallel import FakeExecutor
-from surya.detection.processor import SegformerImageProcessor
 from surya.detection.util import get_total_splits, split_image
 from surya.detection.schema import TextDetectionResult
 from surya.settings import settings
-from surya.detection.heatmap import parallel_get_lines
-
+from surya.detection.heatmap import parallel_get_boxes, parallel_get_inline_boxes
 
 class DetectionPredictor(BasePredictor):
     model_loader_cls = DetectionModelLoader
@@ -25,7 +24,8 @@ class DetectionPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 36
+        "cuda": 36,
+        "xla": 18
     }
 
     def __call__(self, images: List[Image.Image], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
@@ -38,7 +38,7 @@ class DetectionPredictor(BasePredictor):
         with executor(max_workers=max_workers) as e:
             for preds, orig_sizes in detection_generator:
                 for pred, orig_size in zip(preds, orig_sizes):
-                    postprocessing_futures.append(e.submit(parallel_get_lines, pred, orig_size, include_maps))
+                    postprocessing_futures.append(e.submit(parallel_get_boxes, pred, orig_size, include_maps))
 
         return [future.result() for future in postprocessing_futures]
 
@@ -83,7 +83,7 @@ class DetectionPredictor(BasePredictor):
         if len(current_batch) > 0:
             batches.append(current_batch)
 
-        for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
+        for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes", disable=self.disable_tqdm):
             batch_image_idxs = batches[batch_idx]
             batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
 
@@ -98,20 +98,21 @@ class DetectionPredictor(BasePredictor):
 
             image_splits = [self.prepare_image(image) for image in image_splits]
             # Batch images in dim 0
-            batch = torch.stack(image_splits, dim=0).to(self.model.dtype).to(self.model.device)
+            batch = torch.stack(image_splits, dim=0).to(self.model.dtype)
             if static_cache:
                 batch = self.pad_to_batch_size(batch, batch_size)
 
-            with torch.inference_mode():
-                pred = self.model(pixel_values=batch)
+            with settings.INFERENCE_MODE():
+                pred = self.model(pixel_values=batch.to(self.model.device)) # Moving the to device here fixes issues with xla recompilation
 
             logits = pred.logits
             correct_shape = [self.processor.size["height"], self.processor.size["width"]]
             current_shape = list(logits.shape[2:])
             if current_shape != correct_shape:
                 logits = F.interpolate(logits, size=correct_shape, mode='bilinear', align_corners=False)
+            mark_step()
 
-            logits = logits.cpu().detach().numpy().astype(np.float32)
+            logits = logits.to(torch.float32).cpu().numpy()
             preds = []
             for i, (idx, height) in enumerate(zip(split_index, split_heights)):
                 # If our current prediction length is below the image idx, that means we have a new image
@@ -131,3 +132,28 @@ class DetectionPredictor(BasePredictor):
                     preds[idx] = heatmaps
 
             yield preds, [orig_sizes[j] for j in batch_image_idxs]
+
+class InlineDetectionPredictor(DetectionPredictor):
+    model_loader_cls = InlineDetectionModelLoader
+    
+    def batch_generator(self, iterable, batch_size=None):
+        if batch_size is None:
+            batch_size = self.get_batch_size()
+
+        for i in range(0, len(iterable), batch_size):
+            yield iterable[i:i+batch_size]
+
+    def __call__(self, images, text_boxes: List[List[List[float]]], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
+        detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
+        text_box_generator = self.batch_generator(text_boxes)
+
+        postprocessing_futures = []
+        max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
+        parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
+        executor = ThreadPoolExecutor if parallelize else FakeExecutor
+        with executor(max_workers=max_workers) as e:
+            for (preds, orig_sizes), batch_text_boxes in zip(detection_generator, text_box_generator):
+                for pred, orig_size, text_boxes in zip(preds, orig_sizes, batch_text_boxes):
+                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes, include_maps))
+
+        return [future.result() for future in postprocessing_futures]

@@ -80,7 +80,7 @@ def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs)
         out_pred["table_idx"] = table_idx
         table_predictions[orig_name].append(out_pred)
 
-        if loader.images:
+        if loader.save_images:
             rows = [l.bbox for l in pred.rows]
             cols = [l.bbox for l in pred.cols]
             row_labels = [f"Row {l.row_id}" for l in pred.rows]

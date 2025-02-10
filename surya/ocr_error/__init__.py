@@ -10,7 +10,7 @@ from surya.ocr_error.loader import OCRErrorModelLoader
 from surya.ocr_error.model.config import ID2LABEL
 from surya.ocr_error.schema import OCRErrorDetectionResult
 from surya.settings import settings
-
+from surya.common.util import mark_step
 
 class OCRErrorPredictor(BasePredictor):
     model_loader_cls = OCRErrorModelLoader
@@ -18,7 +18,8 @@ class OCRErrorPredictor(BasePredictor):
     default_batch_sizes = {
         "cpu": 8,
         "mps": 8,
-        "cuda": 64
+        "cuda": 64,
+        "xla": 32
     }
 
     def __call__(
@@ -39,15 +40,23 @@ class OCRErrorPredictor(BasePredictor):
         num_batches = math.ceil(len(texts) / batch_size)
         texts_processed = self.processor(texts, padding='longest', truncation=True, return_tensors='pt')
         predictions = []
-        for batch_idx in tqdm(range(num_batches)):
+        for batch_idx in tqdm(range(num_batches), desc="Running OCR Error Detection", disable=self.disable_tqdm):
             start_idx, end_idx = batch_idx * batch_size, (batch_idx + 1) * batch_size
             batch_input_ids = texts_processed.input_ids[start_idx:end_idx].to(self.model.device)
             batch_attention_mask = texts_processed.attention_mask[start_idx:end_idx].to(self.model.device)
 
-            with torch.inference_mode():
+            # Pad to batch size
+            current_batch_size = batch_input_ids.shape[0]
+            if settings.OCR_ERROR_STATIC_CACHE:
+                batch_input_ids = self.pad_to_batch_size(batch_input_ids, batch_size)
+                batch_attention_mask = self.pad_to_batch_size(batch_attention_mask, batch_size)
+
+            with settings.INFERENCE_MODE():
                 pred = self.model(batch_input_ids, attention_mask=batch_attention_mask)
-                logits = pred.logits.detach().cpu().numpy().astype(np.float32)
-                predictions.extend(np.argmax(logits, axis=1).tolist())
+
+                logits = pred.logits.argmax(dim=1).cpu().tolist()[:current_batch_size]
+                predictions.extend(logits)
+            mark_step()
 
         return OCRErrorDetectionResult(
             texts=texts,

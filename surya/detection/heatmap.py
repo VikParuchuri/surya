@@ -2,9 +2,9 @@ from typing import List
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from surya.common.util import clean_boxes
+from surya.common.util import clean_boxes, rescale_bbox
 from surya.detection.affinity import get_vertical_lines
 from surya.detection import TextDetectionResult
 from surya.common.polygon import PolygonBox
@@ -138,6 +138,46 @@ def parallel_get_lines(preds, orig_sizes, include_maps=False):
         vertical_lines=vertical_lines,
         heatmap=heat_img,
         affinity_map=aff_img,
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+    )
+    return result
+
+def parallel_get_boxes(preds, orig_sizes, include_maps=False):
+    heatmap, _ = preds
+    heat_img, aff_img = None, None
+    if include_maps:
+        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
+    heatmap_size = list(reversed(heatmap.shape))
+    bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
+
+    result = TextDetectionResult(
+        bboxes=bboxes,
+        vertical_lines=[],
+        heatmap=heat_img,
+        affinity_map=None,
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+    )
+    return result
+
+def parallel_get_inline_boxes(preds, orig_sizes, text_boxes, include_maps=False):
+    heatmap, = preds
+    heatmap_size = list(reversed(heatmap.shape))
+
+    for text_box in text_boxes:
+        text_box_reshaped = rescale_bbox(text_box, orig_sizes, heatmap_size)
+        x1, y1, x2, y2 = text_box_reshaped
+        heatmap[y2:y2+3, x1:x2] = 0
+    bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes, text_threshold=settings.INLINE_MATH_THRESHOLD)
+
+    heat_img, aff_img = None, None
+    if include_maps:
+        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
+
+    result = TextDetectionResult(
+        bboxes=bboxes,
+        vertical_lines=[],
+        heatmap=heat_img,
+        affinity_map=None,
         image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
     )
     return result

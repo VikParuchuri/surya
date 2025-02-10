@@ -9,7 +9,6 @@ class ColumnLine(PolygonBox):
     vertical: bool
     horizontal: bool
 
-
 class TextDetectionResult(BaseModel):
     bboxes: List[PolygonBox]
     vertical_lines: List[ColumnLine]
