@@ -18,6 +18,11 @@ def verify_det(data):
         raise ValueError("Scores do not meet the required threshold")
 
 
+def verify_inline_det(data):
+    scores = data["metrics"]["surya"]
+    if scores["precision"] <= 0.5 or scores["recall"] <= 0.5:
+        raise ValueError("Scores do not meet the required threshold")
+
 def verify_rec(data):
     scores = data["surya"]
     if scores["avg_score"] <= 0.9:
@@ -62,6 +67,8 @@ def main(file_path, bench_type):
         verify_table_rec(data)
     elif bench_type == "texify":
         verify_texify(data)
+    elif bench_type == "inline_detection":
+        verify_inline_det(data)
     else:
         raise ValueError("Invalid benchmark type")
 
