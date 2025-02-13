@@ -69,7 +69,7 @@ def text_detection(img) -> (Image.Image, TextDetectionResult):
     text_pred = predictors["detection"]([img])[0]
     text_polygons = [p.polygon for p in text_pred.bboxes]
     det_img = draw_polys_on_image(text_polygons, img.copy())
-    return det_img, text_pred, inline_pred
+    return det_img, text_pred
 
 
 def layout_detection(img) -> (Image.Image, LayoutResult):
@@ -211,11 +211,10 @@ if pil_image is None:
 
 # Run Text Detection
 if run_text_det:
-    det_img, text_pred, inline_pred = text_detection(pil_image)
+    det_img, text_pred = text_detection(pil_image)
     with col1:
         st.image(det_img, caption="Detected Text", use_container_width=True)
         st.json(text_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
-        st.json(inline_pred.model_dump(exclude=["heatmap", "affinity_map"]), expanded=True)
 
 if run_inline_det:
     det_img, text_pred, inline_pred = inline_detection(pil_image)

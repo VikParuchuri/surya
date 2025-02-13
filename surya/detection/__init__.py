@@ -145,7 +145,7 @@ class InlineDetectionPredictor(DetectionPredictor):
 
     def __call__(self, images, text_boxes: List[List[List[float]]], batch_size=None, include_maps=False) -> List[TextDetectionResult]:
         detection_generator = self.batch_detection(images, batch_size=batch_size, static_cache=settings.DETECTOR_STATIC_CACHE)
-        text_box_generator = self.batch_generator(text_boxes)
+        text_box_generator = self.batch_generator(text_boxes, batch_size=batch_size)
 
         postprocessing_futures = []
         max_workers = min(settings.DETECTOR_POSTPROCESSING_CPU_WORKERS, len(images))
@@ -153,7 +153,8 @@ class InlineDetectionPredictor(DetectionPredictor):
         executor = ThreadPoolExecutor if parallelize else FakeExecutor
         with executor(max_workers=max_workers) as e:
             for (preds, orig_sizes), batch_text_boxes in zip(detection_generator, text_box_generator):
-                for pred, orig_size, text_boxes in zip(preds, orig_sizes, batch_text_boxes):
-                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes, include_maps))
+                for pred, orig_size, image_text_boxes in zip(preds, orig_sizes, batch_text_boxes):
+                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, image_text_boxes, include_maps))
 
+        assert len(postprocessing_futures) == len(images) == len(text_boxes) # Ensure we have a 1:1 mapping
         return [future.result() for future in postprocessing_futures]
