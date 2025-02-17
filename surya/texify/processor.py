@@ -46,7 +46,7 @@ class TexifyProcessor(S3Mixin, ProcessorMixin):
 
 
 
-class TexifyTokenizer(PreTrainedTokenizerFast):
+class TexifyTokenizer(S3Mixin, PreTrainedTokenizerFast):
     def __init__(
         self,
         vocab_file=None,

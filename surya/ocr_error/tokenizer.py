@@ -34,7 +34,7 @@ def whitespace_tokenize(text):
     return tokens
 
 
-class DistilBertTokenizer(PreTrainedTokenizer, S3Mixin):
+class DistilBertTokenizer(S3Mixin, PreTrainedTokenizer):
     r"""
     Construct a DistilBERT tokenizer. Based on WordPiece.
 
