@@ -20,8 +20,10 @@ from transformers.utils import TensorType
 import PIL.Image
 import torch
 
+from surya.common import S3Mixin
 
-class SegformerImageProcessor(BaseImageProcessor):
+
+class SegformerImageProcessor(S3Mixin, BaseImageProcessor):
     r"""
     Constructs a Segformer image processor.
 

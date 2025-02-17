@@ -6,7 +6,7 @@ from surya.common.load import ModelLoader
 from surya.settings import settings
 from surya.table_rec.model.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig
 from surya.table_rec.model.encoderdecoder import TableRecEncoderDecoderModel
-from surya.table_rec.processor import SuryaProcessor
+from surya.table_rec.processor import SuryaTableRecProcessor
 
 
 class TableRecModelLoader(ModelLoader):
@@ -55,8 +55,8 @@ class TableRecModelLoader(ModelLoader):
         print(f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
         return model
 
-    def processor(self) -> SuryaProcessor:
-        processor = SuryaProcessor(self.checkpoint, self.revision)
+    def processor(self) -> SuryaTableRecProcessor:
+        processor = SuryaTableRecProcessor(self.checkpoint, self.revision)
 
         processor.token_pad_id = 0
         processor.token_eos_id = 1

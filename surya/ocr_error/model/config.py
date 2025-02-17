@@ -4,12 +4,14 @@ from typing import Mapping
 from transformers.configuration_utils import PretrainedConfig
 from transformers.onnx import OnnxConfig
 
+from surya.common import S3Mixin
+
 ID2LABEL = {
     0: 'good',
     1: 'bad'
 }
 
-class DistilBertConfig(PretrainedConfig):
+class DistilBertConfig(S3Mixin, PretrainedConfig):
     model_type = "distilbert"
     attribute_map = {
         "hidden_size": "dim",

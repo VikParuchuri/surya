@@ -1,7 +1,9 @@
 from transformers import PretrainedConfig
 
+from surya.common import S3Mixin
 
-class EfficientViTConfig(PretrainedConfig):
+
+class EfficientViTConfig(S3Mixin,PretrainedConfig):
     r"""
     ```"""
 

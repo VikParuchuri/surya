@@ -4,8 +4,9 @@ import torch
 from transformers import PretrainedConfig
 from transformers.utils import ModelOutput
 
+from surya.common import S3Mixin
 
-class SuryaOCRConfig(PretrainedConfig):
+class SuryaOCRConfig(S3Mixin, PretrainedConfig):
     model_type = "vision-encoder-decoder"
     is_composition = True
 

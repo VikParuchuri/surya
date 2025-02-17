@@ -4,13 +4,14 @@ import PIL
 import torch
 from transformers import ProcessorMixin
 
+from surya.common import S3Mixin
 from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.table_rec.shaper import LabelShaper
 from surya.settings import settings
 from surya.table_rec.model.config import BOX_DIM, SPECIAL_TOKENS
 
 
-class SuryaProcessor(ProcessorMixin):
+class SuryaTableRecProcessor(S3Mixin, ProcessorMixin):
     attributes = ["image_processor"]
     image_processor_class = "AutoImageProcessor"
 

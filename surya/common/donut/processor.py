@@ -9,10 +9,11 @@ from transformers.image_utils import PILImageResampling, ImageInput, ChannelDime
 import numpy as np
 from PIL import Image
 import PIL
+
+from surya.common import S3Mixin
 from surya.settings import settings
 
-
-class SuryaEncoderImageProcessor(DonutImageProcessor):
+class SuryaEncoderImageProcessor(S3Mixin, DonutImageProcessor):
     def __init__(self, *args, max_size=None, align_long_axis=False, **kwargs):
         super().__init__(*args, **kwargs)
 

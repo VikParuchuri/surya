@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import SemanticSegmenterOutput
 
+from surya.common import S3Mixin
 from surya.detection.model.config import EfficientViTConfig
 
 
@@ -721,7 +722,7 @@ class DecodeHead(EfficientViTPreTrainedModel):
         return logits
 
 
-class EfficientViTForSemanticSegmentation(EfficientViTPreTrainedModel):
+class EfficientViTForSemanticSegmentation(S3Mixin, EfficientViTPreTrainedModel):
     def __init__(self, config, **kwargs):
         super().__init__(config)
         self.vit = EfficientVitLarge(config)

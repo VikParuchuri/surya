@@ -4,6 +4,7 @@ import torch
 from transformers import PretrainedConfig
 from transformers.modeling_outputs import CausalLMOutput
 from transformers.utils import ModelOutput
+from surya.common import S3Mixin
 from surya.settings import settings
 
 SPECIAL_TOKENS = 3
@@ -36,7 +37,7 @@ LABEL_TO_ID = {v: k for k, v in ID_TO_LABEL.items()}
 LABEL_COUNT = len(ID_TO_LABEL)
 
 
-class SuryaLayoutConfig(PretrainedConfig):
+class SuryaLayoutConfig(S3Mixin, PretrainedConfig):
     model_type = "vision-encoder-decoder"
     is_composition = True
 

@@ -5,11 +5,12 @@ import torch
 from PIL import Image
 from transformers import PreTrainedTokenizerFast, ProcessorMixin
 
+from surya.common import S3Mixin
 from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.settings import settings
 
 
-class TexifyProcessor(ProcessorMixin):
+class TexifyProcessor(S3Mixin, ProcessorMixin):
     attributes = ["image_processor"]
     image_processor_class = "AutoImageProcessor"
 
