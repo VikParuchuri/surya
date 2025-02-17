@@ -9,7 +9,6 @@ def download_s3_directory(s3_url, local_dir):
     """Download an entire directory from an S3-compatible storage to a local directory."""
     s3 = boto3.client(
         "s3",
-        endpoint_url="https://99c1cdd4c3a268545d8ac8826dfb5139.r2.cloudflarestorage.com",
     )
     
     bucket, prefix = s3_url.replace("s3://", "").split("/", 1)
