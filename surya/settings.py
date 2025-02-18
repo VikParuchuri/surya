@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     FLATTEN_PDF: bool = True # Flatten PDFs by merging form fields before processing
     DISABLE_TQDM: bool = False # Disable tqdm progress bars
     S3_BASE_URL: str = "https://models.datalab.to"
+    PARALLEL_DOWNLOAD_WORKERS: int = 4 # Number of workers for parallel model downloads
 
     # Paths
     DATA_DIR: str = "data"

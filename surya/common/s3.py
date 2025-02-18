@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
@@ -16,7 +17,7 @@ def get_model_name(pretrained_model_name_or_path: str):
     return pretrained_model_name_or_path.split("/")[0]
 
 
-def download_file(remote_path: str, local_path: str, chunk_size: int = 8192):
+def download_file(remote_path: str, local_path: str, chunk_size: int = 1024 * 1024):
     local_path = Path(local_path)
     try:
         response = requests.get(remote_path, stream=True, allow_redirects=True)
@@ -72,11 +73,20 @@ def download_directory(remote_path: str, local_dir: str):
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
 
-        for file in tqdm(manifest["files"], desc=f"Downloading {model_name}..."):
-            # Download the file
-            remote_file = os.path.join(s3_url, file)
-            local_file = os.path.join(temp_dir, file)
-            download_file(remote_file, local_file)
+        pbar = tqdm(desc=f"Downloading {model_name} model...", total=len(manifest["files"]))
+
+        with ThreadPoolExecutor(max_workers=settings.PARALLEL_DOWNLOAD_WORKERS) as executor:
+            futures = []
+            for file in manifest["files"]:
+                remote_file = os.path.join(s3_url, file)
+                local_file = os.path.join(temp_dir, file)
+                futures.append(executor.submit(download_file, remote_file, local_file))
+
+            for future in futures:
+                future.result()
+                pbar.update(1)
+
+        pbar.close()
 
         # Move all files to new directory
         for file in os.listdir(temp_dir):
