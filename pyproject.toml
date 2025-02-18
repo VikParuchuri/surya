@@ -20,10 +20,10 @@ pydantic-settings = "^2.1.0"
 python-dotenv = "^1.0.0"
 pillow = "^10.2.0"
 pypdfium2 = "=4.30.0"
-opencv-python = "^4.9.0.80"
 filetype = "^1.2.0"
 click = "^8.1.8"
 
+opencv-python-headless = "^4.11.0.86"
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
 pytesseract = "^0.3.10"
