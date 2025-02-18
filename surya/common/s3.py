@@ -12,6 +12,11 @@ from tqdm import tqdm
 
 from surya.settings import settings
 
+def join_urls(url1: str, url2: str):
+    url1 = url1.rstrip("/")
+    url2 = url2.lstrip("/")
+    return f"{url1}/{url2}"
+
 
 def get_model_name(pretrained_model_name_or_path: str):
     return pretrained_model_name_or_path.split("/")[0]
@@ -55,8 +60,7 @@ def check_manifest(local_dir: str):
 
 def download_directory(remote_path: str, local_dir: str):
     model_name = get_model_name(remote_path)
-    s3_url = os.path.join(settings.S3_BASE_URL, remote_path)
-
+    s3_url = join_urls(settings.S3_BASE_URL, remote_path)
     # Check to see if it's already downloaded
     model_exists = check_manifest(local_dir)
     if model_exists:
@@ -65,7 +69,7 @@ def download_directory(remote_path: str, local_dir: str):
     # Use tempfile.TemporaryDirectory to automatically clean up
     with tempfile.TemporaryDirectory() as temp_dir:
         # Download the manifest file
-        manifest_file = os.path.join(s3_url, "manifest.json")
+        manifest_file = join_urls(s3_url, "manifest.json")
         manifest_path = os.path.join(temp_dir, "manifest.json")
         download_file(manifest_file, manifest_path)
 
@@ -78,7 +82,7 @@ def download_directory(remote_path: str, local_dir: str):
         with ThreadPoolExecutor(max_workers=settings.PARALLEL_DOWNLOAD_WORKERS) as executor:
             futures = []
             for file in manifest["files"]:
-                remote_file = os.path.join(s3_url, file)
+                remote_file = join_urls(s3_url, file)
                 local_file = os.path.join(temp_dir, file)
                 futures.append(executor.submit(download_file, remote_file, local_file))
 
