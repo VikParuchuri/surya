@@ -19,10 +19,3 @@ class ModelLoader:
             self
     ) -> Any:
         raise NotImplementedError()
-
-    @staticmethod
-    def split_checkpoint_revision(checkpoint: str) -> tuple[str, str | None]:
-        parts = checkpoint.rsplit("@", 1)
-        if len(parts) == 1:
-            return parts[0], "main" # Default revision is main
-        return parts[0], parts[1]

@@ -21,6 +21,7 @@ if is_flash_attn_2_available():
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
+from surya.common.s3 import S3DownloaderMixin
 from surya.ocr_error.model.config import DistilBertConfig
 
 
@@ -693,7 +694,7 @@ class DistilBertModel(DistilBertPreTrainedModel):
         )
 
 
-class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
+class DistilBertForSequenceClassification(S3DownloaderMixin, DistilBertPreTrainedModel):
     def __init__(self, config: DistilBertConfig):
         super().__init__(config)
         self.num_labels = config.num_labels

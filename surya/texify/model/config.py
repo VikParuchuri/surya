@@ -5,10 +5,11 @@ import torch
 from transformers import PretrainedConfig
 from transformers.utils import ModelOutput
 
+from surya.common.s3 import S3DownloaderMixin
 from surya.settings import settings
 
 
-class TexifyConfig(PretrainedConfig):
+class TexifyConfig(S3DownloaderMixin, PretrainedConfig):
     model_type = "vision-encoder-decoder"
     is_composition = True
 

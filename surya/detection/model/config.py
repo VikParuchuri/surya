@@ -1,7 +1,9 @@
 from transformers import PretrainedConfig
 
+from surya.common.s3 import S3DownloaderMixin
 
-class EfficientViTConfig(PretrainedConfig):
+
+class EfficientViTConfig(S3DownloaderMixin, PretrainedConfig):
     r"""
     ```"""
 

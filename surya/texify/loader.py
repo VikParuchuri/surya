@@ -17,8 +17,6 @@ class TexifyModelLoader(ModelLoader):
         if self.checkpoint is None:
             self.checkpoint = settings.TEXIFY_MODEL_CHECKPOINT
 
-        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
-
     def model(
             self,
             device=settings.TORCH_DEVICE_MODEL,
@@ -29,7 +27,7 @@ class TexifyModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        config = TexifyConfig.from_pretrained(self.checkpoint, revision=self.revision)
+        config = TexifyConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = TexifyDecoderConfig(**decoder_config)
         config.decoder = decoder
@@ -38,7 +36,7 @@ class TexifyModelLoader(ModelLoader):
         encoder = TexifyEncoderConfig(**encoder_config)
         config.encoder = encoder
 
-        model = TexifyModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype, revision=self.revision)
+        model = TexifyModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
 
         model = model.to(device)
         model = model.eval()
@@ -57,4 +55,4 @@ class TexifyModelLoader(ModelLoader):
         return model
 
     def processor(self) -> TexifyProcessor:
-        return TexifyProcessor(self.checkpoint, self.revision)
+        return TexifyProcessor(self.checkpoint)

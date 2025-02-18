@@ -5,6 +5,7 @@ import torch
 from transformers import PretrainedConfig
 from transformers.utils import ModelOutput
 
+from surya.common.s3 import S3DownloaderMixin
 from surya.settings import settings
 
 BOX_DIM = 1024
@@ -49,7 +50,7 @@ class TableRecModelOutput(ModelOutput):
     hidden_states: torch.Tensor | None = None
 
 
-class SuryaTableRecConfig(PretrainedConfig):
+class SuryaTableRecConfig(S3DownloaderMixin, PretrainedConfig):
     model_type = "vision-encoder-decoder"
     is_composition = True
 
