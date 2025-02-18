@@ -4,7 +4,7 @@ from typing import Optional, Union, Tuple
 import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 from surya.layout.model.encoder import DonutSwinLayoutModel
 from surya.layout.model.decoder import SuryaLayoutDecoder
 from transformers.utils import ModelOutput
@@ -17,7 +17,7 @@ class LayoutBboxOutput(ModelOutput):
     encoder_last_hidden_state: Optional[torch.FloatTensor] = None
 
 
-class SuryaLayoutModel(S3Mixin, PreTrainedModel):
+class SuryaLayoutModel(S3DownloaderMixin, PreTrainedModel):
     config_class = VisionEncoderDecoderConfig
     base_model_prefix = "vision_encoder_decoder"
     main_input_name = "pixel_values"

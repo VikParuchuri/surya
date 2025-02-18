@@ -1,14 +1,13 @@
 from transformers import DonutProcessor
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.recognition.tokenizer import Byt5LangTokenizer
 from surya.settings import settings
 
-class SuryaProcessor(S3Mixin, DonutProcessor):
-    def __init__(self, checkpoint, revision, image_processor=None, tokenizer=None, **kwargs):
-        print(checkpoint, revision)
-        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint, revision=revision)
+class SuryaProcessor(S3DownloaderMixin, DonutProcessor):
+    def __init__(self, checkpoint,  image_processor=None, tokenizer=None, **kwargs):
+        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint)
         image_processor.do_align_long_axis = True
         image_processor.max_size = settings.RECOGNITION_IMAGE_SIZE
         tokenizer = Byt5LangTokenizer()

@@ -7,9 +7,10 @@ from transformers.models.vision_encoder_decoder.modeling_vision_encoder_decoder 
 from surya.recognition.model.encoder import DonutSwinModel
 from surya.recognition.model.decoder import SuryaOCRDecoder, SuryaOCRTextEncoder
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 
-class OCREncoderDecoderModel(S3Mixin, PreTrainedModel):
+
+class OCREncoderDecoderModel(S3DownloaderMixin, PreTrainedModel):
     config_class = VisionEncoderDecoderConfig
     base_model_prefix = "vision_encoder_decoder"
     main_input_name = "pixel_values"

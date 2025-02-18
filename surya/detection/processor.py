@@ -20,10 +20,10 @@ from transformers.utils import TensorType
 import PIL.Image
 import torch
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 
 
-class SegformerImageProcessor(S3Mixin, BaseImageProcessor):
+class SegformerImageProcessor(S3DownloaderMixin, BaseImageProcessor):
     r"""
     Constructs a Segformer image processor.
 

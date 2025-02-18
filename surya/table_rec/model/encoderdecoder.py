@@ -3,7 +3,7 @@ from typing import Optional, Union, Tuple, Dict
 
 import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 from surya.table_rec.model.decoder import SuryaTableRecDecoder
 from surya.table_rec.model.encoder import DonutSwinModel
 from transformers.utils import ModelOutput
@@ -15,7 +15,7 @@ class TableRecOutput(ModelOutput):
     decoder_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
 
 
-class TableRecEncoderDecoderModel(S3Mixin, PreTrainedModel):
+class TableRecEncoderDecoderModel(S3DownloaderMixin, PreTrainedModel):
     config_class = VisionEncoderDecoderConfig
     base_model_prefix = "vision_encoder_decoder"
     main_input_name = "pixel_values"

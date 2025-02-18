@@ -4,19 +4,19 @@ import PIL
 import torch
 from transformers import ProcessorMixin
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.table_rec.shaper import LabelShaper
 from surya.settings import settings
 from surya.table_rec.model.config import BOX_DIM, SPECIAL_TOKENS
 
 
-class SuryaTableRecProcessor(S3Mixin, ProcessorMixin):
+class SuryaTableRecProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor"]
     image_processor_class = "AutoImageProcessor"
 
-    def __init__(self, checkpoint, revision, **kwargs):
-        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint, revision=revision)
+    def __init__(self, checkpoint, **kwargs):
+        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint)
         image_processor.do_align_long_axis = False
         image_processor.max_size = settings.TABLE_REC_IMAGE_SIZE
         self.image_processor = image_processor

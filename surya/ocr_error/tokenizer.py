@@ -9,7 +9,8 @@ from tokenizers import normalizers
 from transformers.tokenization_utils import PreTrainedTokenizer, _is_control, _is_punctuation, _is_whitespace
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
+
 VOCAB_FILES_NAMES = {"vocab_file": "vocab.txt"}
 
 # Copied from transformers.models.bert.tokenization_bert.load_vocab
@@ -34,7 +35,7 @@ def whitespace_tokenize(text):
     return tokens
 
 
-class DistilBertTokenizer(S3Mixin, PreTrainedTokenizer):
+class DistilBertTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
     r"""
     Construct a DistilBERT tokenizer. Based on WordPiece.
 

@@ -5,22 +5,22 @@ import torch
 from PIL import Image
 from transformers import PreTrainedTokenizerFast, ProcessorMixin
 
-from surya.common import S3Mixin
+from surya.common.s3 import S3DownloaderMixin
 from surya.common.donut.processor import SuryaEncoderImageProcessor
 from surya.settings import settings
 
 
-class TexifyProcessor(S3Mixin, ProcessorMixin):
+class TexifyProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor"]
     image_processor_class = "AutoImageProcessor"
 
-    def __init__(self, checkpoint, revision, **kwargs):
-        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint, revision=revision)
+    def __init__(self, checkpoint, **kwargs):
+        image_processor = SuryaEncoderImageProcessor.from_pretrained(checkpoint)
         image_processor.do_align_long_axis = False
         image_processor.max_size = settings.TEXIFY_IMAGE_SIZE
         self.image_processor = image_processor
 
-        tokenizer = TexifyTokenizer.from_pretrained(checkpoint, revision=revision)
+        tokenizer = TexifyTokenizer.from_pretrained(checkpoint)
         tokenizer.model_max_length = settings.TEXIFY_MAX_TOKENS
         self.tokenizer = tokenizer
 
@@ -46,7 +46,7 @@ class TexifyProcessor(S3Mixin, ProcessorMixin):
 
 
 
-class TexifyTokenizer(S3Mixin, PreTrainedTokenizerFast):
+class TexifyTokenizer(S3DownloaderMixin, PreTrainedTokenizerFast):
     def __init__(
         self,
         vocab_file=None,
