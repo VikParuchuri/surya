@@ -23,6 +23,7 @@ pypdfium2 = "=4.30.0"
 opencv-python = "^4.9.0.80"
 filetype = "^1.2.0"
 click = "^8.1.8"
+platformdirs = "^4.3.6"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
