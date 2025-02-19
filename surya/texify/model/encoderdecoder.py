@@ -4,11 +4,12 @@ import torch
 from transformers import PreTrainedModel, VisionEncoderDecoderConfig, PretrainedConfig
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 
+from surya.common.s3 import S3DownloaderMixin
 from surya.texify.model.decoder import TexifyDecoder
 from surya.texify.model.encoder import TexifyEncoder
 
 
-class TexifyModel(PreTrainedModel):
+class TexifyModel(S3DownloaderMixin, PreTrainedModel):
     config_class = VisionEncoderDecoderConfig
     base_model_prefix = "vision_encoder_decoder"
     main_input_name = "pixel_values"

@@ -22,8 +22,6 @@ class RecognitionModelLoader(ModelLoader):
         if self.checkpoint is None:
             self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
 
-        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
-
     def model(
         self,
         device=settings.TORCH_DEVICE_MODEL,
@@ -34,7 +32,7 @@ class RecognitionModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        config = SuryaOCRConfig.from_pretrained(self.checkpoint, revision=self.revision)
+        config = SuryaOCRConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaOCRDecoderConfig(**decoder_config)
         config.decoder = decoder
@@ -47,7 +45,7 @@ class RecognitionModelLoader(ModelLoader):
         text_encoder = SuryaOCRTextEncoderConfig(**text_encoder_config)
         config.text_encoder = text_encoder
 
-        model = OCREncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype, revision=self.revision)
+        model = OCREncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
         model = model.to(device)
         model = model.eval()
 
@@ -66,5 +64,5 @@ class RecognitionModelLoader(ModelLoader):
         return model
 
     def processor(self) -> SuryaProcessor:
-        return SuryaProcessor(self.checkpoint, self.revision)
+        return SuryaProcessor(self.checkpoint)
 

@@ -6,7 +6,7 @@ from surya.common.load import ModelLoader
 from surya.settings import settings
 from surya.table_rec.model.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig
 from surya.table_rec.model.encoderdecoder import TableRecEncoderDecoderModel
-from surya.table_rec.processor import SuryaProcessor
+from surya.table_rec.processor import SuryaTableRecProcessor
 
 
 class TableRecModelLoader(ModelLoader):
@@ -15,8 +15,6 @@ class TableRecModelLoader(ModelLoader):
 
         if self.checkpoint is None:
             self.checkpoint = settings.TABLE_REC_MODEL_CHECKPOINT
-
-        self.checkpoint, self.revision = self.split_checkpoint_revision(self.checkpoint)
 
     def model(
             self,
@@ -28,7 +26,7 @@ class TableRecModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        config = SuryaTableRecConfig.from_pretrained(self.checkpoint, revision=self.revision)
+        config = SuryaTableRecConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaTableRecDecoderConfig(**decoder_config)
         config.decoder = decoder
@@ -37,7 +35,7 @@ class TableRecModelLoader(ModelLoader):
         encoder = DonutSwinTableRecConfig(**encoder_config)
         config.encoder = encoder
 
-        model = TableRecEncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype, revision=self.revision)
+        model = TableRecEncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
 
         model = model.to(device)
         model = model.eval()
@@ -55,8 +53,8 @@ class TableRecModelLoader(ModelLoader):
         print(f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
         return model
 
-    def processor(self) -> SuryaProcessor:
-        processor = SuryaProcessor(self.checkpoint, self.revision)
+    def processor(self) -> SuryaTableRecProcessor:
+        processor = SuryaTableRecProcessor(self.checkpoint)
 
         processor.token_pad_id = 0
         processor.token_eos_id = 1
