@@ -58,9 +58,9 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Inline math detection
-    INLINE_MATH_MODEL_CHECKPOINT: str = "s3://inline_math_detection/2025_02_18"
-    INLINE_MATH_THRESHOLD: float = 0.8 #Threshold for inline math detection (above this is considered inline-math)
-    INLINE_MATH_BLANK_THRESHOLD: float = 0.5 # Threshold for blank space (below this is considered blank)
+    INLINE_MATH_MODEL_CHECKPOINT: str = "s3://inline_math_detection/2025_02_22"
+    INLINE_MATH_THRESHOLD: float = 0.9 #Threshold for inline math detection (above this is considered inline-math)
+    INLINE_MATH_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
     INLINE_MATH_BENCH_DATASET_NAME: str = "datalab-to/inline_detection_bench"
     INLINE_MATH_TEXT_BLANK_PX: int = 2 # How many pixels to blank out at the botton of each text line
     INLINE_MATH_MIN_AREA: int = 100 # Minimum area for inline math detection

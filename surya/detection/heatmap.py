@@ -160,7 +160,7 @@ def parallel_get_boxes(preds, orig_sizes, include_maps=False):
     return result
 
 def parallel_get_inline_boxes(preds, orig_sizes, text_boxes, include_maps=False):
-    heatmap, = preds
+    heatmap, _ = preds
     heatmap_size = list(reversed(heatmap.shape))
 
     for text_box in text_boxes:
