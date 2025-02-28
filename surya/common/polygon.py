@@ -92,13 +92,13 @@ class PolygonBox(BaseModel):
         y_margin = y_margin * self.height
         for idx, poly in enumerate(self.polygon):
             if idx == 0:
-                new_polygon.append([poly[0] - x_margin, poly[1] - y_margin])
+                new_polygon.append([int(poly[0] - x_margin), int(poly[1] - y_margin)])
             elif idx == 1:
-                new_polygon.append([poly[0] + x_margin, poly[1] - y_margin])
+                new_polygon.append([int(poly[0] + x_margin), int(poly[1] - y_margin)])
             elif idx == 2:
-                new_polygon.append([poly[0] + x_margin, poly[1] + y_margin])
+                new_polygon.append([int(poly[0] + x_margin), int(poly[1] + y_margin)])
             elif idx == 3:
-                new_polygon.append([poly[0] - x_margin, poly[1] + y_margin])
+                new_polygon.append([int(poly[0] - x_margin), int(poly[1] + y_margin)])
         self.polygon = new_polygon
 
     def intersection_polygon(self, other) -> List[List[float]]:
