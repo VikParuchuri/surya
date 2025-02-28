@@ -2,7 +2,7 @@ from typing import List
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from surya.common.util import clean_boxes, rescale_bbox
 from surya.detection.affinity import get_vertical_lines
@@ -153,8 +153,8 @@ def parallel_get_boxes(preds, orig_sizes, include_maps=False):
     heatmap_size = list(reversed(heatmap.shape))
     bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
     for box in bboxes:
-        #Skip for vertical boxes
-        if box.height<3*box.width:
+        # Skip for vertical boxes
+        if box.height < 3 * box.width:
             box.expand(x_margin=0, y_margin=settings.DETECTOR_BOX_Y_EXPAND_MARGIN)
 
     result = TextDetectionResult(
