@@ -129,6 +129,4 @@ class S3DownloaderMixin:
                     print(f"Failed to download {pretrained_model_name_or_path} after {retries} attempts.")
                     raise e  # Reraise exception after max retries
 
-            pretrained_model_name_or_path = local_path
-        
-        return super().from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+        return super().from_pretrained(local_path, *args, **kwargs)
