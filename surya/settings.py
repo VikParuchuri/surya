@@ -48,13 +48,14 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "s3://text_detection/2025_02_18"
+    DETECTOR_MODEL_CHECKPOINT: str = "s3://text_detection/2025_02_28"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = 1400 # Height at which to slice images vertically
     DETECTOR_TEXT_THRESHOLD: float = 0.6 # Threshold for text detection (above this is considered text)
     DETECTOR_BLANK_THRESHOLD: float = 0.35 # Threshold for blank space (below this is considered blank)
     DETECTOR_POSTPROCESSING_CPU_WORKERS: int = min(8, os.cpu_count()) # Number of workers for postprocessing
     DETECTOR_MIN_PARALLEL_THRESH: int = 3 # Minimum number of images before we parallelize
+    DETECTOR_BOX_Y_EXPAND_MARGIN: float = 0.025  #Margin by which to expand detected boxes vertically
     COMPILE_DETECTOR: bool = False
 
     # Inline math detection

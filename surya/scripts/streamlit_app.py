@@ -75,7 +75,7 @@ def text_detection(img) -> (Image.Image, TextDetectionResult):
 def layout_detection(img) -> (Image.Image, LayoutResult):
     pred = predictors["layout"]([img])[0]
     polygons = [p.polygon for p in pred.bboxes]
-    labels = [f"{p.label}-{p.position}" for p in pred.bboxes]
+    labels = [f"{p.label}-{p.position}-{round(p.top_k[p.label], 2)}" for p in pred.bboxes]
     layout_img = draw_polys_on_image(polygons, img.copy(), labels=labels, label_font_size=18)
     return layout_img, pred
 
