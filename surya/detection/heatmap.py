@@ -122,6 +122,7 @@ def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None
     bboxes = clean_boxes(bboxes)
     return bboxes
 
+
 def parallel_get_lines(preds, orig_sizes, include_maps=False):
     heatmap, affinity_map = preds
     heat_img, aff_img = None, None
@@ -143,18 +144,24 @@ def parallel_get_lines(preds, orig_sizes, include_maps=False):
     return result
 
 def parallel_get_boxes(preds, orig_sizes, include_maps=False):
-    heatmap, _ = preds
+    heatmap, affinity_map = preds
     heat_img, aff_img = None, None
+
     if include_maps:
         heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
+        aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
     heatmap_size = list(reversed(heatmap.shape))
     bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
+    for box in bboxes:
+        #Skip for vertical boxes
+        if box.height<3*box.width:
+            box.expand(x_margin=0, y_margin=settings.DETECTOR_BOX_Y_EXPAND_MARGIN)
 
     result = TextDetectionResult(
         bboxes=bboxes,
         vertical_lines=[],
         heatmap=heat_img,
-        affinity_map=None,
+        affinity_map=aff_img,
         image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
     )
     return result
