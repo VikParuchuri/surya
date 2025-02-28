@@ -86,6 +86,21 @@ class PolygonBox(BaseModel):
         y2 = max(self.bbox[3], other.bbox[3])
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
+    def expand(self, x_margin: float, y_margin: float):
+        new_polygon = []
+        x_margin = x_margin * self.width
+        y_margin = y_margin * self.height
+        for idx, poly in enumerate(self.polygon):
+            if idx == 0:
+                new_polygon.append([int(poly[0] - x_margin), int(poly[1] - y_margin)])
+            elif idx == 1:
+                new_polygon.append([int(poly[0] + x_margin), int(poly[1] - y_margin)])
+            elif idx == 2:
+                new_polygon.append([int(poly[0] + x_margin), int(poly[1] + y_margin)])
+            elif idx == 3:
+                new_polygon.append([int(poly[0] - x_margin), int(poly[1] + y_margin)])
+        self.polygon = new_polygon
+
     def intersection_polygon(self, other) -> List[List[float]]:
         new_poly = []
         for i in range(4):
