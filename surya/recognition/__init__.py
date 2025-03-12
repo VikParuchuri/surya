@@ -32,13 +32,16 @@ class RecognitionPredictor(BasePredictor):
     }
     tasks = {
         "ocr_with_boxes": {
-            "needs_bboxes": True
+            "needs_bboxes": True,
+            "img_size": (1024, 256)
         },
         "ocr_without_boxes": {
-            "needs_bboxes": False
+            "needs_bboxes": False,
+            "img_size": (1024, 256)
         },
         "block_without_boxes": {
-            "needs_bboxes": False
+            "needs_bboxes": False,
+            "img_size": (768, 768)
         }
     }
 
@@ -55,7 +58,7 @@ class RecognitionPredictor(BasePredictor):
             input_text: List[str | None] | None = None,
             sort_lines: bool = True
     ) -> List[OCRResult]:
-        allowed_tasks = self.model.config.tasks.keys()
+        allowed_tasks = self.tasks.keys()
         if task_names is None:
             task_names = ["ocr_with_boxes"] * len(images)
 
@@ -165,7 +168,8 @@ class RecognitionPredictor(BasePredictor):
             "slices": all_slices,
             "slice_map": slice_map,
             "polygons": all_polygons,
-            "task_names": all_task_names
+            "task_names": all_task_names,
+            "input_text": [None] * len(all_slices)
         }
 
     def slice_bboxes(
@@ -217,7 +221,7 @@ class RecognitionPredictor(BasePredictor):
     def prepare_input(self, task_names: List[str], images: List[Image.Image], input_text: List[str | None]):
         batch = []
         for (image, text, task_name) in zip(images, input_text, task_names):
-            image_size = self.model.config.tasks[task_name]["img_size"]
+            image_size = self.tasks[task_name]["img_size"]
             image = image.resize(image_size)
 
             # Task input is the same for all tasks for now
@@ -254,7 +258,7 @@ class RecognitionPredictor(BasePredictor):
 
         # Setup various tokens on-device
         device_bbox_ignore = torch.from_numpy(
-            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64)
+            np.array(self.processor.ignore_bbox_tokens, dtype=np.int64)
         ).to(self.model.device)
         device_blank_bbox = torch.from_numpy(
             np.asarray([config.blank_bbox_token_id] * 6, dtype=np.int64)
@@ -275,7 +279,7 @@ class RecognitionPredictor(BasePredictor):
                 batch_images,
                 batch_text
             )
-            processed_inputs = self.processor([batch_input], padding_side="left").to(self.model.device)
+            processed_inputs = self.processor(batch_input, padding_side="left").to(self.model.device)
             input_ids = processed_inputs["input_ids"]
             input_boxes = processed_inputs["input_boxes"]
             image_tiles = processed_inputs["image_tiles"]
@@ -293,7 +297,7 @@ class RecognitionPredictor(BasePredictor):
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
 
             # Setup tensors to hold predictions
-            batch_predictions = torch.zeros((current_batch_size, 1), dtype=torch.long, device=self.model.device).unsqueeze(1)
+            batch_predictions = torch.zeros((current_batch_size, 1), dtype=torch.long, device=self.model.device)
             batch_box_predictions = torch.zeros((current_batch_size, 1, 6), dtype=torch.long, device=self.model.device)
 
             past_key_values = DynamicCache()
@@ -315,26 +319,40 @@ class RecognitionPredictor(BasePredictor):
                     # Update cache
                     past_key_values = outputs["past_key_values"]
 
+                    # Get logits and initial preds
                     next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
                     next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
-
                     preds = torch.argmax(next_token_logits, dim=-1)
-                    box_preds = next_bbox_logits * self.model.config.bbox_size
-                    torch.where(torch.isin(preds, device_bbox_ignore), device_blank_bbox, box_preds)
 
-                    scores = torch.max(F.softmax(next_token_logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
-
+                    # Handle inference completion
                     done = (preds == self.processor.eos_token_id) | (preds == self.processor.pad_token_id)
-                    all_done = all_done | done
+                    all_done = all_done | done.squeeze(-1)
                     all_done_cpu = all_done.cpu()
-
-                    # Confidence score for the current token
-                    scores = scores.masked_fill(all_done, 0)
-                    sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
                     # Account for possible padding of batch
                     if all_done_cpu[:current_batch_size].all():
                         break
+
+                    # Update input ids
+                    # If this batch item is done, input a pad token
+                    input_ids = preds
+                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids)
+
+                    # Confidence score for the current token
+                    scores = torch.max(F.softmax(next_token_logits[:, -1], dim=-1), dim=-1).values
+                    scores = scores.masked_fill(all_done, 0).unsqueeze(1)
+                    sequence_scores = torch.cat([sequence_scores, scores], dim=1)
+
+                    # Update input boxes
+                    box_preds = next_bbox_logits * self.model.config.bbox_size
+                    expanded_blank_bbox = device_blank_bbox.expand(box_preds.shape)
+                    box_preds = torch.where(torch.isin(preds, device_bbox_ignore).unsqueeze(-1), expanded_blank_bbox, box_preds)
+                    input_boxes = box_preds.to(torch.long)
+                    input_boxes[skip_box_idxs, -1] = device_blank_bbox
+
+                    # Update output sequences
+                    batch_predictions = torch.cat([batch_predictions, input_ids], dim=1)
+                    batch_box_predictions = torch.cat([batch_box_predictions, input_boxes], dim=1)
 
                     # Updates for next iteration
                     position_ids = position_ids[:, -1:] + 1
@@ -343,31 +361,16 @@ class RecognitionPredictor(BasePredictor):
                     )
                     image_tiles = None # Remove after prefill
 
-                    # Update input ids
-                    # If this batch item is done, input a pad token
-                    input_ids = preds
-                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids)
-
-                    # Update input boxes
-                    input_boxes = box_preds.to(torch.long)
-                    input_boxes[skip_box_idxs, -1] = device_blank_bbox
-
-                    # Update output sequences
-                    batch_predictions = torch.cat([batch_predictions, input_ids], dim=1)
-                    batch_box_predictions = torch.cat([batch_box_predictions, input_boxes], dim=1)
-
                     # Update token counts and mark XLA step
                     token_count += inference_token_count
                     inference_token_count = input_ids.shape[-1]
                     mark_step()
 
-            sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
-
-            sequence_scores = sequence_scores.cpu()[:current_batch_size].tolist()
+            sequence_scores = sequence_scores.cpu()[:current_batch_size, 1:].tolist()
             batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:].tolist() # Remove the start token
-            batch_bboxes = batch_box_predictions.cpu()[:current_batch_size, 1:].tolist()
+            batch_bboxes = batch_box_predictions.cpu()[:current_batch_size, 1:]
 
-            assert len(batch_predictions) == len(batch_images) == len(batch_bboxes), "Batch size mismatch"
+            assert len(batch_predictions) == len(batch_images) == len(batch_bboxes) == len(sequence_scores), f"Batch size mismatch, {len(batch_predictions)} != {len(batch_images)} != {len(batch_bboxes)}"
             detected_polygons = []
             for img, bboxes in zip(batch_images, batch_bboxes):
                 detected_polygons.append([
@@ -378,6 +381,7 @@ class RecognitionPredictor(BasePredictor):
             detected_chars = []
             for (poly, pred, seq_score) in zip(detected_polygons, batch_predictions, sequence_scores):
                 img_chars = []
+                assert len(poly) == len(pred) == len(seq_score), f"Prediction mismatch found, {len(poly)} != {len(pred)} != {len(seq_score)}"
                 for bbox, char_id, score in zip(poly, pred, seq_score):
                     if char_id in config.special_ocr_tokens:
                         continue

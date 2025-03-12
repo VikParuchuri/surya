@@ -1084,7 +1084,7 @@ class SwinPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
 
 
-class SuryaEncoderModel(SwinPreTrainedModel):
+class SwinModel(SwinPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
@@ -1184,3 +1184,43 @@ class SuryaEncoderModel(SwinPreTrainedModel):
             attentions=encoder_outputs.attentions,
             reshaped_hidden_states=encoder_outputs.reshaped_hidden_states,
         )
+
+class SuryaEncoderModel(SwinModel):
+    @property
+    def image_size(self) -> int:
+        config: SuryaEncoderConfig = self.config
+        if isinstance(config.image_size, tuple) and len(config.image_size) == 2:
+            return config.image_size
+        elif isinstance(config.image_size, int):
+            return (config.image_size, config.image_size)
+
+        raise ValueError(
+            f"The `image_size` for SwinConfig should be a tuple of (int, int) or a single int but found {type(config.image_size)}"
+        )
+
+    @property
+    def hidden_size(self) -> int:
+        config: SuryaEncoderConfig = self.config
+        return config.hidden_size
+
+    def embed_images(self, image_batch: torch.Tensor) -> torch.Tensor:
+        return (
+            super()
+            .forward(
+                pixel_values=image_batch,
+                bool_masked_pos=None,
+                output_attentions=False,
+                output_hidden_states=False,
+                interpolate_pos_encoding=False,
+                return_dict=True,
+            )
+            .last_hidden_state
+        )
+
+    @property
+    def num_patches(self) -> int:
+        # Final swin stage does not downsample, so we can get the value from its last layer
+        final_layer_input_resolution = (
+            self.encoder.layers[-1].blocks[-1].input_resolution
+        )
+        return final_layer_input_resolution[0] * final_layer_input_resolution[1]

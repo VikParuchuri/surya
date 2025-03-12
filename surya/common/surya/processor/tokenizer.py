@@ -3,7 +3,7 @@ from typing import List, Union, Dict
 import numpy as np
 import torch
 
-from transformers import ByT5Tokenizer, PreTrainedTokenizer
+from transformers import ByT5Tokenizer
 
 from surya.common.s3 import S3DownloaderMixin
 
@@ -16,7 +16,7 @@ def create_token_regex(tokens):
     return regex
 
 
-class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
+class SuryaOCRTokenizer(S3DownloaderMixin, ByT5Tokenizer):
     def __init__(self, special_tokens: Dict[str, list] | None = None, **kwargs):
         if special_tokens is None:
             special_tokens = dict()
