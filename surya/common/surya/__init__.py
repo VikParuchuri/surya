@@ -1,12 +1,10 @@
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Unpack, List, Tuple
 
-import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from transformers import PreTrainedModel, DynamicCache
+from transformers import PreTrainedModel
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
@@ -130,7 +128,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         output_hidden_states=False,
         output_attentions=False,
         use_cache=False,
-        **kwargs: Unpack[KwargsForCausalLM],
+        **kwargs: KwargsForCausalLM,
     ):
         # Process the mixed batch if provided
         if inputs_embeds is None:
