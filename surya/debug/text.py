@@ -27,9 +27,9 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
     draw.text((x, y), text, fill="black", font=font)
 
 
-def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], langs: List[str], font_path=None, max_font_size=60, res_upscale=2):
+def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], font_path=None, max_font_size=60, res_upscale=2):
     if font_path is None:
-        font_path = get_font_path(langs)
+        font_path = get_font_path()
     new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)
     image = Image.new('RGB', new_image_size, color='white')
     draw = ImageDraw.Draw(image)

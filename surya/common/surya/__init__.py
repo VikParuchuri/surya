@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Unpack, List
+from typing import Optional, Unpack, List, Tuple
 
 import numpy as np
 import torch
@@ -176,7 +176,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         blank_bbox_token_id: int = None,
         ignore_bbox_token_ids: List[int] = None,
         max_new_tokens: int = 100,
-    ):
+    ) -> Tuple[list, list]:
         config: SuryaModelConfig = self.config
         if eos_token_id is None:
             eos_token_id = config.eos_token_id
@@ -192,54 +192,56 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         skip_bbox_idxs = ~np.array(needs_boxes)
         all_done = np.array([False] * batch_size)
-        for _ in range(max_new_tokens):
-            # This model always returns a dict
-            outputs = self(
-                input_ids=input_ids,
-                input_boxes=input_boxes,
-                image_tiles=image_tiles,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                inputs_embeds=None,
-                past_key_values=past_key_values,
-                use_cache=True,
-            )
+        with torch.inference_mode():
+            for _ in range(max_new_tokens):
+                # This model always returns a dict
 
-            # Update cache
-            past_key_values = outputs["past_key_values"]
+                outputs = self(
+                    input_ids=input_ids,
+                    input_boxes=input_boxes,
+                    image_tiles=image_tiles,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    inputs_embeds=None,
+                    past_key_values=past_key_values,
+                    use_cache=True,
+                )
 
-            # Prepare logits for tokens and bboxes - Clone is from this line - https://github.com/huggingface/transformers/blob/bc30dd1efb99f571d45b2e2131a555d09285ddd8/src/transformers/generation/utils.py#L3252
-            next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
-            next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
+                # Update cache
+                past_key_values = outputs["past_key_values"]
 
-            next_tokens = torch.argmax(next_token_logits, dim=-1)
-            next_bboxes = next_bbox_logits * self.config.bbox_size
+                # Prepare logits for tokens and bboxes - Clone is from this line - https://github.com/huggingface/transformers/blob/bc30dd1efb99f571d45b2e2131a555d09285ddd8/src/transformers/generation/utils.py#L3252
+                next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
+                next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
 
-            updated_attention_mask = torch.cat(
-                [attention_mask, torch.ones_like(next_tokens, dtype=torch.long)], dim=1
-            ).to(attention_mask.device)
-            updated_position_ids = position_ids[:, -1:] + 1
+                next_tokens = torch.argmax(next_token_logits, dim=-1)
+                next_bboxes = next_bbox_logits * self.config.bbox_size
 
-            for j in range(batch_size):
-                # Ignore the generated bbox and force it to blank if the token is special
-                tok = next_tokens[j].item()
-                if tok in ignore_bbox_token_ids:
-                    next_bboxes[j, -1, :] = blank_bbox_token_id
+                updated_attention_mask = torch.cat(
+                    [attention_mask, torch.ones_like(next_tokens, dtype=torch.long)], dim=1
+                ).to(attention_mask.device)
+                updated_position_ids = position_ids[:, -1:] + 1
 
-                new_tokens[j].append(tok)
-                new_boxes[j].append(next_bboxes[j][0].tolist())
+                for j in range(batch_size):
+                    # Ignore the generated bbox and force it to blank if the token is special
+                    tok = next_tokens[j].item()
+                    if tok in ignore_bbox_token_ids:
+                        next_bboxes[j, -1, :] = blank_bbox_token_id
 
-            done = (next_tokens == eos_token_id).cpu().numpy()
-            all_done = all_done | done
-            if all_done.all():
-                break
+                    new_tokens[j].append(tok)
+                    new_boxes[j].append(next_bboxes[j][0].tolist())
 
-            # Removing image tiles after prefill since they are no longer required
-            input_ids = next_tokens
-            input_boxes = next_bboxes.to(torch.long)
-            input_boxes[skip_bbox_idxs, -1, :] = blank_bbox_token_id
-            attention_mask = updated_attention_mask
-            position_ids = updated_position_ids
-            image_tiles = None
+                done = (next_tokens == eos_token_id).cpu().numpy()
+                all_done = all_done | done
+                if all_done.all():
+                    break
+
+                # Removing image tiles after prefill since they are no longer required
+                input_ids = next_tokens
+                input_boxes = next_bboxes.to(torch.long)
+                input_boxes[skip_bbox_idxs, -1, :] = blank_bbox_token_id
+                attention_mask = updated_attention_mask
+                position_ids = updated_position_ids
+                image_tiles = None
 
         return new_tokens, new_boxes

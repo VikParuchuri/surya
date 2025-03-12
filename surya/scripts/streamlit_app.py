@@ -11,7 +11,6 @@ from surya.debug.draw import draw_polys_on_image, draw_bboxes_on_image
 
 from surya.debug.text import draw_text_on_image
 from PIL import Image
-from surya.recognition.languages import CODE_TO_LANGUAGE, replace_lang_with_code
 from surya.table_rec import TableResult
 from surya.detection import TextDetectionResult
 from surya.recognition import OCRResult
@@ -123,13 +122,12 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 
 
 # Function for OCR
-def ocr(img, highres_img, langs: List[str]) -> (Image.Image, OCRResult):
-    replace_lang_with_code(langs)
-    img_pred = predictors["recognition"]([img], [langs], predictors["detection"], highres_images=[highres_img])[0]
+def ocr(img, highres_img) -> (Image.Image, OCRResult):
+    img_pred = predictors["recognition"]([img], predictors["detection"], highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
-    rec_img = draw_text_on_image(bboxes, text, img.size, langs)
+    rec_img = draw_text_on_image(bboxes, text, img.size)
     return rec_img, img_pred
 
 def open_pdf(pdf_file):

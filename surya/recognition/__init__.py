@@ -1,21 +1,23 @@
 from copy import deepcopy
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import torch
 from PIL import Image
 from tqdm import tqdm
 import torch.nn.functional as F
+from transformers import DynamicCache
 
+from surya.common.surya import SuryaModelConfig
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
 from surya.detection import DetectionPredictor
 from surya.input.processing import convert_if_not_rgb, slice_polys_from_image, slice_bboxes_from_image
+from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import truncate_repetitions
-from surya.common.surya.processor import SuryaOCRProcessor
 from surya.recognition.util import sort_text_lines
-from surya.recognition.schema import TextLine, OCRResult
+from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.settings import settings
 
 
@@ -28,12 +30,23 @@ class RecognitionPredictor(BasePredictor):
         "cuda": 256,
         "xla": 128
     }
+    tasks = {
+        "ocr_with_boxes": {
+            "needs_bboxes": True
+        },
+        "ocr_without_boxes": {
+            "needs_bboxes": False
+        },
+        "block_without_boxes": {
+            "needs_bboxes": False
+        }
+    }
 
     def __call__(
             self,
             images: List[Image.Image],
+            task_names: List[str] | None = None,
             det_predictor: DetectionPredictor | None = None,
-            task_name: str | None = "ocr_with_boxes",
             detection_batch_size: int | None = None,
             recognition_batch_size: int | None = None,
             highres_images: List[Image.Image] | None = None,
@@ -43,7 +56,11 @@ class RecognitionPredictor(BasePredictor):
             sort_lines: bool = True
     ) -> List[OCRResult]:
         allowed_tasks = self.model.config.tasks.keys()
-        assert task_name in allowed_tasks, f"Task {task_name} is not supported. Supported tasks are {allowed_tasks}"
+        if task_names is None:
+            task_names = ["ocr_with_boxes"] * len(images)
+
+        assert all([task_name in allowed_tasks for task_name in task_names]), f"One or more tasks in {task_names} is not supported. Supported tasks are {allowed_tasks}"
+        assert len(images) == len(task_names), "You need to pass in one task name for each image"
 
         images = convert_if_not_rgb(images)
         if highres_images is not None:
@@ -57,9 +74,10 @@ class RecognitionPredictor(BasePredictor):
             # Detect then slice
             flat = self.detect_and_slice_bboxes(
                 images,
+                task_names,
                 det_predictor,
                 detection_batch_size=detection_batch_size,
-                highres_images=highres_images
+                highres_images=highres_images,
             )
         else:
             if bboxes is not None:
@@ -71,12 +89,13 @@ class RecognitionPredictor(BasePredictor):
                 images,
                 bboxes=bboxes,
                 polygons=polygons,
-                input_text=input_text
+                input_text=input_text,
+                task_names=task_names
             )
 
-        rec_predictions, confidence_scores = self.batch_recognition(
+        char_predictions = self.batch_recognition(
             flat["slices"],
-            task_name,
+            flat["task_names"],
             input_text=flat["input_text"],
             batch_size=recognition_batch_size
         )
@@ -85,16 +104,18 @@ class RecognitionPredictor(BasePredictor):
         slice_start = 0
         for idx, image in enumerate(images):
             slice_end = slice_start + flat["slice_map"][idx]
-            image_lines = rec_predictions[slice_start:slice_end]
-            line_confidences = confidence_scores[slice_start:slice_end]
+            image_lines = char_predictions[slice_start:slice_end]
             polygons = flat["polygons"][slice_start:slice_end]
             slice_start = slice_end
 
             lines = []
-            for text_line, confidence, polygon in zip(image_lines, line_confidences, polygons):
+            for text_line, polygon in zip(image_lines, polygons):
+                text = "".join([char.text for char in text_line])
+                confidence = float(np.mean([char.confidence for char in text_line]))
                 lines.append(TextLine(
-                    text=text_line,
+                    text=text,
                     polygon=polygon,
+                    chars=text_line,
                     confidence=confidence
                 ))
 
@@ -110,6 +131,7 @@ class RecognitionPredictor(BasePredictor):
     def detect_and_slice_bboxes(
         self,
         images: List[Image.Image],
+        task_names: List[str],
         det_predictor: DetectionPredictor,
         detection_batch_size: int | None = None,
         highres_images: List[Image.Image] | None = None,
@@ -119,8 +141,9 @@ class RecognitionPredictor(BasePredictor):
         all_slices = []
         slice_map = []
         all_polygons = []
+        all_task_names = []
 
-        for idx, (det_pred, image, highres_image, lang) in enumerate(zip(det_predictions, images, highres_images, langs)):
+        for idx, (det_pred, image, highres_image, task_name) in enumerate(zip(det_predictions, images, highres_images, task_names)):
             polygons = [p.polygon for p in det_pred.bboxes]
             if highres_image:
                 width_scaler = highres_image.size[0] / image.size[0]
@@ -133,18 +156,22 @@ class RecognitionPredictor(BasePredictor):
             slice_map.append(len(slices))
             all_slices.extend(slices)
             all_polygons.extend(polygons)
+            all_task_names.extend([task_name] * len(slices))
 
-        assert len(all_slices) == sum(slice_map) == len(all_polygons)
+
+        assert len(all_slices) == sum(slice_map) == len(all_polygons) == len(all_task_names)
 
         return {
             "slices": all_slices,
             "slice_map": slice_map,
-            "polygons": all_polygons
+            "polygons": all_polygons,
+            "task_names": all_task_names
         }
 
     def slice_bboxes(
         self,
         images: List[Image.Image],
+        task_names: List[str],
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[List[str | None]] | None = None
@@ -154,6 +181,8 @@ class RecognitionPredictor(BasePredictor):
         all_slices = []
         all_polygons = []
         all_text = []
+        all_task_names = []
+
         for idx, image in enumerate(images):
             if polygons is not None:
                 polys = polygons[idx]
@@ -167,63 +196,50 @@ class RecognitionPredictor(BasePredictor):
             slice_map.append(len(slices))
             all_slices.extend(slices)
             all_polygons.extend(polys)
+            all_task_names.extend([task_names[idx]] * len(slices))
+
             if input_text is None:
                 all_text.extend([None] * len(slices))
             else:
                 all_text.extend(input_text[idx])
 
 
-        assert len(all_slices) == sum(slice_map)  == len(all_polygons) == len(all_text)
+        assert len(all_slices) == sum(slice_map)  == len(all_polygons) == len(all_text) == len(all_task_names)
 
         return {
             "slices": all_slices,
             "slice_map": slice_map,
             "polygons": all_polygons,
-            "input_text": all_text
+            "input_text": all_text,
+            "task_names": all_task_names
         }
 
-    def prepare_input(self, batch_langs, batch_pixel_values, batch_size):
-        batch_decoder_input = [[self.model.config.decoder_start_token_id] + lang for lang in batch_langs]
-        max_input_length = max(len(tokens) for tokens in batch_decoder_input)
+    def prepare_input(self, task_names: List[str], images: List[Image.Image], input_text: List[str | None]):
+        batch = []
+        for (image, text, task_name) in zip(images, input_text, task_names):
+            image_size = self.model.config.tasks[task_name]["img_size"]
+            image = image.resize(image_size)
 
-        # Pad decoder input to max length if needed, to ensure we can convert to a tensor
-        for idx, tokens in enumerate(batch_decoder_input):
-            if len(tokens) < max_input_length:
-                padding_length = max_input_length - len(tokens)
-                batch_decoder_input[idx] = [self.processor.tokenizer.pad_id] * padding_length + tokens
+            # Task input is the same for all tasks for now
+            text = text or ""
+            inputs = [{"type": "image", "image": image}, {"type": "text", "text": text}]
+            batch.append({"task": task_name, "inputs": inputs})
 
-        batch_pixel_values = torch.tensor(np.stack(batch_pixel_values, axis=0), dtype=self.model.dtype)
-        batch_decoder_input = torch.tensor(np.stack(batch_decoder_input, axis=0), dtype=torch.long)
-        if settings.RECOGNITION_STATIC_CACHE:
-            batch_pixel_values = self.pad_to_batch_size(batch_pixel_values, batch_size)
-            batch_decoder_input = self.pad_to_batch_size(batch_decoder_input, batch_size)
-
-        # Moving this after the padding fixes XLA recompilation issues
-        batch_pixel_values = batch_pixel_values.to(self.model.device)
-        batch_decoder_input = batch_decoder_input.to(self.model.device)
-
-        return batch_pixel_values, batch_decoder_input
-
-    def prepare_input(self, task: str, image: Image.Image, input_text: str):
-        image_size = self.model.config.tasks[task]["img_size"]
-        image = image.resize(image_size)
-
-        # Task input is the same for all tasks for now
-        inputs = [{"type": "image", "image": image}, {"type": "text", "text": input_text}]
-
-        return {"task": task, "inputs": inputs}
+        return batch
 
     def batch_recognition(
         self,
         images: List[Image.Image],
-        task_name: str,
+        task_names: List[str],
         input_text: List[str | None],
         batch_size: int | None = None
-    ):
+    ) -> List[List[TextChar]]:
         assert all(isinstance(image, Image.Image) for image in images)
 
         if len(images) == 0:
             return [], []
+
+        assert len(images) == len(task_names) == len(input_text), "You need to pass in one task name and text line for each image"
 
         if batch_size is None:
             batch_size = self.get_batch_size()
@@ -234,67 +250,81 @@ class RecognitionPredictor(BasePredictor):
         indices = list(indices)
         images = list(images)
 
+        config: SuryaModelConfig = self.model.config
+
+        # Setup various tokens on-device
+        device_bbox_ignore = torch.from_numpy(
+            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64)
+        ).to(self.model.device)
+        device_blank_bbox = torch.from_numpy(
+            np.asarray([config.blank_bbox_token_id] * 6, dtype=np.int64)
+        ).to(self.model.device)
+        device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device)
+
+
         output_text = []
-        confidences = []
         for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text", disable=self.disable_tqdm):
             batch_images = images[i:i + batch_size]
             batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
+            batch_text = input_text[i:i + batch_size]
+            batch_task_names = task_names[i:i + batch_size]
             current_batch_size = len(batch_images)
 
             batch_input = self.prepare_input(
-                batch_pixel_values,
-                batch_size
+                batch_task_names,
+                batch_images,
+                batch_text
             )
+            processed_inputs = self.processor([batch_input], padding_side="left").to(self.model.device)
+            input_ids = processed_inputs["input_ids"]
+            input_boxes = processed_inputs["input_boxes"]
+            image_tiles = processed_inputs["image_tiles"]
+            attention_mask = processed_inputs["attention_mask"]
+            position_ids = processed_inputs["position_ids"]
+
+            needs_boxes = [self.tasks[task_name]["needs_bboxes"] for task_name in batch_task_names]
+            skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
             token_count = 0
-            inference_token_count = batch_decoder_input.shape[-1]
-
-            decoder_position_ids = torch.ones_like(batch_decoder_input[0, :], dtype=torch.int64,
-                                                   device=self.model.device).cumsum(0) - 1
-            self.model.decoder.model._setup_cache(self.model.config, batch_size, self.model.device, self.model.dtype)
-            self.model.text_encoder.model._setup_cache(self.model.config, batch_size, self.model.device, self.model.dtype)
+            inference_token_count = input_ids.shape[-1]
 
             # Batch pixel values is the real current batch size
-            sequence_scores = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device).unsqueeze(1)
-            all_done = torch.zeros(batch_pixel_values.shape[0], dtype=torch.bool, device=self.model.device)
-            batch_predictions = torch.zeros(batch_pixel_values.shape[0], dtype=torch.int64, device=self.model.device).unsqueeze(1)
-            device_pad_token = torch.tensor(self.processor.tokenizer.pad_token_id, device=self.model.device)
+            sequence_scores = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device).unsqueeze(1)
+            all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
+
+            # Setup tensors to hold predictions
+            batch_predictions = torch.zeros((current_batch_size, 1), dtype=torch.long, device=self.model.device).unsqueeze(1)
+            batch_box_predictions = torch.zeros((current_batch_size, 1, 6), dtype=torch.long, device=self.model.device)
+
+            past_key_values = DynamicCache()
+            attention_ones = torch.ones(current_batch_size, 1, device=self.model.device, dtype=torch.long)
 
             with settings.INFERENCE_MODE():
-                encoder_hidden_states = self.model.encoder(pixel_values=batch_pixel_values).last_hidden_state
-
-                text_encoder_input_ids = torch.arange(
-                    self.model.text_encoder.config.query_token_count,
-                    device=encoder_hidden_states.device,
-                    dtype=torch.long
-                ).unsqueeze(0).expand(encoder_hidden_states.size(0), -1)
-
-                encoder_text_hidden_states = self.model.text_encoder(
-                    input_ids=text_encoder_input_ids,
-                    cache_position=None,
-                    attention_mask=None,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=None,
-                    use_cache=False
-                ).hidden_states
-
                 while token_count < settings.RECOGNITION_MAX_TOKENS - 1:
-                    is_prefill = token_count == 0
-                    # TODO: add attention mask
-                    return_dict = self.model.decoder(
-                        input_ids=batch_decoder_input,
-                        encoder_hidden_states=encoder_text_hidden_states,
-                        cache_position=decoder_position_ids,
-                        use_cache=True,
-                        prefill=is_prefill
+                    outputs = self.model(
+                        input_ids=input_ids,
+                        input_boxes=input_boxes,
+                        image_tiles=image_tiles,
+                        attention_mask=attention_mask,
+                        position_ids=position_ids,
+                        inputs_embeds=None,
+                        past_key_values=past_key_values,
+                        use_cache=True
                     )
 
-                    decoder_position_ids = decoder_position_ids[-1:] + 1
-                    logits = return_dict["logits"]  # Ignore batch padding
+                    # Update cache
+                    past_key_values = outputs["past_key_values"]
 
-                    preds = torch.argmax(logits[:, -1], dim=-1)
-                    scores = torch.max(F.softmax(logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
-                    done = (preds == self.processor.tokenizer.eos_id) | (preds == self.processor.tokenizer.pad_id)
+                    next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
+                    next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
+
+                    preds = torch.argmax(next_token_logits, dim=-1)
+                    box_preds = next_bbox_logits * self.model.config.bbox_size
+                    torch.where(torch.isin(preds, device_bbox_ignore), device_blank_bbox, box_preds)
+
+                    scores = torch.max(F.softmax(next_token_logits[:, -1], dim=-1), dim=-1).values.unsqueeze(1)
+
+                    done = (preds == self.processor.eos_token_id) | (preds == self.processor.pad_token_id)
                     all_done = all_done | done
                     all_done_cpu = all_done.cpu()
 
@@ -302,35 +332,66 @@ class RecognitionPredictor(BasePredictor):
                     scores = scores.masked_fill(all_done, 0)
                     sequence_scores = torch.cat([sequence_scores, scores], dim=1)
 
-                    # Account for possible padding
+                    # Account for possible padding of batch
                     if all_done_cpu[:current_batch_size].all():
                         break
 
-                    batch_decoder_input = preds.unsqueeze(1)
+                    # Updates for next iteration
+                    position_ids = position_ids[:, -1:] + 1
+                    attention_mask = torch.cat(
+                        [attention_mask, attention_ones], dim=1
+                    )
+                    image_tiles = None # Remove after prefill
 
+                    # Update input ids
                     # If this batch item is done, input a pad token
-                    batch_decoder_input = torch.where(all_done.unsqueeze(1), device_pad_token, batch_decoder_input)
+                    input_ids = preds
+                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids)
 
-                    batch_predictions = torch.cat([batch_predictions, batch_decoder_input], dim=1)
+                    # Update input boxes
+                    input_boxes = box_preds.to(torch.long)
+                    input_boxes[skip_box_idxs, -1] = device_blank_bbox
+
+                    # Update output sequences
+                    batch_predictions = torch.cat([batch_predictions, input_ids], dim=1)
+                    batch_box_predictions = torch.cat([batch_box_predictions, input_boxes], dim=1)
+
+                    # Update token counts and mark XLA step
                     token_count += inference_token_count
-
-                    inference_token_count = batch_decoder_input.shape[-1]
+                    inference_token_count = input_ids.shape[-1]
                     mark_step()
 
             sequence_scores = torch.sum(sequence_scores, dim=-1) / torch.sum(sequence_scores != 0, dim=-1)
 
-            sequence_scores = sequence_scores.cpu()[:current_batch_size]
-            batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:] # Remove the start token
-            detected_text = self.processor.tokenizer.batch_decode(batch_predictions)
+            sequence_scores = sequence_scores.cpu()[:current_batch_size].tolist()
+            batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:].tolist() # Remove the start token
+            batch_bboxes = batch_box_predictions.cpu()[:current_batch_size, 1:].tolist()
+
+            assert len(batch_predictions) == len(batch_images) == len(batch_bboxes), "Batch size mismatch"
+            detected_polygons = []
+            for img, bboxes in zip(batch_images, batch_bboxes):
+                detected_polygons.append([
+                    prediction_to_polygon(bbox, img.size, config.bbox_size, config.bbox_size // 2)
+                    for bbox in bboxes
+                ])
+
+            detected_chars = []
+            for (poly, pred, seq_score) in zip(detected_polygons, batch_predictions, sequence_scores):
+                img_chars = []
+                for bbox, char_id, score in zip(poly, pred, seq_score):
+                    if char_id in config.special_ocr_tokens:
+                        continue
+                    img_chars.append(TextChar(
+                        text=self.processor.decode([char_id]),
+                        polygon=bbox,
+                        confidence=score
+                    ))
+                detected_chars.append(img_chars)
+
 
             # Convert sequence_scores to list for the current batch
-            batch_confidences = sequence_scores.tolist()
-
-            output_text.extend(detected_text)
-            confidences.extend(batch_confidences)
+            output_text.extend(detected_chars)
 
         output_text = sorted(zip(indices, output_text), key=lambda x: x[0])
-        confidences = sorted(zip(indices, confidences), key=lambda x: x[0])
         output_text = [text for _, text in output_text]
-        confidences = [conf for _, conf in confidences]
-        return output_text, confidences
+        return output_text

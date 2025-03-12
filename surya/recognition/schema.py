@@ -6,6 +6,7 @@ from surya.common.polygon import PolygonBox
 
 class TextChar(PolygonBox):
     text: str
+    bbox_valid: bool = True
     confidence: Optional[float] = None
 
 class TextSpan(PolygonBox):
