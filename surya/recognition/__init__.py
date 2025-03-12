@@ -258,12 +258,14 @@ class RecognitionPredictor(BasePredictor):
 
         # Setup various tokens on-device
         device_bbox_ignore = torch.from_numpy(
-            np.array(self.processor.ignore_bbox_tokens, dtype=np.int64)
+            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64)
         ).to(self.model.device)
         device_blank_bbox = torch.from_numpy(
             np.asarray([config.blank_bbox_token_id] * 6, dtype=np.int64)
         ).to(self.model.device)
         device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device)
+        device_math_start = torch.from_numpy(np.array(self.processor.math_start_token_ids, dtype=np.int64)).to(self.model.device)
+        device_math_end = torch.from_numpy(np.array(self.processor.math_end_token_ids, dtype=np.int64)).to(self.model.device)
 
 
         output_text = []
@@ -295,6 +297,7 @@ class RecognitionPredictor(BasePredictor):
             # Batch pixel values is the real current batch size
             sequence_scores = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device).unsqueeze(1)
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
+            in_math = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
 
             # Setup tensors to hold predictions
             batch_predictions = torch.zeros((current_batch_size, 1), dtype=torch.long, device=self.model.device)
@@ -324,6 +327,12 @@ class RecognitionPredictor(BasePredictor):
                     next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
                     preds = torch.argmax(next_token_logits, dim=-1)
 
+                    # Handle math sections
+                    math_start = torch.isin(preds, device_math_start).squeeze(-1)
+                    in_math = in_math | math_start
+                    math_end = torch.isin(preds, device_math_end).squeeze(-1)
+                    in_math = in_math & ~math_end
+
                     # Handle inference completion
                     done = (preds == self.processor.eos_token_id) | (preds == self.processor.pad_token_id)
                     all_done = all_done | done.squeeze(-1)
@@ -346,7 +355,17 @@ class RecognitionPredictor(BasePredictor):
                     # Update input boxes
                     box_preds = next_bbox_logits * self.model.config.bbox_size
                     expanded_blank_bbox = device_blank_bbox.expand(box_preds.shape)
-                    box_preds = torch.where(torch.isin(preds, device_bbox_ignore).unsqueeze(-1), expanded_blank_bbox, box_preds)
+                    box_preds = torch.where(
+                        torch.isin(preds, device_bbox_ignore).unsqueeze(-1),
+                        expanded_blank_bbox,
+                        box_preds
+                    )
+                    # Set bbox to blank if we're in a match section
+                    box_preds = torch.where(
+                        in_math.unsqueeze(-1).unsqueeze(-1),
+                        expanded_blank_bbox,
+                        box_preds
+                    )
                     input_boxes = box_preds.to(torch.long)
                     input_boxes[skip_box_idxs, -1] = device_blank_bbox
 

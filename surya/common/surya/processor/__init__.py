@@ -107,10 +107,21 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         self.bbox_pad_token_id = self.blank_bbox_token_id
 
         # Tells us where to insert a bbox blank token
-        self.ignore_bbox_tokens = [
+        self.ignore_bbox_token_ids = [
             v
-            for (k, v) in ocr_tokenizer.SPECIAL_TOKEN_MAPPING.items()
-            if k not in ocr_tokenizer.special_tokens["math_external"]
+            for (k, v) in self.ocr_tokenizer.SPECIAL_TOKEN_MAPPING.items()
+            if k not in self.ocr_tokenizer.special_tokens["math_external"]
+        ]
+        math_end_token = "</math>"
+        self.math_start_token_ids = [
+            v
+            for (k, v) in self.ocr_tokenizer.SPECIAL_TOKEN_MAPPING.items()
+            if k in self.ocr_tokenizer.special_tokens["math_external"] and k != math_end_token
+        ]
+        self.math_end_token_ids = [
+            v
+            for (k, v) in self.ocr_tokenizer.SPECIAL_TOKEN_MAPPING.items()
+            if k == math_end_token
         ]
 
         super().__init__(image_processor, ocr_tokenizer)
