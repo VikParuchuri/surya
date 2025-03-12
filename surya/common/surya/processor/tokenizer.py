@@ -5,6 +5,8 @@ import torch
 
 from transformers import ByT5Tokenizer, PreTrainedTokenizer
 
+from surya.common.s3 import S3DownloaderMixin
+
 
 def create_token_regex(tokens):
     escaped_tokens = [re.escape(token) for token in tokens]
@@ -14,7 +16,7 @@ def create_token_regex(tokens):
     return regex
 
 
-class SuryaOCRTokenizer(PreTrainedTokenizer):
+class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
     def __init__(self, special_tokens: Dict[str, list] | None = None, **kwargs):
         if special_tokens is None:
             special_tokens = dict()

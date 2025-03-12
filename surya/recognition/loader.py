@@ -5,11 +5,9 @@ from transformers import AutoImageProcessor
 
 from surya.common.load import ModelLoader
 from surya.common.surya.config import SuryaModelConfig
-from surya.common.surya.model import SuryaModel
-from surya.common.surya.processor.processor import SuryaOCRProcessor
+from surya.common.surya.__init__ import SuryaModel
+from surya.common.surya.processor.__init__ import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
-from surya.recognition.model.config import SuryaOCRConfig, SuryaOCRDecoderConfig, DonutSwinConfig, SuryaOCRTextEncoderConfig
-from surya.recognition.model.encoderdecoder import OCREncoderDecoderModel
 from surya.settings import settings
 
 torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)

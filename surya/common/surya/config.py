@@ -5,7 +5,7 @@ from surya.common.surya.decoder.config import SuryaDecoderConfig
 
 
 class SuryaModelConfig(PretrainedConfig):
-    model_type = "surya-foundation"
+    model_type = "surya-multimodal-foundation"
     is_composition = True
 
     def __init__(
@@ -18,12 +18,12 @@ class SuryaModelConfig(PretrainedConfig):
         pad_token_id=2,
         image_token_id=3,
         special_token_count=4,
-        tile_size=(384, 384),
+        tile_size=(256, 256),
         max_sequence_length=1536,
         special_ocr_tokens=None,
         vision_encoder=None,
         decoder=None,
-        use_ce_loss=False,
+        tasks: dict | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -38,8 +38,8 @@ class SuryaModelConfig(PretrainedConfig):
         self.tile_size = tile_size
         self.special_ocr_tokens = special_ocr_tokens
         self.special_token_count = special_token_count  # pad, bos, etc, tokens
-        self.use_ce_loss = use_ce_loss
         self.max_sequence_length = max_sequence_length
+        self.tasks = tasks
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(

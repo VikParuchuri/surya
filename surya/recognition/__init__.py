@@ -13,7 +13,7 @@ from surya.detection import DetectionPredictor
 from surya.input.processing import convert_if_not_rgb, slice_polys_from_image, slice_bboxes_from_image
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import truncate_repetitions
-from surya.recognition.processor import SuryaProcessor
+from surya.common.surya.processor import SuryaOCRProcessor
 from surya.recognition.util import sort_text_lines
 from surya.recognition.schema import TextLine, OCRResult
 from surya.settings import settings
@@ -32,92 +32,92 @@ class RecognitionPredictor(BasePredictor):
     def __call__(
             self,
             images: List[Image.Image],
-            langs: List[List[str] | None],
             det_predictor: DetectionPredictor | None = None,
+            task_name: str | None = "ocr_with_boxes",
             detection_batch_size: int | None = None,
             recognition_batch_size: int | None = None,
             highres_images: List[Image.Image] | None = None,
             bboxes: List[List[List[int]]] | None = None,
             polygons: List[List[List[List[int]]]] | None = None,
+            input_text: List[str | None] | None = None,
             sort_lines: bool = True
     ) -> List[OCRResult]:
-            assert len(images) == len(langs), "You need to pass in one list of languages for each image"
-            images = convert_if_not_rgb(images)
-            if highres_images is not None:
-                assert len(images) == len(highres_images), "You need to pass in one highres image for each image"
+        allowed_tasks = self.model.config.tasks.keys()
+        assert task_name in allowed_tasks, f"Task {task_name} is not supported. Supported tasks are {allowed_tasks}"
 
-            highres_images = convert_if_not_rgb(highres_images) if highres_images is not None else [None] * len(images)
+        images = convert_if_not_rgb(images)
+        if highres_images is not None:
+            assert len(images) == len(highres_images), "You need to pass in one highres image for each image"
 
-            if bboxes is None and polygons is None:
-                assert det_predictor is not None, "You need to pass in a detection predictor if you don't provide bboxes or polygons"
+        highres_images = convert_if_not_rgb(highres_images) if highres_images is not None else [None] * len(images)
 
-                # Detect then slice
-                flat = self.detect_and_slice_bboxes(
-                    images,
-                    langs,
-                    det_predictor,
-                    detection_batch_size=detection_batch_size,
-                    highres_images=highres_images
-                )
-            else:
-                if bboxes is not None:
-                    assert len(images) == len(bboxes), "You need to pass in one list of bboxes for each image"
-                if polygons is not None:
-                    assert len(images) == len(polygons), "You need to pass in one list of polygons for each image"
+        if bboxes is None and polygons is None:
+            assert det_predictor is not None, "You need to pass in a detection predictor if you don't provide bboxes or polygons"
 
-                flat = self.slice_bboxes(
-                    images,
-                    langs,
-                    bboxes=bboxes,
-                    polygons=polygons
-                )
+            # Detect then slice
+            flat = self.detect_and_slice_bboxes(
+                images,
+                det_predictor,
+                detection_batch_size=detection_batch_size,
+                highres_images=highres_images
+            )
+        else:
+            if bboxes is not None:
+                assert len(images) == len(bboxes), "You need to pass in one list of bboxes for each image"
+            if polygons is not None:
+                assert len(images) == len(polygons), "You need to pass in one list of polygons for each image"
 
-            rec_predictions, confidence_scores = self.batch_recognition(
-                flat["slices"],
-                flat["langs"],
-                batch_size=recognition_batch_size
+            flat = self.slice_bboxes(
+                images,
+                bboxes=bboxes,
+                polygons=polygons,
+                input_text=input_text
             )
 
-            predictions_by_image = []
-            slice_start = 0
-            for idx, (image, lang) in enumerate(zip(images, langs)):
-                slice_end = slice_start + flat["slice_map"][idx]
-                image_lines = rec_predictions[slice_start:slice_end]
-                line_confidences = confidence_scores[slice_start:slice_end]
-                polygons = flat["polygons"][slice_start:slice_end]
-                slice_start = slice_end
+        rec_predictions, confidence_scores = self.batch_recognition(
+            flat["slices"],
+            task_name,
+            input_text=flat["input_text"],
+            batch_size=recognition_batch_size
+        )
 
-                lines = []
-                for text_line, confidence, polygon in zip(image_lines, line_confidences, polygons):
-                    lines.append(TextLine(
-                        text=text_line,
-                        polygon=polygon,
-                        confidence=confidence
-                    ))
+        predictions_by_image = []
+        slice_start = 0
+        for idx, image in enumerate(images):
+            slice_end = slice_start + flat["slice_map"][idx]
+            image_lines = rec_predictions[slice_start:slice_end]
+            line_confidences = confidence_scores[slice_start:slice_end]
+            polygons = flat["polygons"][slice_start:slice_end]
+            slice_start = slice_end
 
-                if sort_lines:
-                    lines = sort_text_lines(lines)
-                predictions_by_image.append(OCRResult(
-                    text_lines=lines,
-                    languages=lang,
-                    image_bbox=[0, 0, image.size[0], image.size[1]]
+            lines = []
+            for text_line, confidence, polygon in zip(image_lines, line_confidences, polygons):
+                lines.append(TextLine(
+                    text=text_line,
+                    polygon=polygon,
+                    confidence=confidence
                 ))
 
-            return predictions_by_image
+            if sort_lines:
+                lines = sort_text_lines(lines)
+            predictions_by_image.append(OCRResult(
+                text_lines=lines,
+                image_bbox=[0, 0, image.size[0], image.size[1]]
+            ))
+
+        return predictions_by_image
 
     def detect_and_slice_bboxes(
-            self,
-            images: List[Image.Image],
-            langs: List[List[str] | None],
-            det_predictor: DetectionPredictor,
-            detection_batch_size: int | None = None,
-            highres_images: List[Image.Image] | None = None,
+        self,
+        images: List[Image.Image],
+        det_predictor: DetectionPredictor,
+        detection_batch_size: int | None = None,
+        highres_images: List[Image.Image] | None = None,
     ):
         det_predictions = det_predictor(images, batch_size=detection_batch_size)
 
         all_slices = []
         slice_map = []
-        all_langs = []
         all_polygons = []
 
         for idx, (det_pred, image, highres_image, lang) in enumerate(zip(det_predictions, images, highres_images, langs)):
@@ -131,32 +131,30 @@ class RecognitionPredictor(BasePredictor):
             else:
                 slices = slice_polys_from_image(image, polygons)
             slice_map.append(len(slices))
-            all_langs.extend([lang] * len(slices))
             all_slices.extend(slices)
             all_polygons.extend(polygons)
 
-        assert len(all_slices) == sum(slice_map) == len(all_langs) == len(all_polygons)
+        assert len(all_slices) == sum(slice_map) == len(all_polygons)
 
         return {
             "slices": all_slices,
             "slice_map": slice_map,
-            "langs": all_langs,
             "polygons": all_polygons
         }
 
     def slice_bboxes(
-            self,
-            images: List[Image.Image],
-            langs: List[List[str] | None],
-            bboxes: List[List[List[int]]] | None = None,
-            polygons: List[List[List[List[int]]]] | None = None
+        self,
+        images: List[Image.Image],
+        bboxes: List[List[List[int]]] | None = None,
+        polygons: List[List[List[List[int]]]] | None = None,
+        input_text: List[List[str | None]] | None = None
     ):
         assert bboxes is not None or polygons is not None
         slice_map = []
         all_slices = []
-        all_langs = []
         all_polygons = []
-        for idx, (image, lang) in enumerate(zip(images, langs)):
+        all_text = []
+        for idx, image in enumerate(images):
             if polygons is not None:
                 polys = polygons[idx]
                 slices = slice_polys_from_image(image, polys)
@@ -168,16 +166,20 @@ class RecognitionPredictor(BasePredictor):
                 ]
             slice_map.append(len(slices))
             all_slices.extend(slices)
-            all_langs.extend([deepcopy(lang)] * len(slices))
             all_polygons.extend(polys)
+            if input_text is None:
+                all_text.extend([None] * len(slices))
+            else:
+                all_text.extend(input_text[idx])
 
-        assert len(all_slices) == sum(slice_map) == len(all_langs) == len(all_polygons)
+
+        assert len(all_slices) == sum(slice_map)  == len(all_polygons) == len(all_text)
 
         return {
             "slices": all_slices,
             "slice_map": slice_map,
-            "langs": all_langs,
-            "polygons": all_polygons
+            "polygons": all_polygons,
+            "input_text": all_text
         }
 
     def prepare_input(self, batch_langs, batch_pixel_values, batch_size):
@@ -202,14 +204,23 @@ class RecognitionPredictor(BasePredictor):
 
         return batch_pixel_values, batch_decoder_input
 
+    def prepare_input(self, task: str, image: Image.Image, input_text: str):
+        image_size = self.model.config.tasks[task]["img_size"]
+        image = image.resize(image_size)
+
+        # Task input is the same for all tasks for now
+        inputs = [{"type": "image", "image": image}, {"type": "text", "text": input_text}]
+
+        return {"task": task, "inputs": inputs}
+
     def batch_recognition(
-            self,
-            images: List[Image.Image],
-            languages: List[List[str] | None],
-            batch_size=None
+        self,
+        images: List[Image.Image],
+        task_name: str,
+        input_text: List[str | None],
+        batch_size: int | None = None
     ):
         assert all(isinstance(image, Image.Image) for image in images)
-        assert len(images) == len(languages)
 
         if len(images) == 0:
             return [], []
@@ -229,13 +240,8 @@ class RecognitionPredictor(BasePredictor):
             batch_images = images[i:i + batch_size]
             batch_images = [image.convert("RGB") for image in batch_images]  # also copies the images
             current_batch_size = len(batch_images)
-            batch_langs = languages[i:i + current_batch_size]
-            processed_batch = self.processor(text=[""] * len(batch_images), images=batch_images, langs=batch_langs)
 
-            batch_pixel_values = processed_batch["pixel_values"]
-            batch_langs = processed_batch["langs"]
-            batch_pixel_values, batch_decoder_input = self.prepare_input(
-                batch_langs,
+            batch_input = self.prepare_input(
                 batch_pixel_values,
                 batch_size
             )
