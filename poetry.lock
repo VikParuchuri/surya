@@ -1806,6 +1806,17 @@ files = [
 ]
 
 [[package]]
+name = "mathml-to-latex"
+version = "1.0.0"
+description = "It converts MathML to LaTeX"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "mathml_to_latex-1.0.0-py3-none-any.whl", hash = "sha256:a85ec2434da774be019ed5ea32494616baabf48471b054e3567a7700ae759572"},
+    {file = "mathml_to_latex-1.0.0.tar.gz", hash = "sha256:ba6a438526684940572d1875b4d5f2d6cb3bea52943830307d08a9fc662e4f69"},
+]
+
+[[package]]
 name = "matplotlib-inline"
 version = "0.1.7"
 description = "Inline Matplotlib backend for Jupyter"
@@ -4897,4 +4908,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "8e85436a7a3d12cffe53fdfa3fe8b70cf99e50795e92f4402c0ab309cfe997d0"
+content-hash = "554f7918d98e81136a1e983dc6a02c54ad81de1052d55140209b27b01fa8e2fe"

@@ -44,12 +44,6 @@ def table_rec_predictor() -> TableRecPredictor:
     del table_rec_predictor
 
 @pytest.fixture(scope="session")
-def texify_predictor() -> TexifyPredictor:
-    texify_predictor = TexifyPredictor()
-    yield texify_predictor
-    del texify_predictor
-
-@pytest.fixture(scope="session")
 def inline_detection_predictor() -> InlineDetectionPredictor:
     inline_detection_predictor = InlineDetectionPredictor()
     yield inline_detection_predictor

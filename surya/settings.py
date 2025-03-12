@@ -102,12 +102,7 @@ class Settings(BaseSettings):
     COMPILE_TABLE_REC: bool = False
 
     # Texify
-    TEXIFY_MODEL_CHECKPOINT: str = "s3://texify/2025_02_18"
     TEXIFY_BENCHMARK_DATASET: str = "datalab-to/texify_bench"
-    TEXIFY_IMAGE_SIZE: Dict = {"height": 480, "width": 480}
-    TEXIFY_MAX_TOKENS: int = 768
-    TEXIFY_BATCH_SIZE: Optional[int] = None
-    COMPILE_TEXIFY: bool = False
 
     # OCR Error Detection
     OCR_ERROR_MODEL_CHECKPOINT: str = "s3://ocr_error_detection/2025_02_18"
@@ -138,10 +133,6 @@ class Settings(BaseSettings):
     @computed_field
     def OCR_ERROR_STATIC_CACHE(self) -> bool:
         return self.COMPILE_ALL or self.COMPILE_OCR_ERROR or self.TORCH_DEVICE_MODEL == "xla"
-
-    @computed_field
-    def TEXIFY_STATIC_CACHE(self) -> bool:
-        return self.COMPILE_ALL or self.COMPILE_TEXIFY or self.TORCH_DEVICE_MODEL == "xla"
 
     @computed_field
     def MODEL_DTYPE(self) -> torch.dtype:

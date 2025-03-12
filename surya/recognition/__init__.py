@@ -17,7 +17,7 @@ from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import truncate_repetitions
 from surya.recognition.util import sort_text_lines
-from surya.recognition.schema import TextLine, OCRResult, TextChar
+from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
 from surya.settings import settings
 
 
@@ -31,15 +31,15 @@ class RecognitionPredictor(BasePredictor):
         "xla": 128
     }
     tasks = {
-        "ocr_with_boxes": {
+        TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
             "img_size": (1024, 256)
         },
-        "ocr_without_boxes": {
+        TaskNames.ocr_without_boxes: {
             "needs_bboxes": False,
             "img_size": (1024, 256)
         },
-        "block_without_boxes": {
+        TaskNames.block_without_boxes: {
             "needs_bboxes": False,
             "img_size": (768, 768)
         }
@@ -60,7 +60,7 @@ class RecognitionPredictor(BasePredictor):
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
-            task_names = ["ocr_with_boxes"] * len(images)
+            task_names = [TaskNames.ocr_with_boxes] * len(images)
 
         assert all([task_name in allowed_tasks for task_name in task_names]), f"One or more tasks in {task_names} is not supported. Supported tasks are {allowed_tasks}"
         assert len(images) == len(task_names), "You need to pass in one task name for each image"
@@ -267,7 +267,6 @@ class RecognitionPredictor(BasePredictor):
         device_math_start = torch.from_numpy(np.array(self.processor.math_start_token_ids, dtype=np.int64)).to(self.model.device)
         device_math_end = torch.from_numpy(np.array(self.processor.math_end_token_ids, dtype=np.int64)).to(self.model.device)
 
-
         output_text = []
         for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text", disable=self.disable_tqdm):
             batch_images = images[i:i + batch_size]
@@ -292,7 +291,7 @@ class RecognitionPredictor(BasePredictor):
             skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
             token_count = 0
-            inference_token_count = input_ids.shape[-1]
+            inference_token_count = 1
 
             # Batch pixel values is the real current batch size
             sequence_scores = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device).unsqueeze(1)

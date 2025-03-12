@@ -1,4 +1,8 @@
 import os
+from typing import List
+
+from surya.recognition import RecognitionPredictor, TaskNames
+from surya.util.mathml import mathml_to_latex
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1" # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
 
@@ -11,8 +15,6 @@ import hashlib
 import pypdfium2
 
 from surya.settings import settings
-from surya.texify import TexifyPredictor
-from surya.texify.util import convert_math_delimiters
 from PIL import Image
 
 MAX_WIDTH = 800
@@ -21,14 +23,15 @@ MAX_HEIGHT = 1000
 
 @st.cache_resource()
 def load_predictor():
-    return TexifyPredictor()
+    return RecognitionPredictor()
 
 
 @st.cache_data()
-def inference(pil_image, bbox):
+def inference(pil_image: Image.Image, bbox: List[float]):
     input_img = pil_image.crop(bbox)
-    model_output = predictor([input_img])
-    return model_output[0].text, convert_math_delimiters(model_output[0].text)
+    bbox = [0, 0, input_img.width, input_img.height]
+    model_output = predictor([input_img], [TaskNames.block_without_boxes], bboxes=[[bbox]])
+    return model_output[0].text_lines[0].text, mathml_to_latex(model_output[0].text_lines[0].text)
 
 
 def open_pdf(pdf_file):
@@ -133,10 +136,11 @@ if objects.shape[0] > 0:
 if bbox_list:
     with col2:
         texts = [inference(pil_image, bbox) for bbox in bbox_list]
-        for idx, (raw, renderable) in enumerate(reversed(texts)):
+        for idx, (mathml, latex) in enumerate(reversed(texts)):
             st.markdown(f"### {len(texts) - idx}")
-            st.markdown(renderable)
-            st.code(raw)
+            st.markdown(mathml, unsafe_allow_html=True)
+            st.code(mathml)
+            st.code(latex)
             st.divider()
 
 with col2:
