@@ -74,12 +74,19 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.bbox_head = nn.Linear(config.hidden_size, 6)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
 
-    def get_image_embeddings(self, image_tiles):
+    def get_image_embeddings(self, image_tiles, batch_size: int):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch
-        # TODO - Batch processing, since the total #image_tiles could be much higher than the original batch size
-        return self.vision_projector(
-            self.vision_encoder.embed_images(image_batch=image_tiles)
-        )
+        all_image_features = None
+        for i in range(0, len(image_tiles), batch_size):
+            image_batch = image_tiles[i:i + batch_size]
+            image_features = self.vision_projector(
+                self.vision_encoder.embed_images(image_batch=image_batch)
+            )
+            if i == 0:
+                all_image_features = image_features
+            else:
+                all_image_features = torch.cat([all_image_features, image_features], dim=0)
+        return all_image_features
 
     def embed_ids_boxes_images(self, input_ids, input_boxes, image_tiles):
         """
@@ -91,7 +98,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             input_tokens=input_ids, input_bboxes=input_boxes
         )
         if image_tiles is not None:
-            image_features = self.get_image_embeddings(image_tiles=image_tiles)
+            image_features = self.get_image_embeddings(image_tiles=image_tiles, batch_size=len(input_ids))
 
             special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(

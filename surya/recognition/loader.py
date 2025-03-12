@@ -9,6 +9,11 @@ from surya.common.surya.__init__ import SuryaModel
 from surya.common.surya.processor.__init__ import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
 from surya.settings import settings
+try:
+    from flash_attn_interface import flash_attn_func
+    flash_available = True
+except ImportError:
+    flash_available = False
 
 torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)
 if not settings.ENABLE_EFFICIENT_ATTENTION:
@@ -35,8 +40,11 @@ class RecognitionModelLoader(ModelLoader):
             dtype = settings.MODEL_DTYPE
 
         model = SuryaModel.from_pretrained(self.checkpoint)
-        model = model.to(device)
+        model = model.to(device=device, dtype=dtype)
         model = model.eval()
+
+        if flash_available:
+            model.config._attn_implementation = "flash_attention_2"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch.set_float32_matmul_precision('high')

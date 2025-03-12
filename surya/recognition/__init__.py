@@ -261,9 +261,9 @@ class RecognitionPredictor(BasePredictor):
             np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64)
         ).to(self.model.device)
         device_blank_bbox = torch.from_numpy(
-            np.asarray([config.blank_bbox_token_id] * 6, dtype=np.int64)
-        ).to(self.model.device)
-        device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device)
+            np.asarray([config.blank_bbox_token_id] * 6)
+        ).to(self.model.device).to(torch.long)
+        device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device, dtype=torch.long)
         device_math_start = torch.from_numpy(np.array(self.processor.math_start_token_ids, dtype=np.int64)).to(self.model.device)
         device_math_end = torch.from_numpy(np.array(self.processor.math_end_token_ids, dtype=np.int64)).to(self.model.device)
 
@@ -280,7 +280,10 @@ class RecognitionPredictor(BasePredictor):
                 batch_images,
                 batch_text
             )
-            processed_inputs = self.processor(batch_input, padding_side="left").to(self.model.device)
+            processed_inputs = self.processor(batch_input, padding_side="left").to(
+                device=self.model.device,
+                dtype=self.model.dtype
+            )
             input_ids = processed_inputs["input_ids"]
             input_boxes = processed_inputs["input_boxes"]
             image_tiles = processed_inputs["image_tiles"]
@@ -344,7 +347,7 @@ class RecognitionPredictor(BasePredictor):
                     # Update input ids
                     # If this batch item is done, input a pad token
                     input_ids = preds
-                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids)
+                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids).to(torch.long)
 
                     # Confidence score for the current token
                     scores = torch.max(F.softmax(next_token_logits[:, -1], dim=-1), dim=-1).values
