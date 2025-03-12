@@ -398,16 +398,19 @@ class RecognitionPredictor(BasePredictor):
                 ])
 
             detected_chars = []
-            for (poly, pred, seq_score) in zip(detected_polygons, batch_predictions, sequence_scores):
+            for (poly, pred, seq_score, needs_box) in zip(detected_polygons, batch_predictions, sequence_scores, needs_boxes):
                 img_chars = []
                 assert len(poly) == len(pred) == len(seq_score), f"Prediction mismatch found, {len(poly)} != {len(pred)} != {len(seq_score)}"
                 for bbox, char_id, score in zip(poly, pred, seq_score):
                     if char_id in config.special_ocr_tokens:
                         continue
+                    if not needs_box:
+                        bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
                     img_chars.append(TextChar(
                         text=self.processor.decode([char_id]),
                         polygon=bbox,
-                        confidence=score
+                        confidence=score,
+                        bbox_valid=needs_box
                     ))
                 detected_chars.append(img_chars)
 

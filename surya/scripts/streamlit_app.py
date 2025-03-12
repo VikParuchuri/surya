@@ -236,7 +236,7 @@ if run_text_rec:
         st.image(rec_img, caption="OCR Result", use_container_width=True)
         json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])
         with json_tab:
-            st.json(pred.model_dump(), expanded=True)
+            st.json(pred.model_dump(), expanded=False)
         with text_tab:
             st.text("\n".join([p.text for p in pred.text_lines]))
 
