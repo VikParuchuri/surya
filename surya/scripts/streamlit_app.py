@@ -123,12 +123,13 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 
 # Function for OCR
 def ocr(img, highres_img) -> (Image.Image, OCRResult):
-    img_pred = predictors["recognition"]([img], predictors["detection"], highres_images=[highres_img])[0]
+    img_pred = predictors["recognition"]([img], det_predictor=predictors["detection"], highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
     rec_img = draw_text_on_image(bboxes, text, img.size)
     return rec_img, img_pred
+
 
 def open_pdf(pdf_file):
     stream = io.BytesIO(pdf_file.getvalue())
@@ -171,13 +172,12 @@ Notes:
 - This works best on documents with printed text.
 - Preprocessing the image (e.g. increasing contrast) can improve results.
 - If OCR doesn't work, try changing the resolution of your image (increase if below 2048px width, otherwise decrease).
-- This supports 90+ languages, see [here](https://github.com/VikParuchuri/surya/tree/master/surya/languages.py) for a full list.
+- This supports 90+ major languages.
 
 Find the project [here](https://github.com/VikParuchuri/surya).
 """)
 
 in_file = st.sidebar.file_uploader("PDF file or image:", type=["pdf", "png", "jpg", "jpeg", "gif", "webp"])
-languages = st.sidebar.multiselect("Languages", sorted(list(CODE_TO_LANGUAGE.values())), default=[], max_selections=4, help="Select the languages in the image (if known) to improve OCR accuracy.  Optional.")
 
 if in_file is None:
     st.stop()
@@ -231,7 +231,7 @@ if run_layout_det:
 
 # Run OCR
 if run_text_rec:
-    rec_img, pred = ocr(pil_image, pil_image_highres, languages)
+    rec_img, pred = ocr(pil_image, pil_image_highres)
     with col1:
         st.image(rec_img, caption="OCR Result", use_container_width=True)
         json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])
