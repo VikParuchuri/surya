@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     INLINE_MATH_MIN_AREA: int = 100 # Minimum area for inline math detection
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr"
+    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr2"
     RECOGNITION_MAX_TOKENS: int = 512
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
