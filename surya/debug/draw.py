@@ -1,8 +1,7 @@
-from typing import List
+import re
 from PIL import ImageDraw, ImageFont
 
 from surya.debug.fonts import get_font_path
-from surya.common.polygon import PolygonBox
 from surya.debug.text import get_text_size
 
 

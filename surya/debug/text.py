@@ -1,7 +1,22 @@
+import re
 from typing import List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 from surya.debug.fonts import get_font_path
+from surya.debug.render_html import render_text_as_html
+
+try:
+    from playwright.sync_api import sync_playwright
+    has_playwright = True
+except ImportError:
+    has_playwright = False
+
+
+def strip_html_tags(html_text):
+    pattern = re.compile(r'<\w[^>]*>')
+    text_only = pattern.sub('', html_text)
+
+    return text_only
 
 
 def get_text_size(text, font):
@@ -27,7 +42,27 @@ def render_text(draw, text, s_bbox, bbox_width, bbox_height, font_path, box_font
     draw.text((x, y), text, fill="black", font=font)
 
 
+def draw_text_with_playwright(bboxes, texts: List[str], image_size: Tuple[int, int]):
+    html_content, image_size = render_text_as_html(bboxes, texts, image_size)
+    if not has_playwright:
+        raise ImportError("Playwright is not installed. Please install it using `pip install playwright`")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": image_size[0], "height": image_size[1]})
+        page.set_content(html_content)
+        page.wait_for_timeout(1000)
+        body = page.query_selector('body')
+        image = body.screenshot()
+        browser.close()
+    return image
+
+
 def draw_text_on_image(bboxes, texts, image_size: Tuple[int, int], font_path=None, max_font_size=60, res_upscale=2):
+    if has_playwright:
+        return draw_text_with_playwright(bboxes, texts, image_size)
+
+    texts = [strip_html_tags(text) for text in texts]
     if font_path is None:
         font_path = get_font_path()
     new_image_size = (image_size[0] * res_upscale, image_size[1] * res_upscale)

@@ -19,6 +19,7 @@ from surya.settings import settings
 from surya.common.util import rescale_bbox, expand_bbox
 
 
+
 @st.cache_resource()
 def load_predictors_cached():
     return load_predictors()
@@ -166,13 +167,13 @@ predictors = load_predictors_cached()
 st.markdown("""
 # Surya OCR Demo
 
-This app will let you try surya, a multilingual OCR model. It supports text detection + layout analysis in any language, and text recognition in 90+ languages.
+This app will let you try surya, a multilingual OCR toolkit.
 
 Notes:
+
 - This works best on documents with printed text.
-- Preprocessing the image (e.g. increasing contrast) can improve results.
+- For OCR, the formatting (math, italics, etc) will not show up in the image preview, but it will show up in the returned text lines.
 - If OCR doesn't work, try changing the resolution of your image (increase if below 2048px width, otherwise decrease).
-- This supports 90+ major languages.
 
 Find the project [here](https://github.com/VikParuchuri/surya).
 """)
