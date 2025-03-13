@@ -15,7 +15,7 @@ from surya.detection import DetectionPredictor
 from surya.input.processing import convert_if_not_rgb, slice_polys_from_image, slice_bboxes_from_image
 from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
-from surya.recognition.postprocessing import truncate_repetitions
+from surya.recognition.postprocessing import truncate_repetitions, replace_invalid_tags
 from surya.recognition.util import sort_text_lines
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
 from surya.settings import settings
@@ -414,6 +414,9 @@ class RecognitionPredictor(BasePredictor):
                         confidence=score,
                         bbox_valid=needs_box
                     ))
+
+                # Cleanup tags that aren't properly balanced
+                img_chars = replace_invalid_tags(img_chars)
                 detected_chars.append(img_chars)
 
 

@@ -13,7 +13,7 @@ except ImportError:
 
 
 def strip_html_tags(html_text):
-    pattern = re.compile(r'<\w[^>]*>')
+    pattern = re.compile(r'<[\w/][^>]*>')
     text_only = pattern.sub('', html_text)
 
     return text_only
