@@ -119,7 +119,7 @@ class RecognitionPredictor(BasePredictor):
                     text=text,
                     polygon=polygon,
                     chars=text_line,
-                    confidence=confidence
+                    confidence=confidence,
                 ))
 
             if sort_lines:
@@ -241,7 +241,7 @@ class RecognitionPredictor(BasePredictor):
         assert all(isinstance(image, Image.Image) for image in images)
 
         if len(images) == 0:
-            return [], []
+            return []
 
         assert len(images) == len(task_names) == len(input_text), "You need to pass in one task name and text line for each image"
 
@@ -404,10 +404,14 @@ class RecognitionPredictor(BasePredictor):
                 img_chars = []
                 assert len(poly) == len(pred) == len(seq_score), f"Prediction mismatch found, {len(poly)} != {len(pred)} != {len(seq_score)}"
                 for bbox, char_id, score in zip(poly, pred, seq_score):
-                    if char_id in config.special_ocr_tokens:
+
+                    # Skip pad token, eos, etc.
+                    if char_id in self.processor.special_token_mapping.values():
                         continue
+
                     if not needs_box:
                         bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
+
                     img_chars.append(TextChar(
                         text=self.processor.decode([char_id]),
                         polygon=bbox,
@@ -416,9 +420,8 @@ class RecognitionPredictor(BasePredictor):
                     ))
 
                 # Cleanup tags that aren't properly balanced
-                img_chars = replace_invalid_tags(img_chars)
+                #img_chars = replace_invalid_tags(img_chars, self.model.config.special_ocr_tokens)
                 detected_chars.append(img_chars)
-
 
             # Convert sequence_scores to list for the current batch
             output_text.extend(detected_chars)
