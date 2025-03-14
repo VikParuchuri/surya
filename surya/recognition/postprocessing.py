@@ -97,6 +97,7 @@ def replace_invalid_tags(text_chars: List[TextChar], special_tokens: Dict[str, l
         for char in text_chars:
             if re.match(tag_pattern, char.text):
                 char.text = ""
+                char.confidence = 0
     return text_chars
 
 
