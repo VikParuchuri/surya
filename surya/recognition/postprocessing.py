@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Dict
 
 from surya.recognition.schema import TextChar
 
@@ -34,13 +34,28 @@ def truncate_repetitions(text: str, min_len=15):
 
     return text[:len(text_to_truncate)]
 
+def extract_tags(proposed_tags: List[str]) -> List[str]:
+    tags = []
+    for tag in proposed_tags:
+        tag_match = re.match(tag_pattern, tag)
+        if not tag_match:
+            continue
+
+        if not tag_match.group(1) == "/":
+            continue
+
+        tags.append(tag_match.group(2))
+    return tags
+
 
 tag_pattern = re.compile(r"<(/?)([a-z]+)([^>]*)>?", re.IGNORECASE)
-format_tags = ["math", "i", "b", "u", "del", "code", "mark", "small", "sub", "sup"]
-def ensure_matching_tags(text_chars: List[TextChar]) -> bool:
+def ensure_matching_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]) -> bool:
     self_closing_tags = ["br"]
 
     open_tags = []
+
+    format_tags = extract_tags(special_tokens["formatting"]) + extract_tags(special_tokens["math_external"])
+    math_tags = extract_tags(special_tokens["math_internal"])
 
     for char in text_chars:
         if len(char.text) <= 1:
@@ -53,7 +68,7 @@ def ensure_matching_tags(text_chars: List[TextChar]) -> bool:
         is_closing = tag_match.group(1) == "/"
         tag_name = tag_match.group(2).lower()
 
-        if tag_name not in format_tags:
+        if tag_name not in format_tags + math_tags:
             continue
 
         if tag_name in self_closing_tags:
@@ -76,12 +91,14 @@ def ensure_matching_tags(text_chars: List[TextChar]) -> bool:
 
     return False
 
-def replace_invalid_tags(text_chars: List[TextChar]):
-    bad_tags = not ensure_matching_tags(text_chars)
+def replace_invalid_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]):
+    bad_tags = not ensure_matching_tags(text_chars, special_tokens)
     if bad_tags:
         for char in text_chars:
             if re.match(tag_pattern, char.text):
                 char.text = ""
     return text_chars
+
+
 
 
