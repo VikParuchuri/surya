@@ -483,8 +483,6 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        else:
-            assert torch.allclose(position_ids, cache_position.unsqueeze(0))
 
         causal_mask = self._update_causal_mask(
             attention_mask,
