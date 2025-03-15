@@ -113,14 +113,24 @@ class RecognitionPredictor(BasePredictor):
 
             lines = []
             for text_line, polygon in zip(image_lines, polygons):
-                text = "".join([char.text for char in text_line])
-                confidence = float(np.mean([char.confidence for char in text_line]))
-                lines.append(TextLine(
-                    text=text,
-                    polygon=polygon,
-                    chars=text_line,
-                    confidence=confidence,
-                ))
+                # Special case when input text is good
+                if not text_line:
+                    lines.append(TextLine(
+                        text="",
+                        polygon=polygon,
+                        chars=[],
+                        confidence=1,
+                        original_text_good=True
+                    ))
+                else:
+                    text = "".join([char.text for char in text_line])
+                    confidence = float(np.mean([char.confidence for char in text_line]))
+                    lines.append(TextLine(
+                        text=text,
+                        polygon=polygon,
+                        chars=text_line,
+                        confidence=confidence,
+                    ))
 
             if sort_lines:
                 lines = sort_text_lines(lines)
@@ -345,9 +355,7 @@ class RecognitionPredictor(BasePredictor):
                         break
 
                     # Update input ids
-                    # If this batch item is done, input a pad token
                     input_ids = preds
-                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids).to(torch.long)
 
                     # Confidence score for the current token
                     scores = torch.max(F.softmax(next_token_logits[:, -1], dim=-1), dim=-1).values
@@ -376,6 +384,8 @@ class RecognitionPredictor(BasePredictor):
                     batch_box_predictions = torch.cat([batch_box_predictions, input_boxes], dim=1)
 
                     # Updates for next iteration
+                    # If this batch item is done, input a pad token
+                    input_ids = torch.where(all_done.unsqueeze(1), device_pad_token, input_ids).to(torch.long)
                     position_ids = position_ids[:, -1:] + 1
                     attention_mask = torch.cat(
                         [attention_mask, attention_ones], dim=1
@@ -405,9 +415,13 @@ class RecognitionPredictor(BasePredictor):
                 assert len(poly) == len(pred) == len(seq_score), f"Prediction mismatch found, {len(poly)} != {len(pred)} != {len(seq_score)}"
                 for bbox, char_id, score in zip(poly, pred, seq_score):
 
-                    # Skip pad token, eos, etc.
-                    if char_id in self.processor.special_token_mapping.values():
-                        continue
+                    # Special case when input text is good, don't overwrite
+                    if char_id == self.processor.no_output_token:
+                        img_chars = None
+                        break
+
+                    if char_id == self.processor.eos_token_id:
+                        break
 
                     if not needs_box:
                         bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]

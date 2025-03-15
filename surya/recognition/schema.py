@@ -23,6 +23,7 @@ class TextLine(PolygonBox):
     text: str
     chars: List[TextChar] # Individual characters in the line
     confidence: Optional[float] = None
+    original_text_good: bool = False
 
 
 class OCRResult(BaseModel):
