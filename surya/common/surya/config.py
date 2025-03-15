@@ -18,7 +18,7 @@ class SuryaModelConfig(PretrainedConfig):
         pad_token_id=2,
         image_token_id=3,
         special_token_count=4,
-        tile_size=(256, 256),
+        tile_size=(1024, 256),
         max_sequence_length=1536,
         special_ocr_tokens=None,
         vision_encoder=None,
