@@ -258,11 +258,11 @@ class RecognitionPredictor(BasePredictor):
         if batch_size is None:
             batch_size = self.get_batch_size()
 
-        # Sort images by width, so similar length ones go together
-        sorted_pairs = sorted(enumerate(images), key=lambda x: x[1].width, reverse=False)
-        indices, images = zip(*sorted_pairs)
+        # Sort images by width, so similar length ones go together, sort input text to match
+        sorted_data = sorted(enumerate(zip(images, input_text)), key=lambda x: x[1][0].width)
+        indices, pairs = zip(*sorted_data)
         indices = list(indices)
-        images = list(images)
+        images, input_text = map(list, zip(*pairs))
 
         config: SuryaModelConfig = self.model.config
 
