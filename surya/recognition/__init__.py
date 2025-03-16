@@ -41,7 +41,7 @@ class RecognitionPredictor(BasePredictor):
         },
         TaskNames.block_without_boxes: {
             "needs_bboxes": False,
-            "img_size": (768, 768)
+            "img_size": (1024, 768)
         }
     }
 
