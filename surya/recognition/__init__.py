@@ -24,6 +24,7 @@ from surya.settings import settings
 class RecognitionPredictor(BasePredictor):
     model_loader_cls = RecognitionModelLoader
     batch_size = settings.RECOGNITION_BATCH_SIZE
+    torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {
         "cpu": 32,
         "mps": 64,

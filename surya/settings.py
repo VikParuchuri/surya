@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     INLINE_MATH_MIN_AREA: int = 100 # Minimum area for inline math detection
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr1.2"
+    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr-test"
     RECOGNITION_MAX_TOKENS: int = 1024
     RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
@@ -141,6 +141,14 @@ class Settings(BaseSettings):
         if self.TORCH_DEVICE_MODEL == "xla":
             return torch.bfloat16
         return torch.float16
+
+    @computed_field
+    def MODEL_DTYPE_BFLOAT(self) -> torch.dtype:
+        if self.TORCH_DEVICE_MODEL == "cpu":
+            return torch.float32
+        if self.TORCH_DEVICE_MODEL == "mps":
+            return torch.float16
+        return torch.bfloat16
 
     @computed_field
     def INFERENCE_MODE(self) -> Callable:

@@ -32,12 +32,12 @@ class RecognitionModelLoader(ModelLoader):
     def model(
         self,
         device=settings.TORCH_DEVICE_MODEL,
-        dtype=settings.MODEL_DTYPE
+        dtype=settings.MODEL_DTYPE_BFLOAT
     ) -> SuryaModel:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
         if dtype is None:
-            dtype = settings.MODEL_DTYPE
+            dtype = settings.MODEL_DTYPE_BFLOAT
 
         model = SuryaModel.from_pretrained(self.checkpoint)
         model = model.to(device=device, dtype=dtype)
