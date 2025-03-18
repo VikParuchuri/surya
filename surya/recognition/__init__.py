@@ -329,7 +329,8 @@ class RecognitionPredictor(BasePredictor):
                         position_ids=position_ids,
                         inputs_embeds=None,
                         past_key_values=past_key_values,
-                        use_cache=True
+                        use_cache=True,
+                        logits_to_keep=1
                     )
 
                     # Update cache

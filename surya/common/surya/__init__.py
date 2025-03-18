@@ -135,6 +135,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         output_hidden_states=False,
         output_attentions=False,
         use_cache=False,
+        logits_to_keep=None,
         **kwargs: KwargsForCausalLM,
     ):
         # Process the mixed batch if provided
@@ -155,6 +156,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         )
 
         hidden_states = outputs.last_hidden_state
+        # Only keep the last `logits_to_keep` logits, should bring down memory usage during inference
+        if logits_to_keep is not None:
+            hidden_states = hidden_states[:, -logits_to_keep:, :]
         bbox_logits = F.sigmoid(self.bbox_head(hidden_states))
         lm_logits = self.lm_head(hidden_states)
 
