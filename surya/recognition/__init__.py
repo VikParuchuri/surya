@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import List, Tuple
 
 import numpy as np
@@ -332,9 +331,6 @@ class RecognitionPredictor(BasePredictor):
                         use_cache=True,
                         logits_to_keep=1
                     )
-
-                    # Update cache
-                    past_key_values = outputs["past_key_values"]
 
                     # Get logits and initial preds
                     next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
