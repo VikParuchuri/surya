@@ -453,11 +453,11 @@ class ContinuousBatchingCache(DynamicCache):
         padding_size: int
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Size is assumed to be (batch_size, num_kv_heads, seq_length, head_dim) - To match huggingface
-        key_padding = torch.zeros((key_states.shape[0], key_states.shape[1], padding_size, key_states.shape[3]), device=key_states.device)
+        key_padding = torch.zeros((key_states.shape[0], key_states.shape[1], padding_size, key_states.shape[3]), device=key_states.device, dtype=key_states.dtype)
         key_states_padded = torch.cat([key_padding, key_states], dim=-2)  # Pad along the sequence length dimension (dim=-2)
 
         # Pad value_states to the left by `padding_size`
-        value_padding = torch.zeros((value_states.shape[0], value_states.shape[1], padding_size, value_states.shape[3]), device=value_states.device)
+        value_padding = torch.zeros((value_states.shape[0], value_states.shape[1], padding_size, value_states.shape[3]), device=value_states.device, dtype=value_states.dtype)
         value_states_padded = torch.cat([value_padding, value_states], dim=-2)  # Pad along the sequence length dimension (dim=-2)
 
         return key_states_padded, value_states_padded
@@ -473,18 +473,19 @@ class ContinuousBatchingCache(DynamicCache):
         current_seq_length = self.get_seq_length()
         new_cache_seq_length = new_cache.get_seq_length()
         offset = current_seq_length - new_cache_seq_length      # Generally positive, but negative case is handled too
-
         with torch.inference_mode():
             # As long as we set the attention mask and position ids correctly, padding value can be anything
             for layer_idx in range(len(self)):
                 new_k, new_v = new_cache[layer_idx]
                 if offset > 0:
                     new_k, new_v = self.pad_left(new_k, new_v, offset)
+
+                if offset < 0:
+                    adjusted_key_cache, adjusted_value_cache = self.pad_left(self.key_cache[layer_idx], self.value_cache[layer_idx], abs(offset))
+                else:
+                    adjusted_key_cache, adjusted_value_cache = self.key_cache[layer_idx], self.value_cache[layer_idx]
+
                 for i, merge_idx in enumerate(merge_idxs):
-                    if offset < 0:
-                        adjusted_key_cache, adjusted_value_cache = self.pad_left(self.key_cache[layer_idx], self.value_cache[layer_idx], abs(offset))
-                    else:
-                        adjusted_key_cache, adjusted_value_cache = self.key_cache[layer_idx], self.value_cache[layer_idx]
                     adjusted_key_cache[merge_idx] = new_k[i]
                     adjusted_value_cache[merge_idx] = new_v[i]
 
@@ -530,7 +531,7 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
         super().__init__(checkpoint, device, dtype)
         self.kv_cache = None
         self.prompt_queue = deque()
-        self.batch_prompt_mapping = {i: None for i in range(self.get_batch_size())}
+        self.batch_prompt_mapping = None
 
         config: SuryaModelConfig = self.model.config
         # Setup various tokens on-device
@@ -543,6 +544,11 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
         self.device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device, dtype=torch.long)
         self.device_math_start = torch.from_numpy(np.array(self.processor.math_start_token_ids, dtype=np.int64)).to(self.model.device)
         self.device_math_end = torch.from_numpy(np.array(self.processor.math_end_token_ids, dtype=np.int64)).to(self.model.device)
+
+    def setup_cache(self, batch_size: int):
+        self.kv_cache = None
+        self.prompt_queue.clear()
+        self.batch_prompt_mapping = {i: None for i in range(batch_size)}
 
     @property
     def num_empty_slots(self):
@@ -683,6 +689,8 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
 
         # Process outputs
         processed_outputs = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs, in_math=in_math)
+        in_math = in_math | processed_outputs.math_start
+        in_math = in_math & ~processed_outputs.math_end
 
         # Merge new kv cache with existing, update batch mapping
         non_active_idxs = [k for k,v in self.batch_prompt_mapping.items() if v is None]
@@ -803,6 +811,11 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
         predicted_tokens = [[] for _ in range(len(flat['slices']))]
         predicted_boxes = [[] for _ in range(len(flat['slices']))]
         scores = [[] for _ in range(len(flat['slices']))]
+
+        if recognition_batch_size is None:
+            recognition_batch_size = self.get_batch_size()
+        current_inputs = None
+        self.setup_cache(recognition_batch_size)
         for idx, (img, txt, task) in enumerate(zip(flat['slices'], flat['input_text'], flat['task_names'])):
             self.prompt_queue.append(RecognitionPrompt(
                 id=idx,
@@ -811,14 +824,9 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                 image=img
             ))
 
-        current_inputs = None
-        finished = 0
-        self.kv_cache = None
-        self.batch_prompt_mapping = {i: None for i in range(self.get_batch_size())}
-
-        pbar = tqdm(total=len(flat['slices']), desc='Recognizing Text')
+        pbar = tqdm(total=len(self.prompt_queue), desc='Recognizing Text')
         while self.prompt_queue or self.num_active_slots > 0:
-            if (self.num_empty_slots / self.get_batch_size()) > self.min_prefill_ratio and self.prompt_queue:
+            if (self.num_empty_slots / recognition_batch_size) > self.min_prefill_ratio and self.prompt_queue:
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
@@ -830,7 +838,6 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id]:
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
-                            finished += 1
             else:
                 updated_inputs, outputs = self.decode(current_inputs)
 
@@ -844,7 +851,6 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == settings.RECOGNITION_MAX_TOKENS:
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
-                            finished += 1
 
             current_inputs = updated_inputs
         pbar.close()
