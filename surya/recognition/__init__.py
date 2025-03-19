@@ -834,6 +834,7 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                         p_idx = self.batch_prompt_mapping[b_idx]
                         predicted_tokens[p_idx].append(outputs.preds[temp_idx].cpu().item())
                         predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx].cpu()[0])
+                        scores[p_idx].append(outputs.scores[temp_idx].cpu().item())
 
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id]:
                             self.batch_prompt_mapping[b_idx] = None
@@ -846,7 +847,7 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                     if p_idx is not None:
                         predicted_tokens[p_idx].append(outputs.preds[b_idx].cpu().item())
                         predicted_boxes[p_idx].append(outputs.bbox_preds[b_idx].cpu()[0])
-                        # scores[p_idx].append(outputs.scores[b_idx].cpu().item())
+                        scores[p_idx].append(outputs.scores[b_idx].cpu().item())
 
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == settings.RECOGNITION_MAX_TOKENS:
                             self.batch_prompt_mapping[b_idx] = None
@@ -858,10 +859,10 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
         char_predictions = []
         needs_boxes = [self.tasks[task_name]["needs_bboxes"] for task_name in flat['task_names']]
         bbox_size = self.model.config.bbox_size
-        for slice_idx, (slice_image, image_tokens, image_boxes, needs_box) in enumerate(zip(flat['slices'], predicted_tokens, predicted_boxes, needs_boxes)):
+        for slice_idx, (slice_image, image_tokens, image_boxes, image_scores, needs_box) in enumerate(zip(flat['slices'], predicted_tokens, predicted_boxes, scores, needs_boxes)):
             image_polygons = [prediction_to_polygon(bbox, slice_image.size, bbox_size, bbox_size // 2) for bbox in image_boxes]
             img_chars = []
-            for bbox, char_id in zip(image_polygons, image_tokens):
+            for bbox, char_id, score in zip(image_polygons, image_tokens, image_scores):
                 # Special case when input text is good, don't overwrite
                 if char_id == self.processor.no_output_token:
                     img_chars = None
@@ -870,13 +871,13 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                 if char_id == self.processor.eos_token_id:
                     break
 
-                # if not needs_box:
-                bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
+                if not needs_box:
+                    bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
 
                 img_chars.append(TextChar(
                     text=self.processor.decode([char_id]),
                     polygon=bbox,
-                    confidence=0,
+                    confidence=score,
                     bbox_valid=needs_box
                 ))
 
