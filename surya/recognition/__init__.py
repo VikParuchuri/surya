@@ -485,6 +485,7 @@ class ContinuousBatchingCache(DynamicCache):
                 else:
                     adjusted_key_cache, adjusted_value_cache = self.key_cache[layer_idx], self.value_cache[layer_idx]
 
+                # TODO Make this assignment batched? 
                 for i, merge_idx in enumerate(merge_idxs):
                     adjusted_key_cache[merge_idx] = new_k[i]
                     adjusted_value_cache[merge_idx] = new_v[i]
@@ -836,7 +837,7 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
                         predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx].cpu()[0])
                         scores[p_idx].append(outputs.scores[temp_idx].cpu().item())
 
-                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id]:
+                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.no_output_token]:
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
