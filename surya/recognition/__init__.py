@@ -815,6 +815,8 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
         finished = 0
         self.kv_cache = None
         self.batch_prompt_mapping = {i: None for i in range(self.get_batch_size())}
+
+        pbar = tqdm(total=len(flat['slices']), desc='Recognizing Text')
         while self.prompt_queue or self.num_active_slots > 0:
             if (self.num_empty_slots / self.get_batch_size()) > self.min_prefill_ratio and self.prompt_queue:
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
@@ -827,6 +829,7 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
 
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id]:
                             self.batch_prompt_mapping[b_idx] = None
+                            pbar.update(1)
                             finished += 1
             else:
                 updated_inputs, outputs = self.decode(current_inputs)
@@ -840,9 +843,11 @@ class ContinuousBatchingRecognitionPredictor(RecognitionPredictor):
 
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == settings.RECOGNITION_MAX_TOKENS:
                             self.batch_prompt_mapping[b_idx] = None
+                            pbar.update(1)
                             finished += 1
 
             current_inputs = updated_inputs
+        pbar.close()
 
         char_predictions = []
         needs_boxes = [self.tasks[task_name]["needs_bboxes"] for task_name in flat['task_names']]
