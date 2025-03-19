@@ -1,4 +1,5 @@
 from copy import deepcopy
+from statistics import mean
 from typing import List, Tuple
 
 import numpy as np
@@ -16,7 +17,7 @@ from surya.input.processing import convert_if_not_rgb, slice_polys_from_image, s
 from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import truncate_repetitions, replace_invalid_tags
-from surya.recognition.util import sort_text_lines
+from surya.recognition.util import sort_text_lines, clean_close_polygons
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
 from surya.settings import settings
 
@@ -378,7 +379,7 @@ class RecognitionPredictor(BasePredictor):
                         box_preds
                     )
                     input_boxes = box_preds.to(torch.long)
-                    input_boxes[skip_box_idxs, -1] = device_blank_bbox
+                    input_boxes[skip_box_idxs, -1] = device_blank_bbox # Set blank for tasks that don't need boxes
 
                     # Update output sequences
                     batch_predictions = torch.cat([batch_predictions, input_ids], dim=1)
@@ -402,7 +403,7 @@ class RecognitionPredictor(BasePredictor):
             batch_predictions = batch_predictions.cpu()[:current_batch_size, 1:].tolist() # Remove the start token
             batch_bboxes = batch_box_predictions.cpu()[:current_batch_size, 1:]
 
-            assert len(batch_predictions) == len(batch_images) == len(batch_bboxes) == len(sequence_scores), f"Batch size mismatch, {len(batch_predictions)} != {len(batch_images)} != {len(batch_bboxes)}"
+            assert len(batch_predictions) == len(batch_images) == len(batch_bboxes) == len(sequence_scores) == len(batch_task_names), f"Batch size mismatch, {len(batch_predictions)} != {len(batch_images)} != {len(batch_bboxes)} != {len(sequence_scores)} != {len(batch_task_names)}"
             detected_polygons = []
             for img, bboxes in zip(batch_images, batch_bboxes):
                 detected_polygons.append([
@@ -411,31 +412,72 @@ class RecognitionPredictor(BasePredictor):
                 ])
 
             detected_chars = []
-            for (poly, pred, seq_score, needs_box) in zip(detected_polygons, batch_predictions, sequence_scores, needs_boxes):
-                img_chars = []
-                assert len(poly) == len(pred) == len(seq_score), f"Prediction mismatch found, {len(poly)} != {len(pred)} != {len(seq_score)}"
+            for (poly, pred, seq_score, needs_box, task_name) in zip(detected_polygons, batch_predictions, sequence_scores, needs_boxes, batch_task_names):
+
+                # Special case when no output
+                if self.processor.no_output_token in pred:
+                    detected_chars.append(None)
+                    continue
+
+                detokenize_sequences = []
+                detokenize_sequence = []
+                past_char_qwen_token = False
+
+                def _add_detokenize_sequence(qwen_token: bool, past_char_qwen_token: bool, force: bool = False):
+                    nonlocal detokenize_sequence, detokenize_sequences
+
+                    if (qwen_token != past_char_qwen_token or force) and detokenize_sequence:
+                        chars = [dt[0] for dt in detokenize_sequence]
+                        scores = mean([dt[1] for dt in detokenize_sequence]) if detokenize_sequence else 0
+                        bboxes = [dt[2] for dt in detokenize_sequence]
+
+                        if past_char_qwen_token:
+                            detokenize_sequences.append((chars, scores, None, "qwen"))
+                        else:
+                            detokenize_sequences.append((chars, scores, bboxes, "ocr"))
+
+                        detokenize_sequence = []
+
+                # Split up into sequences to detokenize separately
                 for bbox, char_id, score in zip(poly, pred, seq_score):
-
-                    # Special case when input text is good, don't overwrite
-                    if char_id == self.processor.no_output_token:
-                        img_chars = None
+                    if char_id in [self.processor.eos_token_id, self.processor.pad_token_id]:
                         break
 
-                    if char_id == self.processor.eos_token_id:
-                        break
+                    qwen_token = char_id < self.processor.ocr_tokenizer.qwen_offset
+                    _add_detokenize_sequence(qwen_token, past_char_qwen_token)
+                    detokenize_sequence.append((char_id, score, bbox))
+                    past_char_qwen_token = qwen_token
 
-                    if not needs_box:
-                        bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
+                _add_detokenize_sequence(False, past_char_qwen_token, force=True)
 
-                    img_chars.append(TextChar(
-                        text=self.processor.decode([char_id]),
-                        polygon=bbox,
-                        confidence=score,
-                        bbox_valid=needs_box
-                    ))
+                img_chars = []
+                for sequence in detokenize_sequences:
+                    token_ids, seq_score, bboxes, token_type = sequence
+                    blank_bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
+                    if token_type == "ocr":
+                        text = self.processor.ocr_tokenizer.decode(token_ids, task="ocr_with_boxes")
+                        bboxes = clean_close_polygons(bboxes) # clean out bboxes that are close, like what happens with multiple utf-16 tokens per char
+                        bbox_idx = 0
+                        for text_idx, text in enumerate(text):
+                            img_chars.append(TextChar(
+                                text=text,
+                                polygon=bboxes[bbox_idx],
+                                confidence=seq_score,
+                                bbox_valid=True
+                            ))
 
-                # Cleanup tags that aren't properly balanced
-                #img_chars = replace_invalid_tags(img_chars, self.model.config.special_ocr_tokens)
+                            # Ensure we don't exceed the bbox count
+                            if bbox_idx < len(bboxes) - 1:
+                                bbox_idx += 1
+                    else:
+                        text = self.processor.ocr_tokenizer.decode(token_ids, task="block_without_boxes")
+                        img_chars.append(TextChar(
+                            text=text,
+                            polygon=blank_bbox,
+                            confidence=seq_score,
+                            bbox_valid=False
+                        ))
+
                 detected_chars.append(img_chars)
 
             # Convert sequence_scores to list for the current batch

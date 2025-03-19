@@ -64,7 +64,7 @@ class RecognitionModelLoader(ModelLoader):
 
         # Workaround since load_pretrained isn't working for our processor - TODO Fix
         image_processor = AutoImageProcessor.from_pretrained(self.checkpoint)
-        ocr_tokenizer = SuryaOCRTokenizer(special_tokens=config.special_ocr_tokens)
+        ocr_tokenizer = SuryaOCRTokenizer(special_tokens=config.special_ocr_tokens, model_checkpoint=self.checkpoint)
         processor = SuryaOCRProcessor(
             image_processor=image_processor,
             ocr_tokenizer=ocr_tokenizer,
