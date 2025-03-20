@@ -151,9 +151,6 @@ class InlineDetectionPredictor(DetectionPredictor):
                     postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes[current_image_idx], include_maps))
                     current_image_idx += 1
 
-        try:
-            assert len(postprocessing_futures) == len(images) == len(text_boxes) # Ensure we have a 1:1 mapping
-        except:
-            print(len(postprocessing_futures), len(images), len(text_boxes))
-            raise ValueError()
+        assert len(postprocessing_futures) == len(images) == len(text_boxes) # Ensure we have a 1:1 mapping
+
         return [future.result() for future in postprocessing_futures]
