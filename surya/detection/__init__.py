@@ -144,12 +144,12 @@ class InlineDetectionPredictor(DetectionPredictor):
         parallelize = not settings.IN_STREAMLIT and len(images) >= settings.DETECTOR_MIN_PARALLEL_THRESH
         executor = ThreadPoolExecutor if parallelize else FakeExecutor
 
-        current_image_idx = 0
+        image_idx = 0
         with executor(max_workers=max_workers) as e:
             for (preds, orig_sizes) in detection_generator:
                 for pred, orig_size in zip(preds, orig_sizes):
-                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes[current_image_idx], include_maps))
-                    current_image_idx += 1
+                    postprocessing_futures.append(e.submit(parallel_get_inline_boxes, pred, orig_size, text_boxes[image_idx], include_maps))
+                    image_idx += 1
 
         assert len(postprocessing_futures) == len(images) == len(text_boxes) # Ensure we have a 1:1 mapping
 
