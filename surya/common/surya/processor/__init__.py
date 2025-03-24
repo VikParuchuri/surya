@@ -156,14 +156,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             input_ids = [self.image_rotated_token] + input_ids
 
         input_bboxes = [[self.blank_bbox_token_id] * 6] * len(input_ids)
-        lm_labels = [-100] * len(input_ids)
-        bbox_labels = [[-100] * 6] * len(input_ids)
 
         return ProcessorOutput(
             input_ids=input_ids,
             input_boxes=input_bboxes,
-            lm_labels=lm_labels,
-            bbox_labels=bbox_labels,
             image_tiles=image_tiles,
         )
 

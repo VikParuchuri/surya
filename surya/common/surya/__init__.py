@@ -36,6 +36,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     _supports_static_cache = True
     _supports_attention_backend = True
     main_input_name = "input_ids"
+    _tied_weights_keys = ["lm_head.weight"]
 
     def __init__(
         self,
@@ -73,6 +74,25 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         self.bbox_head = nn.Linear(config.hidden_size, 6)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
+
+    def tie_weights(self):
+        self._tie_weights()
+
+    def _tie_weights(self):
+        # Tie weights of lm head and token embedder
+        self._tie_or_clone_weights(self.lm_head, self.embedder.token_embed)
+
+    def get_output_embeddings(self) -> nn.Module:
+        return self.lm_head
+
+    def get_input_embeddings(self) -> nn.Module:
+        return self.embedder.token_embed
+
+    def set_output_embeddings(self, new_embeddings: nn.Module):
+        self.lm_head = new_embeddings
+
+    def set_input_embeddings(self, new_embeddings: nn.Module):
+        self.embedder.token_embed = new_embeddings
 
     def get_image_embeddings(self, image_tiles, batch_size: int):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch

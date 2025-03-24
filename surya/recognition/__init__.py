@@ -276,8 +276,6 @@ class RecognitionPredictor(BasePredictor):
             np.asarray([config.blank_bbox_token_id] * 6)
         ).to(self.model.device).to(torch.long)
         device_pad_token = torch.tensor(self.processor.pad_token_id, device=self.model.device, dtype=torch.long)
-        device_math_start = torch.from_numpy(np.array(self.processor.math_start_token_ids, dtype=np.int64)).to(self.model.device)
-        device_math_end = torch.from_numpy(np.array(self.processor.math_end_token_ids, dtype=np.int64)).to(self.model.device)
 
         output_text = []
         for i in tqdm(range(0, len(images), batch_size), desc="Recognizing Text", disable=self.disable_tqdm):
@@ -293,14 +291,13 @@ class RecognitionPredictor(BasePredictor):
                 batch_text
             )
             processed_inputs = self.processor(batch_input, padding_side="left").to(
-                device=self.model.device,
-                dtype=self.model.dtype
+                device=self.model.device
             )
-            input_ids = processed_inputs["input_ids"]
-            input_boxes = processed_inputs["input_boxes"]
-            image_tiles = processed_inputs["image_tiles"]
-            attention_mask = processed_inputs["attention_mask"]
-            position_ids = processed_inputs["position_ids"]
+            input_ids = processed_inputs["input_ids"].to(torch.long)
+            input_boxes = processed_inputs["input_boxes"].to(torch.long)
+            image_tiles = processed_inputs["image_tiles"].to(self.model.dtype)
+            attention_mask = processed_inputs["attention_mask"].to(torch.long)
+            position_ids = processed_inputs["position_ids"].to(torch.long)
 
             needs_boxes = [self.tasks[task_name]["needs_bboxes"] for task_name in batch_task_names]
             skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
@@ -311,7 +308,6 @@ class RecognitionPredictor(BasePredictor):
             # Batch pixel values is the real current batch size
             sequence_scores = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device).unsqueeze(1)
             all_done = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
-            in_math = torch.zeros(current_batch_size, dtype=torch.bool, device=self.model.device)
 
             # Setup tensors to hold predictions
             batch_predictions = torch.zeros((current_batch_size, 1), dtype=torch.long, device=self.model.device)
@@ -342,10 +338,7 @@ class RecognitionPredictor(BasePredictor):
                     preds = torch.argmax(next_token_logits, dim=-1)
 
                     # Handle math sections
-                    math_start = torch.isin(preds, device_math_start).squeeze(-1)
-                    in_math = in_math | math_start
-                    math_end = torch.isin(preds, device_math_end).squeeze(-1)
-                    in_math = in_math & ~math_end
+                    is_special_token = (preds < self.processor.ocr_tokenizer.qwen_offset)  | (torch.isin(preds, device_bbox_ignore))
 
                     # Handle inference completion
                     done = (preds == self.processor.eos_token_id) | (preds == self.processor.pad_token_id)
@@ -372,9 +365,10 @@ class RecognitionPredictor(BasePredictor):
                         expanded_blank_bbox,
                         box_preds
                     )
+
                     # Set bbox to blank if we're in a match section
                     box_preds = torch.where(
-                        in_math.unsqueeze(-1).unsqueeze(-1),
+                        is_special_token.unsqueeze(-1),
                         expanded_blank_bbox,
                         box_preds
                     )
@@ -423,32 +417,37 @@ class RecognitionPredictor(BasePredictor):
                 detokenize_sequence = []
                 past_char_qwen_token = False
 
-                def _add_detokenize_sequence(qwen_token: bool, past_char_qwen_token: bool, force: bool = False):
+                def _add_detokenize_sequence(qwen_token: bool, past_char_qwen_token: bool, special_token: bool, past_special_token: bool, force: bool = False):
                     nonlocal detokenize_sequence, detokenize_sequences
 
-                    if (qwen_token != past_char_qwen_token or force) and detokenize_sequence:
+                    if (qwen_token != past_char_qwen_token or force or special_token or past_special_token) and detokenize_sequence:
                         chars = [dt[0] for dt in detokenize_sequence]
                         scores = mean([dt[1] for dt in detokenize_sequence]) if detokenize_sequence else 0
                         bboxes = [dt[2] for dt in detokenize_sequence]
 
                         if past_char_qwen_token:
                             detokenize_sequences.append((chars, scores, None, "qwen"))
+                        elif past_special_token:
+                            detokenize_sequences.append((chars, scores, None, "special"))
                         else:
                             detokenize_sequences.append((chars, scores, bboxes, "ocr"))
 
                         detokenize_sequence = []
 
                 # Split up into sequences to detokenize separately
+                past_special_token = False
                 for bbox, char_id, score in zip(poly, pred, seq_score):
                     if char_id in [self.processor.eos_token_id, self.processor.pad_token_id]:
                         break
 
                     qwen_token = char_id < self.processor.ocr_tokenizer.qwen_offset
-                    _add_detokenize_sequence(qwen_token, past_char_qwen_token)
+                    special_token = self.processor.ocr_tokenizer.qwen_offset <= char_id < self.processor.ocr_tokenizer.special_token_offset
+                    _add_detokenize_sequence(qwen_token, past_char_qwen_token, special_token, past_special_token)
                     detokenize_sequence.append((char_id, score, bbox))
                     past_char_qwen_token = qwen_token
+                    past_special_token = special_token
 
-                _add_detokenize_sequence(False, past_char_qwen_token, force=True)
+                _add_detokenize_sequence(False, past_char_qwen_token, False, past_special_token, force=True)
 
                 img_chars = []
                 for sequence in detokenize_sequences:
@@ -458,9 +457,9 @@ class RecognitionPredictor(BasePredictor):
                         text = self.processor.ocr_tokenizer.decode(token_ids, task="ocr_with_boxes")
                         bboxes = clean_close_polygons(bboxes) # clean out bboxes that are close, like what happens with multiple utf-16 tokens per char
                         bbox_idx = 0
-                        for text_idx, text in enumerate(text):
+                        for text_idx, text_line in enumerate(text):
                             img_chars.append(TextChar(
-                                text=text,
+                                text=text_line,
                                 polygon=bboxes[bbox_idx],
                                 confidence=seq_score,
                                 bbox_valid=True
@@ -469,6 +468,14 @@ class RecognitionPredictor(BasePredictor):
                             # Ensure we don't exceed the bbox count
                             if bbox_idx < len(bboxes) - 1:
                                 bbox_idx += 1
+                    elif token_type == "special":
+                        text = self.processor.ocr_tokenizer.decode(token_ids, task="ocr_without_boxes")
+                        img_chars.append(TextChar(
+                            text=text,
+                            polygon=blank_bbox,
+                            confidence=seq_score,
+                            bbox_valid=False
+                        ))
                     else:
                         text = self.processor.ocr_tokenizer.decode(token_ids, task="block_without_boxes")
                         img_chars.append(TextChar(

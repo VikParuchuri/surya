@@ -68,13 +68,18 @@ class BboxEmbedding(nn.Module):
         cx, cy, w, h, xskew, yskew = boxes.to(torch.long).unbind(dim=-1)
         is_special = (cx == self.config.blank_bbox_token_id).to(torch.long)
 
-        xskew_actual = ((xskew - self.config.bbox_size // 2) / 2).to(torch.long)
-        yskew_actual = ((yskew - self.config.bbox_size // 2) / 2).to(torch.long)
+        xskew_actual = ((xskew - self.config.bbox_size // 2) / 2).to(torch.long).clamp(0, self.config.bbox_size)
+        yskew_actual = ((yskew - self.config.bbox_size // 2) / 2).to(torch.long).clamp(0, self.config.bbox_size)
 
         x1 = (cx - w // 2 - xskew_actual).clamp(0, self.config.bbox_size).to(torch.long)
         y1 = (cy - h // 2 - yskew_actual).clamp(0, self.config.bbox_size).to(torch.long)
         x3 = (cx + w // 2 + xskew_actual).clamp(0, self.config.bbox_size).to(torch.long)
         y3 = (cy + h // 2 + yskew_actual).clamp(0, self.config.bbox_size).to(torch.long)
+
+        w = w.clamp(0, self.config.bbox_size)
+        h = h.clamp(0, self.config.bbox_size)
+        cx = cx.clamp(0, self.config.bbox_size)
+        cy = cy.clamp(0, self.config.bbox_size)
 
         size_embeds = (
                 self.w_embed(w) + self.h_embed(h) + self.cx_embed(cx) + self.cy_embed(cy)

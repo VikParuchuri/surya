@@ -1,4 +1,5 @@
 import re
+import time
 from typing import List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
@@ -48,7 +49,7 @@ def draw_text_with_playwright(bboxes, texts: List[str], image_size: Tuple[int, i
         raise ImportError("Playwright is not installed. Please install it using `pip install playwright`")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": image_size[0], "height": image_size[1]})
         page.set_content(html_content)
         page.wait_for_timeout(1000)

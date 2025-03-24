@@ -3,6 +3,7 @@ import re
 from typing import List, Union, Dict
 import numpy as np
 import torch
+from tokenizers import AddedToken
 
 from transformers import PreTrainedTokenizer, Qwen2Tokenizer
 
@@ -245,9 +246,19 @@ class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
         super().__init__(**kwargs)
 
         self.qwen_offset = len(self.qwen_tokenizer)
+        self.special_token_offset = self.qwen_offset + self.ocr_tokenizer.SPECIAL_TOKEN_OFFSET
 
     def get_vocab(self) -> Dict[str, int]:
         return self.qwen_tokenizer.get_vocab()
+
+    def _add_tokens(
+        self,
+        new_tokens: Union[List[str], List[AddedToken]],
+        special_tokens: bool = False,
+    ) -> int:
+        return self.qwen_tokenizer._add_tokens(
+            new_tokens, special_tokens=special_tokens
+        )
 
     @property
     def vocab_size(self):
