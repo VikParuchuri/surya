@@ -156,6 +156,7 @@ def parallel_get_boxes(preds, orig_sizes, include_maps=False):
         # Skip for vertical boxes
         if box.height < 3 * box.width:
             box.expand(x_margin=0, y_margin=settings.DETECTOR_BOX_Y_EXPAND_MARGIN)
+            box.fit_to_bounds([0, 0, orig_sizes[0], orig_sizes[1]])     # Fix any bad expands
 
     result = TextDetectionResult(
         bboxes=bboxes,
