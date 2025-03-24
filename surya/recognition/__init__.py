@@ -10,6 +10,7 @@ from PIL import Image
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from surya.common.polygon import PolygonBox
 from surya.common.surya import SuryaModelConfig, SuryaModelOutput
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
@@ -153,7 +154,7 @@ class RecognitionPredictor(BasePredictor):
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[List[str | None]] | None = None
-    ):
+    ) -> dict:
         assert bboxes is not None or polygons is not None
         slice_map = []
         all_slices = []
@@ -596,6 +597,10 @@ class RecognitionPredictor(BasePredictor):
                 else:
                     text = "".join([char.text for char in text_line])
                     confidence = float(np.mean([char.confidence for char in text_line]))
+                    poly_box = PolygonBox(polygon=polygon)
+                    for char in text_line:
+                        char.shift(poly_box.bbox[0], poly_box.bbox[1]) # Ensure character boxes match line boxes (relative to page)
+
                     lines.append(TextLine(
                         text=text,
                         polygon=polygon,
