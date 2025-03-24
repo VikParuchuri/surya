@@ -149,5 +149,15 @@ class PolygonBox(BaseModel):
             for corner in self.polygon:
                 corner[1] += y_shift
 
+    @property
+    def center(self):
+        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
+
+    def distance(self, other):
+        center = self.center
+        other_center = other.center
+
+        return ((center[0] - other_center[0]) ** 2 + (center[1] - other_center[1]) ** 2) ** 0.5
+
     def __hash__(self):
         return hash(tuple(self.bbox))

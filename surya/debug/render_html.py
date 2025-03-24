@@ -1,6 +1,8 @@
 import html as htmllib
+import os.path
 import re
 
+filepath = os.path.abspath(__file__)
 
 def render_text_as_html(
         bboxes: list[list[int]],
@@ -9,24 +11,31 @@ def render_text_as_html(
         base_font_size: int = 24,
         scaler: int = 2
 ):
+    katex_path = os.path.join(os.path.dirname(filepath), "katex.js")
+    with open(katex_path, "r") as f:
+        katex_script = f.read()
+
     html_content = []
     image_size = tuple([int(s * scaler) for s in image_size])
+    width, height = image_size
 
-    html_content.append("""
+
+    html_content.append(f"""
+<!DOCTYPE html>
 <html>
 <head>
     <style>
-        body {
+        body {{
             margin: 0;
             padding: 0;
-            width: %dpx;
-            height: %dpx;
+            width: {width}px;
+            height: {height}px;
             position: relative;
             overflow: hidden;
             background: white;
             color: black;
-        }
-        .text-box {
+        }}
+        .text-box {{
             position: absolute;
             overflow: hidden;
             display: flex;
@@ -34,16 +43,12 @@ def render_text_as_html(
             justify-content: center;
             font-family: Arial, sans-serif;
             white-space: pre-wrap;
-        }
-        /* Add MathML styling */
-        math {
-            display: inline-block;
-        }
+        }}
     </style>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    {katex_script}
 </head>
 <body>
-""" % image_size)
+""")
 
     for i, (bbox, text) in enumerate(zip(bboxes, texts)):
         bbox = bbox.copy()

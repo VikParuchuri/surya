@@ -63,15 +63,16 @@ class RecognitionModelLoader(ModelLoader):
         config: SuryaModelConfig = SuryaModelConfig.from_pretrained(self.checkpoint)
 
         # Workaround since load_pretrained isn't working for our processor - TODO Fix
-        image_processor = AutoImageProcessor.from_pretrained(self.checkpoint)
-        ocr_tokenizer = SuryaOCRTokenizer(special_tokens=config.special_ocr_tokens)
+        image_processor = AutoImageProcessor.from_pretrained(self.checkpoint, use_fast=False)
+        ocr_tokenizer = SuryaOCRTokenizer(special_tokens=config.special_ocr_tokens, model_checkpoint=self.checkpoint)
+
         processor = SuryaOCRProcessor(
             image_processor=image_processor,
             ocr_tokenizer=ocr_tokenizer,
             tile_size=config.tile_size,
             image_tokens_per_tile=config.vision_encoder.num_patches,
             blank_bbox_token_id=config.blank_bbox_token_id,
-            sequence_length=None,
+            sequence_length=None
         )
         config.eos_token_id = processor.eos_token_id
         config.pad_token_id = processor.pad_token_id

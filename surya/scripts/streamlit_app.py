@@ -123,8 +123,11 @@ def table_recognition(img, highres_img, skip_table_detection: bool) -> (Image.Im
 
 
 # Function for OCR
-def ocr(img, highres_img) -> (Image.Image, OCRResult):
-    img_pred = predictors["recognition"]([img], det_predictor=predictors["detection"], highres_images=[highres_img])[0]
+def ocr(img: Image.Image, highres_img: Image.Image, skip_text_detection: bool = False) -> (Image.Image, OCRResult):
+    if skip_text_detection:
+        img_pred = predictors["recognition"]([highres_img], bboxes=[[[0, 0, highres_img.width, highres_img.height]]])[0]
+    else:
+        img_pred = predictors["recognition"]([img], det_predictor=predictors["detection"], highres_images=[highres_img])[0]
 
     bboxes = [l.bbox for l in img_pred.text_lines]
     text = [l.text for l in img_pred.text_lines]
@@ -204,6 +207,7 @@ run_table_rec = st.sidebar.button("Run Table Rec")
 run_ocr_errors = st.sidebar.button("Run bad PDF text detection")
 use_pdf_boxes = st.sidebar.checkbox("PDF table boxes", value=True, help="Table recognition only: Use the bounding boxes from the PDF file vs text detection model.")
 skip_table_detection = st.sidebar.checkbox("Skip table detection", value=False, help="Table recognition only: Skip table detection and treat the whole image/page as a table.")
+skip_text_detection = st.sidebar.checkbox("Skip text detection", value=False, help="OCR only: Skip text detection and treat the whole image as a single line.")
 
 if pil_image is None:
     st.stop()
@@ -232,7 +236,7 @@ if run_layout_det:
 
 # Run OCR
 if run_text_rec:
-    rec_img, pred = ocr(pil_image, pil_image_highres)
+    rec_img, pred = ocr(pil_image, pil_image_highres, skip_text_detection)
     with col1:
         st.image(rec_img, caption="OCR Result", use_container_width=True)
         json_tab, text_tab = st.tabs(["JSON", "Text Lines (for debugging)"])

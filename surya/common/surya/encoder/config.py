@@ -37,7 +37,7 @@ class SuryaEncoderConfig(BackboneConfigMixin, PretrainedConfig):
         encoder_stride=32,
         out_features=None,
         out_indices=None,
-        num_patches=64,
+        num_patches=256,
         **kwargs,
     ):
         super().__init__(**kwargs)
