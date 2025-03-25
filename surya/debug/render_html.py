@@ -39,7 +39,6 @@ def render_text_as_html(
             position: absolute;
             overflow: hidden;
             display: flex;
-            align-items: left;
             justify-content: left;
             font-family: Arial, sans-serif;
             white-space: pre-wrap;

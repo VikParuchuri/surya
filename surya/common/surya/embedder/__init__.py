@@ -9,57 +9,43 @@ class BboxEmbedding(nn.Module):
         special_token_count = config.special_token_count
 
         self.w_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.h_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.cx_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.cy_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.xskew_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.yskew_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
 
         # Corners
         self.x1_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.y1_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
-        )
-        # x2 + y2 are unused, but kept for compat
-        self.x2_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
-        )
-        self.y2_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.x3_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.y3_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
-        )
-        # x4 + y4 are unused, but kept for compat
-        self.x4_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
-        )
-        self.y4_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
 
         self.xspecial_token_count_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
         self.yspecial_token_count_embed = nn.Embedding(
-            config.bbox_size + special_token_count, config.hidden_size
+            config.bbox_size + special_token_count, config.bbox_embed_size
         )
 
         self.config = config
@@ -101,11 +87,16 @@ class SimpleTokenEmbedder(nn.Module):
         super().__init__()
         self.token_embed = nn.Embedding(config.vocab_size, config.hidden_size)
         self.bbox_embed = BboxEmbedding(config)
+        self.bbox_padding_size = config.hidden_size - config.bbox_embed_size
 
     def embed(
         self, input_tokens: torch.Tensor, input_bboxes: torch.Tensor
     ) -> torch.Tensor:
         token_embeds = self.token_embed(input_tokens)
         bbox_embeds = self.bbox_embed(input_bboxes)
+        padded_bbox_embeds = torch.nn.functional.pad(
+            bbox_embeds, (self.bbox_padding_size, 0), "constant", 0
+        )
 
-        return token_embeds + bbox_embeds
+        embeddings = token_embeds + padded_bbox_embeds
+        return embeddings

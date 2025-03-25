@@ -53,13 +53,12 @@ def extract_tags(proposed_tags: List[str]) -> List[str]:
 
 
 tag_pattern = re.compile(r"<(/?)([a-z]+)([^>]*)>?", re.IGNORECASE)
-def ensure_matching_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]) -> bool:
+def fix_unbalanced_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]) -> List[TextChar]:
     self_closing_tags = ["br"]
 
     open_tags = []
 
     format_tags = extract_tags(special_tokens["formatting"]) + extract_tags(special_tokens["math_external"])
-    math_tags = extract_tags(special_tokens["math_internal"])
 
     for char in text_chars:
         if len(char.text) <= 1:
@@ -72,7 +71,7 @@ def ensure_matching_tags(text_chars: List[TextChar], special_tokens: Dict[str, l
         is_closing = tag_match.group(1) == "/"
         tag_name = tag_match.group(2).lower()
 
-        if tag_name not in format_tags + math_tags:
+        if tag_name not in format_tags:
             continue
 
         if tag_name in self_closing_tags:
@@ -90,20 +89,14 @@ def ensure_matching_tags(text_chars: List[TextChar], special_tokens: Dict[str, l
         else:
             open_tags.append(tag_name)
 
-    if not open_tags:
-        return True
-
-    return False
-
-def replace_invalid_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]):
-    bad_tags = not ensure_matching_tags(text_chars, special_tokens)
-    if bad_tags:
-        for char in text_chars:
-            if re.match(tag_pattern, char.text):
-                char.text = ""
-                char.confidence = 0
+    for tag in open_tags:
+        text_chars.append(TextChar(
+            text=f"</{tag}>",
+            confidence=0,
+            polygon=[[0, 0], [1, 0], [1, 1], [0, 1]],
+            bbox_valid=False
+        ))
     return text_chars
-
 
 
 
