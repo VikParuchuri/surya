@@ -461,7 +461,7 @@ class RecognitionPredictor(BasePredictor):
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
-                    if self.batch_prompt_mapping[b_idx]:
+                    if self.batch_prompt_mapping[b_idx] is not None:
                         p_idx = self.batch_prompt_mapping[b_idx]
                         predicted_tokens[p_idx].append(outputs.preds[temp_idx].cpu().item())
                         predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx].cpu()[0])
