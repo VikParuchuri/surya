@@ -24,6 +24,7 @@ class SuryaModelConfig(PretrainedConfig):
         vision_encoder=None,
         decoder=None,
         tasks: dict | None = None,
+        bbox_embed_size: int = 64,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -40,6 +41,8 @@ class SuryaModelConfig(PretrainedConfig):
         self.special_token_count = special_token_count  # pad, bos, etc, tokens
         self.max_sequence_length = max_sequence_length
         self.tasks = tasks
+        self.tie_word_embeddings = True
+        self.bbox_embed_size = bbox_embed_size
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(

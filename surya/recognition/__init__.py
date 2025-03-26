@@ -6,10 +6,11 @@ from collections import deque
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from surya.common.polygon import PolygonBox
 from surya.common.surya import SuryaModelConfig, SuryaModelOutput
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
@@ -17,6 +18,7 @@ from surya.detection import DetectionPredictor
 from surya.input.processing import convert_if_not_rgb, slice_polys_from_image, slice_bboxes_from_image
 from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
+from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import sort_text_lines, clean_close_polygons
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
 from surya.recognition.cache import ContinuousBatchingCache
@@ -153,7 +155,7 @@ class RecognitionPredictor(BasePredictor):
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[List[str | None]] | None = None
-    ):
+    ) -> dict:
         assert bboxes is not None or polygons is not None
         slice_map = []
         all_slices = []
@@ -238,7 +240,9 @@ class RecognitionPredictor(BasePredictor):
             box_preds
         )
         input_boxes = box_preds.to(torch.long)
-        input_boxes[skip_box_idxs, -1] = self.device_blank_bbox     # Set blank for tasks that don't need boxes
+
+        # Set blank for tasks that don't need boxes
+        input_boxes[skip_box_idxs, -1] = self.device_blank_bbox
 
         return ContinuousBatchOutput(
             input_ids=input_ids,
@@ -331,6 +335,8 @@ class RecognitionPredictor(BasePredictor):
         # Merge new kv cache with existing, update batch mapping
         non_active_idxs = [k for k,v in self.batch_prompt_mapping.items() if v is None]
         idxs_to_merge = non_active_idxs[:len(prompts)]
+
+        assert len(idxs_to_merge) == len(prompts), "Number of prompts should match number of empty slots"
         for i, prompt in zip(idxs_to_merge, prompts):
             self.batch_prompt_mapping[i] = prompt.id
 
@@ -596,6 +602,11 @@ class RecognitionPredictor(BasePredictor):
                 else:
                     text = "".join([char.text for char in text_line])
                     confidence = float(np.mean([char.confidence for char in text_line]))
+                    poly_box = PolygonBox(polygon=polygon)
+                    for char in text_line:
+                        char.shift(poly_box.bbox[0], poly_box.bbox[1]) # Ensure character boxes match line boxes (relative to page)
+
+                    text_line = fix_unbalanced_tags(text_line, self.processor.ocr_tokenizer.special_tokens)
                     lines.append(TextLine(
                         text=text,
                         polygon=polygon,

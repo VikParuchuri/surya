@@ -1,5 +1,17 @@
 <style>
-    .katex { font-size: {{katex_line_size}}em; }
+    .katex-display-container {
+        display: inline-block;
+        max-width: 100%;
+        overflow-x: auto;
+        max-height: 100%;
+    }
+
+    .katex-inline-container {
+        display: inline-block;
+        max-width: 100%;
+        overflow-x: auto;
+        max-height: 100%;
+    }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" onload="setTimeout(function() {renderMath()})" async></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
