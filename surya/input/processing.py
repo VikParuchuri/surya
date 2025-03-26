@@ -50,7 +50,7 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
     bbox = [min([x[0] for x in coordinates]), min([x[1] for x in coordinates]), max([x[0] for x in coordinates]), max([x[1] for x in coordinates])]
 
     # We mask out anything not in the polygon
-    cropped_polygon = image_array[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy()
+    cropped_polygon = image_array[max(0,bbox[1]):bbox[3], bbox[0]:bbox[2]].copy()
     coordinates = [(x - bbox[0], y - bbox[1]) for x, y in coordinates]
 
     # Pad the area outside the polygon with the pad value
