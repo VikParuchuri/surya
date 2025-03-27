@@ -21,7 +21,7 @@ from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import sort_text_lines, clean_close_polygons
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
-from surya.recognition.cache import ContinuousBatchingCache
+from surya.recognition.cache import ContinuousBatchingDynamicCache
 from surya.settings import settings
 
 @dataclass
@@ -314,7 +314,7 @@ class RecognitionPredictor(BasePredictor):
         needs_boxes = [self.tasks[p.task_name]["needs_bboxes"] for p in prompts]
         skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
-        prefill_cache = ContinuousBatchingCache()
+        prefill_cache = ContinuousBatchingDynamicCache()
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
