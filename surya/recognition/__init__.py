@@ -253,6 +253,17 @@ class RecognitionPredictor(BasePredictor):
             scores=scores,
         )
 
+    def merge_cache_attention_mask(self, prefill_cache, current_attention_mask, prefill_attention_mask, merge_idxs):
+        offset = self.kv_cache.merge(prefill_cache, merge_idxs)
+
+        if offset > 0:
+            prefill_attention_mask = F.pad(prefill_attention_mask, (offset, 0), value=0)
+        elif offset < 0:
+            current_attention_mask = F.pad(current_attention_mask, (abs(offset), 0), value=0)
+        current_attention_mask[merge_idxs] = prefill_attention_mask
+
+        return current_attention_mask
+
     def decode(
         self,
         current_inputs: Optional[ContinuousBatchInput] = None
@@ -340,13 +351,6 @@ class RecognitionPredictor(BasePredictor):
         for i, prompt in zip(idxs_to_merge, prompts):
             self.batch_prompt_mapping[i] = prompt.id
 
-        if self.kv_cache:
-            offset = self.kv_cache.merge(prefill_cache, idxs_to_merge)
-        else:
-            self.kv_cache = prefill_cache
-            offset = 0
-
-
         # Adjust attention mask and position ids to account for the newly generated tokens
         attention_mask = torch.cat(
             [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
@@ -361,22 +365,18 @@ class RecognitionPredictor(BasePredictor):
                 position_ids=position_ids,
                 skip_box_idxs=skip_box_idxs,
             )
+            self.kv_cache = prefill_cache
 
             return new_input, processed_outputs, range(processed_outputs.input_ids.shape[0])
 
         # Merging input_ids, input_boxes, attention masks and position ids
+        current_attention_mask = self.merge_cache_attention_mask(prefill_cache, current_inputs.attention_mask, attention_mask, idxs_to_merge)
+
         current_input_ids = current_inputs.input_ids
         current_input_ids[idxs_to_merge] = processed_outputs.input_ids
         
         current_input_boxes = current_inputs.input_boxes
         current_input_boxes[idxs_to_merge] = processed_outputs.input_boxes
-
-        current_attention_mask = current_inputs.attention_mask
-        if offset > 0:
-            attention_mask = F.pad(attention_mask, (offset, 0), value=0)
-        elif offset < 0:
-            current_attention_mask = F.pad(current_attention_mask, (abs(offset), 0), value=0)
-        current_attention_mask[idxs_to_merge] = attention_mask
 
         current_position_ids = current_inputs.position_ids
         current_position_ids[idxs_to_merge] = position_ids
