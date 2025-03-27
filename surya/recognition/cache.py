@@ -28,13 +28,12 @@ class ContinuousBatchingDynamicCache(DynamicCache):
     ):
         assert len(new_cache) == len(self), "The two caches should have the same number of layers"
         
-        # We should TECHNICALLY be able to pad these values to 0s now, since they will be attention masked
         current_seq_length = self.get_seq_length()
         new_cache_seq_length = new_cache.get_seq_length()
-        offset = current_seq_length - new_cache_seq_length      # Generally positive, but negative case is handled too
+        offset = current_seq_length - new_cache_seq_length
 
         with torch.inference_mode():
-            # As long as we set the attention mask and position ids correctly, padding value can be anything
+            # Since we set the attention mask and position ids correctly, padding value can be anything
             for layer_idx in range(len(self)):
                 new_k, new_v = new_cache[layer_idx]
                 new_k, new_v = self.pad_left(new_k, new_v, max(0, offset))
