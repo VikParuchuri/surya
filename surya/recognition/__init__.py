@@ -225,12 +225,17 @@ class RecognitionPredictor(BasePredictor):
     ):
         batch = []
         for image, text, task_name in zip(images, input_text, task_names):
+            image, rotated = self.processor.align_long_axis(image)
+
             image_size = self.tasks[task_name]["img_size"]
             image = image.resize(image_size)
 
             # Task input is the same for all tasks for now
             text = text or ""
-            inputs = [{"type": "image", "image": image}, {"type": "text", "text": text}]
+            inputs = [
+                {"type": "image", "image": image, "rotated": rotated},
+                {"type": "text", "text": text},
+            ]
             batch.append({"task": task_name, "inputs": inputs})
 
         return batch

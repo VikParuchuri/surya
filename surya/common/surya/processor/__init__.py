@@ -15,7 +15,6 @@ from surya.common.surya.processor.schema import (
     TextInput,
     OCRInput,
     ImageInput,
-    EmptyInput,
     ProcessorOutput,
 )
 
@@ -31,6 +30,7 @@ IMAGE_ROTATED_TOKEN = "<ROT>"
 OCR_WITH_BOXES_BOS_TOKEN = "<OCR-WB>"
 OCR_WITHOUT_BOXES_BOS_TOKEN = "<OCR-WOB>"
 BLOCK_WITHOUT_BOXES_TOKEN = "<BLOCKS-WOB>"
+
 
 class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor", "ocr_tokenizer"]
@@ -220,10 +220,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     # The task is expected to have - image_dict, user_input_dict, output_dict
     # use_input_dict is allowed to have an empty input which is fine, but needs to be present
     def _process_ocr_with_boxes(
-        self,
-        mixed_input: List[dict],
-        bos_token_id: int,
-        task: str = "ocr_with_boxes"
+        self, mixed_input: List[dict], bos_token_id: int, task: str = "ocr_with_boxes"
     ):
         processed_input_ids = []
         processed_input_boxes = []
@@ -271,13 +268,34 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             all_image_tiles,
         )
 
-    def _process_ocr_without_boxes(self, mixed_input: List[dict], bos_token_id: int, task: str = "ocr_without_boxes"):
+    def _process_ocr_without_boxes(
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = "ocr_without_boxes",
+    ):
         # Boxes are set to None, so this will work
         # TODO: improve this behavior
-        return self._process_ocr_with_boxes(mixed_input, bos_token_id=bos_token_id, task=task)
+        return self._process_ocr_with_boxes(
+            mixed_input, bos_token_id=bos_token_id, task=task
+        )
 
-    def _process_block_without_boxes(self, mixed_input: List[dict], bos_token_id: int, task: str = "block_without_boxes"):
-        return self._process_ocr_with_boxes(mixed_input, bos_token_id=bos_token_id, task=task)
+    def _process_block_without_boxes(
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = "block_without_boxes",
+    ):
+        return self._process_ocr_with_boxes(
+            mixed_input, bos_token_id=bos_token_id, task=task
+        )
+
+    def align_long_axis(self, image: Image.Image) -> Tuple[Image.Image, bool]:
+        width, height = image.size
+        if height > width:  # Rotate vertical lines
+            return image.rotate(90, expand=True), True
+
+        return image, False
 
     def __call__(self, mixed_batch: List[dict], padding_side: Optional[str] = "left"):
         all_image_tiles = []
@@ -290,9 +308,9 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             assert task in self.bos_token_id, f"Task {task} has no bos token defined."
 
             # Select the correct processing function based on the task type
-            input_ids, input_boxes, image_tiles = getattr(
-                self, f"_process_{task}"
-            )(mixed_input, self.bos_token_id[task])
+            input_ids, input_boxes, image_tiles = getattr(self, f"_process_{task}")(
+                mixed_input, self.bos_token_id[task]
+            )
 
             all_input_ids.append(input_ids)
             all_input_boxes.append(input_boxes)
@@ -346,4 +364,3 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             if t not in self.special_token_mapping.values() and t != -100
         ]  # Skip special tokens and loss ignore index
         return self.ocr_tokenizer.decode(filtered_tokens, task=task)
-
