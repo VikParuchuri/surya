@@ -21,7 +21,7 @@ from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import sort_text_lines, clean_close_polygons
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
-from surya.recognition.cache import ContinuousBatchingDynamicCache
+from surya.recognition.cache import ContinuousBatchingDynamicCache, ContinuousBatchingStaticCache
 from surya.settings import settings
 
 @dataclass
@@ -31,6 +31,7 @@ class ContinuousBatchInput:
     attention_mask: torch.Tensor
     position_ids: torch.Tensor
     skip_box_idxs: torch.Tensor
+    cache_position: Optional[torch.Tensor]
 
 @dataclass
 class ContinuousBatchOutput:
@@ -254,31 +255,69 @@ class RecognitionPredictor(BasePredictor):
         )
 
     def merge_cache_attention_mask(self, prefill_cache, current_attention_mask, prefill_attention_mask, merge_idxs):
-        offset = self.kv_cache.merge(prefill_cache, merge_idxs)
+        if settings.RECOGNITION_STATIC_CACHE:
+            # Attention mask is already padded to max seq len in static cache case
+            num_new_elements = len(merge_idxs)
+            self.kv_cache.merge(prefill_cache, merge_idxs)
+            current_attention_mask[merge_idxs] = prefill_attention_mask[:num_new_elements]
+        else:
+            offset = self.kv_cache.merge(prefill_cache, merge_idxs)
 
-        if offset > 0:
-            prefill_attention_mask = F.pad(prefill_attention_mask, (offset, 0), value=0)
-        elif offset < 0:
-            current_attention_mask = F.pad(current_attention_mask, (abs(offset), 0), value=0)
-        current_attention_mask[merge_idxs] = prefill_attention_mask
+            if offset > 0:
+                prefill_attention_mask = F.pad(prefill_attention_mask, (offset, 0), value=0)
+            elif offset < 0:
+                current_attention_mask = F.pad(current_attention_mask, (abs(offset), 0), value=0)
+            current_attention_mask[merge_idxs] = prefill_attention_mask
 
         return current_attention_mask
+
+    def static_cache_pad(self, processed_inputs, pad_value=0):
+        """
+        Pads all tensors in the dictionary to a static shape (batch_size, max_seq_len),
+        right-padding along the sequence dimension and bottom-padding along the batch dimension.
+        
+        Args:
+            processed_inputs (dict): A dictionary of PyTorch tensors with shape (batch_size, seq_len, ...)
+            pad_value (int, optional): The value to use for padding. Defaults to 0.
+        
+        Returns:
+            dict: A dictionary with the padded tensors.
+        """
+        batch_size = self.get_batch_size()
+        max_seq_len = settings.RECOGNITION_MAX_TOKENS
+        
+        padded_tensors = {}
+        for name, tensor in processed_inputs.items():
+            if name == "image_tiles":
+                padded_tensors[name] = tensor  # Skip padding for image_tiles
+                continue
+            
+            pad_batch = batch_size - tensor.shape[0]
+            pad_seq = max_seq_len - tensor.shape[1]
+            
+            pad_dims = (0, 0) * (tensor.dim() - 2) + (0, pad_seq, 0, pad_batch)  # Right & bottom pad
+            padded_tensors[name] = torch.nn.functional.pad(tensor, pad_dims, value=pad_value)
+        
+        return padded_tensors
 
     def decode(
         self,
         current_inputs: Optional[ContinuousBatchInput] = None
     ):
+        # TODO Setup cache position here and in the ContinuousBatchInput
         input_ids = current_inputs.input_ids
         input_boxes = current_inputs.input_boxes
         attention_mask = current_inputs.attention_mask
         position_ids = current_inputs.position_ids
         skip_box_idxs = current_inputs.skip_box_idxs
+        cache_position = current_inputs.cache_position
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
                 input_boxes=input_boxes,
                 attention_mask=attention_mask,
+                cache_position=cache_position,
                 position_ids=position_ids,
                 use_cache=True,
                 past_key_values=self.kv_cache,
@@ -287,14 +326,22 @@ class RecognitionPredictor(BasePredictor):
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs)
 
-        attention_mask = torch.cat(
-            [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
-        )
-        position_ids = position_ids[:, -1:] + 1
+        if settings.RECOGNITION_STATIC_CACHE:
+            batch_indices = torch.arange(attention_mask.shape[0], device=attention_mask.device)
+            attention_mask[batch_indices, cache_position.squeeze(1)] = 1
+            cache_position = cache_position + 1  # Increment cache position
+            position_ids = position_ids[:, -1:] + 1
+        else:
+            attention_mask = torch.cat(
+                [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
+            )
+            position_ids = position_ids[:, -1:] + 1
+            cache_position = None
         new_input = ContinuousBatchInput(
             input_ids=processed_output.input_ids,
             input_boxes=processed_output.input_boxes,
             attention_mask=attention_mask,
+            cache_position=cache_position,
             position_ids=position_ids,
             skip_box_idxs=skip_box_idxs
         )
@@ -317,15 +364,29 @@ class RecognitionPredictor(BasePredictor):
             device=self.model.device,
             dtype=self.model.dtype
         )
+
+        prefill_batch_size, prefill_seq_len = processed_inputs['input_ids'].shape[:2]
+        if settings.RECOGNITION_STATIC_CACHE:
+            processed_inputs = self.static_cache_pad(processed_inputs)
+            
+        # Do not need cache position for prefill, automatically handled
         input_ids = processed_inputs["input_ids"]
         input_boxes = processed_inputs["input_boxes"]
         image_tiles = processed_inputs["image_tiles"]
         attention_mask = processed_inputs["attention_mask"]
         position_ids = processed_inputs["position_ids"]
         needs_boxes = [self.tasks[p.task_name]["needs_bboxes"] for p in prompts]
+        if settings.RECOGNITION_STATIC_CACHE:
+            needs_boxes += [False] * (self.get_batch_size() - len(prompts))
+            cache_position = torch.arange(input_ids.shape[1], dtype=torch.long, device=input_ids.device).repeat(self.get_batch_size(), 1)
+        else:
+            cache_position = None
         skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
-        prefill_cache = ContinuousBatchingDynamicCache()
+        if settings.RECOGNITION_STATIC_CACHE:
+            prefill_cache = ContinuousBatchingStaticCache(config=self.model.config.decoder, max_batch_size=self.get_batch_size(), max_cache_len=settings.RECOGNITION_MAX_TOKENS, dtype=self.model.dtype, device=self.model.device)
+        else:
+            prefill_cache = ContinuousBatchingDynamicCache()
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
@@ -335,6 +396,7 @@ class RecognitionPredictor(BasePredictor):
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 inputs_embeds=None,
+                cache_position=cache_position,
                 past_key_values=prefill_cache,
                 use_cache=True,
                 num_logits_to_keep=1
@@ -352,10 +414,19 @@ class RecognitionPredictor(BasePredictor):
             self.batch_prompt_mapping[i] = prompt.id
 
         # Adjust attention mask and position ids to account for the newly generated tokens
-        attention_mask = torch.cat(
-            [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
-        )
-        position_ids = position_ids[:, -1:] + 1
+        if settings.RECOGNITION_STATIC_CACHE:
+            attention_mask[:, prefill_seq_len] = 1
+            position_ids = position_ids[:, prefill_seq_len:prefill_seq_len + 1] + 1
+            cache_position = torch.full(
+                (self.get_batch_size(), 1), prefill_seq_len + 1, dtype=position_ids.dtype, device=position_ids.device
+            )
+        else:
+            attention_mask = torch.cat(
+                [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)],
+                dim=1
+            )
+            position_ids = position_ids[:, -1:] + 1
+            cache_position = None
 
         if current_inputs is None:
             new_input = ContinuousBatchInput(
@@ -364,32 +435,40 @@ class RecognitionPredictor(BasePredictor):
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 skip_box_idxs=skip_box_idxs,
+                cache_position=cache_position
             )
             self.kv_cache = prefill_cache
 
             return new_input, processed_outputs, range(processed_outputs.input_ids.shape[0])
 
-        # Merging input_ids, input_boxes, attention masks and position ids
+        # Merging input_ids, input_boxes, attention masks, cache position and position ids
+        # The prefill batch may be padded for static shape, so we only consider the 'true' elements
         current_attention_mask = self.merge_cache_attention_mask(prefill_cache, current_inputs.attention_mask, attention_mask, idxs_to_merge)
 
         current_input_ids = current_inputs.input_ids
-        current_input_ids[idxs_to_merge] = processed_outputs.input_ids
+        current_input_ids[idxs_to_merge] = processed_outputs.input_ids[:prefill_batch_size]
         
         current_input_boxes = current_inputs.input_boxes
-        current_input_boxes[idxs_to_merge] = processed_outputs.input_boxes
+        current_input_boxes[idxs_to_merge] = processed_outputs.input_boxes[:prefill_batch_size]
 
         current_position_ids = current_inputs.position_ids
-        current_position_ids[idxs_to_merge] = position_ids
+        current_position_ids[idxs_to_merge] = position_ids[:prefill_batch_size]
 
         current_skip_box_idxs = current_inputs.skip_box_idxs
-        current_skip_box_idxs[idxs_to_merge] = skip_box_idxs
+        current_skip_box_idxs[idxs_to_merge] = skip_box_idxs[:prefill_batch_size]
 
+        if (current_cache_position := current_inputs.cache_position) is not None:
+            current_cache_position[idxs_to_merge] = cache_position[:prefill_batch_size]
+        else:
+            current_cache_position = None
+            
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
             input_boxes=current_input_boxes,
             attention_mask=current_attention_mask,
             position_ids=current_position_ids,
             skip_box_idxs=current_skip_box_idxs,
+            cache_position=current_cache_position
         )
 
         return new_input, processed_outputs, idxs_to_merge
@@ -464,6 +543,7 @@ class RecognitionPredictor(BasePredictor):
         pbar = tqdm(total=len(self.prompt_queue), desc='Recognizing Text')
         while self.prompt_queue or self.num_active_slots > 0:
             if (self.num_empty_slots / recognition_batch_size) > self.min_prefill_ratio and self.prompt_queue:
+                print('PREFILL-------------------------------------------------------------------------------')
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
@@ -477,6 +557,7 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
+                print('DECODE-------------------------------------------------------------------------------')
                 updated_inputs, outputs = self.decode(current_inputs)
 
                 # TODO Find a cleaner way of popping from the dict
@@ -494,6 +575,7 @@ class RecognitionPredictor(BasePredictor):
             current_inputs = updated_inputs
             mark_step()
         pbar.close()
+        del self.kv_cache
 
         char_predictions = []
         needs_boxes = [self.tasks[task_name]["needs_bboxes"] for task_name in flat['task_names']]
@@ -606,7 +688,7 @@ class RecognitionPredictor(BasePredictor):
                     for char in text_line:
                         char.shift(poly_box.bbox[0], poly_box.bbox[1]) # Ensure character boxes match line boxes (relative to page)
 
-                    text_line = fix_unbalanced_tags(text_line, self.processor.ocr_tokenizer.special_tokens)
+                    # text_line = fix_unbalanced_tags(text_line, self.processor.ocr_tokenizer.special_tokens)
                     lines.append(TextLine(
                         text=text,
                         polygon=polygon,

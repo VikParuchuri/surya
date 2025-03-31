@@ -1,6 +1,7 @@
+from __future__ import annotations
 import torch
-from transformers import DynamicCache
-from typing import List, Tuple
+from transformers import DynamicCache, StaticCache
+from typing import Any, Dict, List, Optional, Tuple
 
 class ContinuousBatchingDynamicCache(DynamicCache):
     def pad_left(
@@ -51,3 +52,71 @@ class ContinuousBatchingDynamicCache(DynamicCache):
                 self.value_cache[layer_idx] = adjusted_value_cache
 
         return offset
+
+
+class ContinuousBatchingStaticCache(StaticCache):
+    # Modified version of StaticCache.update for continuous batching
+    # HF implementation assumes that cache_position is the same across all batches when updating cache which doesn't apply in this case
+    def update(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        cache_position = cache_kwargs.get("cache_position")  # Shape: (batch_size,)
+
+        k_out = self.key_cache[layer_idx]  # Shape: (batch, num_heads, max_seq_len, head_dim)
+        v_out = self.value_cache[layer_idx]
+
+        key_states = key_states.to(k_out.dtype)  # Ensure dtype consistency
+        value_states = value_states.to(v_out.dtype)
+
+        if cache_position is None:
+            k_out.copy_(key_states)
+            v_out.copy_(value_states)
+        else:
+            batch_size, num_heads, seq_len, head_dim = key_states.shape
+
+            cache_position = cache_position.to(dtype=torch.long)  # Ensure integer indices
+            cache_position = cache_position.unsqueeze(1).expand(-1, num_heads, -1)  # Correct expansion
+
+            assert cache_position.shape == key_states.shape[:3], f"Shape mismatch: {cache_position.shape} vs {key_states.shape[:3]}"
+
+            k_out.scatter_(2, cache_position.unsqueeze(-1), key_states)  # Scatter update for keys
+            v_out.scatter_(2, cache_position.unsqueeze(-1), value_states)  # Scatter update for values
+
+        return k_out, v_out
+
+    def __len__(self) -> int:
+        return len(self.key_cache)
+
+    # We return the max seq length among all slots
+    @torch._dynamo.disable
+    def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
+        """Returns the sequence length of the cached states that were seen by the model."""
+        return 300
+        all_seq_lengths = self.key_cache[layer_idx][:, 0, :, :].sum(-1)
+        return all_seq_lengths.max()
+
+    def merge(
+        self,
+        new_cache: ContinuousBatchingStaticCache,
+        merge_idxs: List[int]
+    ):
+
+        assert len(new_cache) == len(self), "The two caches should have the same number of layers"
+        assert new_cache.key_cache[0].shape == self.key_cache[0].shape, "The two caches should have the same shape"
+        num_new_elements = len(merge_idxs)
+        merge_idxs_tensor = torch.tensor(merge_idxs, device=self.key_cache[0].device)
+        
+        with torch.inference_mode():
+            for layer_idx in range(len(self)):
+                # Merge idxs can be of less length than the prefill cache, since prefill cache may have padded batch elements
+                new_k, new_v = new_cache.key_cache[layer_idx], new_cache.value_cache[layer_idx]
+                new_k, new_v = new_k[:num_new_elements], new_v[:num_new_elements]
+
+                # In the static batching case, both prefill and current cache have the exact same shape, so no padding
+                self.key_cache[layer_idx].index_copy(0, merge_idxs_tensor, new_k)
+                self.value_cache[layer_idx].index_copy_(0, merge_idxs_tensor, new_v)

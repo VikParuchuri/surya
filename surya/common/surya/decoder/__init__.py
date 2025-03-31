@@ -688,7 +688,13 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
             diagonal_attend_mask = torch.arange(
                 target_length, device=device
             ) > cache_position.reshape(-1, 1)
-            if config.sliding_window is not None:
+            
+            # tcp = torch.arange(0, sequence_length, device=device, dtype=dtype).reshape(-1, 1)
+            # diagonal_attend_mask = torch.arange(
+            #     target_length, device=device
+            # ) > tcp.reshape(-1, 1)            
+
+            if config.use_sliding_window:
                 # if we have sliding window, we should not attend to tokens beyond sliding window length, so we mask them out also
                 # the check is needed to verify is current checkpoint was trained with sliding window or not
                 if (
