@@ -557,7 +557,7 @@ class RecognitionPredictor(BasePredictor):
                         predicted_boxes[p_idx].append(outputs.bbox_preds[b_idx].cpu()[0])
                         scores[p_idx].append(outputs.scores[b_idx].cpu().item())
 
-                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == 100:
+                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == settings.RECOGNITION_MAX_TOKENS:
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
 
