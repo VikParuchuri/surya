@@ -33,6 +33,8 @@ class ContinuousBatchingDynamicCache(DynamicCache):
         new_cache_seq_length = new_cache.get_seq_length()
         offset = current_seq_length - new_cache_seq_length
 
+        merge_idxs_tensor = torch.tensor(merge_idxs, device=self.key_cache[0].device)
+
         with torch.inference_mode():
             # Since we set the attention mask and position ids correctly, padding value can be anything
             for layer_idx in range(len(self)):
@@ -44,7 +46,6 @@ class ContinuousBatchingDynamicCache(DynamicCache):
                     self.key_cache[layer_idx], self.value_cache[layer_idx], max(0, -offset)
                 )
 
-                merge_idxs_tensor = torch.tensor(merge_idxs)
                 adjusted_key_cache.index_copy_(0, merge_idxs_tensor, new_k)
                 adjusted_value_cache.index_copy_(0, merge_idxs_tensor, new_v)
 
