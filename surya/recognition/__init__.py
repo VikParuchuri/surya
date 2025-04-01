@@ -451,8 +451,11 @@ class RecognitionPredictor(BasePredictor):
         current_skip_box_idxs = current_inputs.skip_box_idxs
         current_skip_box_idxs[idxs_to_merge] = skip_box_idxs[:prefill_batch_size]
 
+        # In the dynamic batching case, cache position should always reflect the full cache len for all batch elements, since it is _left padded_
+        # In the static batching case, cache position would be ragged (different values for different batch elements) since it is right padded due to the static size
         current_cache_position = current_inputs.cache_position
-        current_cache_position[idxs_to_merge] = cache_position[:prefill_batch_size]
+        if settings.RECOGNITION_STATIC_CACHE:
+            current_cache_position[idxs_to_merge] = cache_position[:prefill_batch_size]
             
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
