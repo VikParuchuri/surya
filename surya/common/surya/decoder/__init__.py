@@ -645,7 +645,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
         target_length: int,
         dtype: torch.dtype,
         device: torch.device,
-        cache_position: torch.Tensor,
+        cache_position: torch.Tensor,  # 2D: (batch_size, seq_len)
         batch_size: int,
         config: SuryaDecoderConfig,
         past_key_values: Cache,
@@ -664,61 +664,59 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
             dtype (`torch.dtype`):
                 The dtype to use for the 4D attention mask.
             device (`torch.device`):
-                The device to plcae the 4D attention mask on.
+                The device to place the 4D attention mask on.
             cache_position (`torch.Tensor`):
-                Indices depicting the position of the input sequence tokens in the sequence.
-            batch_size (`torch.Tensor`):
+                2D tensor (batch_size, seq_len) depicting per-batch token positions.
+            batch_size (`int`):
                 Batch size.
-            config (`Qwen2Config`):
-                The model's configuration class
+            config (`SuryaDecoderConfig`):
+                The model's configuration class.
             past_key_values (`Cache`):
-                The cache class that is being used currently to generate
+                The cache class that is being used currently to generate.
         """
         if attention_mask is not None and attention_mask.dim() == 4:
-            # In this case we assume that the mask comes already in inverted form and requires no inversion or slicing.
+            # If mask is already 4D and inverted, return it directly.
             causal_mask = attention_mask
         else:
             min_dtype = torch.finfo(dtype).min
+
+            if config.use_sliding_window:
+                raise NotImplementedError("Sliding Window has not been modified to work with continuous batching + static cache!")
+
+            # Assuming cache_position is of shape [batch_size, sequence_length]
+            batch_size, _ = cache_position.shape
+
+            # Create base causal mask filled with minimum values
             causal_mask = torch.full(
-                (sequence_length, target_length),
+                (batch_size, sequence_length, target_length),
                 fill_value=min_dtype,
                 dtype=dtype,
                 device=device,
             )
-            diagonal_attend_mask = torch.arange(
-                target_length, device=device
-            ) > cache_position.reshape(-1, 1)
-            
-            # tcp = torch.arange(0, sequence_length, device=device, dtype=dtype).reshape(-1, 1)
-            # diagonal_attend_mask = torch.arange(
-            #     target_length, device=device
-            # ) > tcp.reshape(-1, 1)            
 
-            if config.use_sliding_window:
-                # if we have sliding window, we should not attend to tokens beyond sliding window length, so we mask them out also
-                # the check is needed to verify is current checkpoint was trained with sliding window or not
-                if (
-                    not isinstance(past_key_values, SlidingWindowCache)
-                    or sequence_length > target_length
-                ):
-                    sliding_attend_mask = torch.arange(
-                        target_length, device=device
-                    ) <= (cache_position.reshape(-1, 1) - config.sliding_window)
-                    diagonal_attend_mask.bitwise_or_(sliding_attend_mask)
-            causal_mask *= diagonal_attend_mask
-            causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
+            target_indices = torch.arange(target_length, device=device)
+
+            # Create a mask where each position can only attend to positions up to its cache_position
+            # This broadcasts the comparison across all dimensions
+            attend_mask = target_indices.unsqueeze(0).unsqueeze(0) <= cache_position.unsqueeze(-1)
+
+            # Apply the mask (replace min_dtype values with 0 where attention is allowed)
+            causal_mask = torch.where(attend_mask, 0, min_dtype)
+            causal_mask = causal_mask[:, None, :, :]
+
+            # Handle explicit attention masks
             if attention_mask is not None:
-                causal_mask = (
-                    causal_mask.clone()
-                )  # copy to contiguous memory for in-place edit
+                causal_mask = causal_mask.clone()  # Ensure contiguous memory for in-place edits
+
+                # Trim attention_mask if it extends beyond target_length
                 if attention_mask.shape[-1] > target_length:
                     attention_mask = attention_mask[:, :target_length]
+
                 mask_length = attention_mask.shape[-1]
-                padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[
-                    :, None, None, :
-                ].to(causal_mask.device)
+
+                # Apply padding mask where `attention_mask` is zero
+                padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[:, None, None, :].to(causal_mask.device)
                 padding_mask = padding_mask == 0
-                causal_mask[:, :, :, :mask_length] = causal_mask[
-                    :, :, :, :mask_length
-                ].masked_fill(padding_mask, min_dtype)
+                causal_mask[:, :, :, :mask_length] = causal_mask[:, :, :, :mask_length].masked_fill(padding_mask, min_dtype)
+
         return causal_mask

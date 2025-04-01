@@ -326,17 +326,15 @@ class RecognitionPredictor(BasePredictor):
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs)
 
+        cache_position = cache_position + 1  # Increment cache position
+        position_ids = position_ids[:, -1:] + 1
         if settings.RECOGNITION_STATIC_CACHE:
             batch_indices = torch.arange(attention_mask.shape[0], device=attention_mask.device)
             attention_mask[batch_indices, cache_position.squeeze(1)] = 1
-            cache_position = cache_position + 1  # Increment cache position
-            position_ids = position_ids[:, -1:] + 1
         else:
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
             )
-            position_ids = position_ids[:, -1:] + 1
-            cache_position = None
         new_input = ContinuousBatchInput(
             input_ids=processed_output.input_ids,
             input_boxes=processed_output.input_boxes,
@@ -377,10 +375,9 @@ class RecognitionPredictor(BasePredictor):
         position_ids = processed_inputs["position_ids"]
         needs_boxes = [self.tasks[p.task_name]["needs_bboxes"] for p in prompts]
         if settings.RECOGNITION_STATIC_CACHE:
+            # Adjust for padding to max batch size
             needs_boxes += [False] * (self.get_batch_size() - len(prompts))
-            cache_position = torch.arange(input_ids.shape[1], dtype=torch.long, device=input_ids.device).repeat(self.get_batch_size(), 1)
-        else:
-            cache_position = None
+        cache_position = torch.arange(input_ids.shape[1], dtype=torch.long, device=input_ids.device).repeat(input_ids.shape[0], 1)
         skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
         if settings.RECOGNITION_STATIC_CACHE:
@@ -414,19 +411,16 @@ class RecognitionPredictor(BasePredictor):
             self.batch_prompt_mapping[i] = prompt.id
 
         # Adjust attention mask and position ids to account for the newly generated tokens
+        cache_position = cache_position[:, prefill_seq_len - 1: prefill_seq_len] + 1
         if settings.RECOGNITION_STATIC_CACHE:
             attention_mask[:, prefill_seq_len] = 1
             position_ids = position_ids[:, prefill_seq_len:prefill_seq_len + 1] + 1
-            cache_position = torch.full(
-                (self.get_batch_size(), 1), prefill_seq_len + 1, dtype=position_ids.dtype, device=position_ids.device
-            )
         else:
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)],
                 dim=1
             )
             position_ids = position_ids[:, -1:] + 1
-            cache_position = None
 
         if current_inputs is None:
             new_input = ContinuousBatchInput(
@@ -457,10 +451,8 @@ class RecognitionPredictor(BasePredictor):
         current_skip_box_idxs = current_inputs.skip_box_idxs
         current_skip_box_idxs[idxs_to_merge] = skip_box_idxs[:prefill_batch_size]
 
-        if (current_cache_position := current_inputs.cache_position) is not None:
-            current_cache_position[idxs_to_merge] = cache_position[:prefill_batch_size]
-        else:
-            current_cache_position = None
+        current_cache_position = current_inputs.cache_position
+        current_cache_position[idxs_to_merge] = cache_position[:prefill_batch_size]
             
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
@@ -484,7 +476,7 @@ class RecognitionPredictor(BasePredictor):
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[str | None] | None = None,
-        sort_lines: bool = True
+        sort_lines: bool = False
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
@@ -543,7 +535,6 @@ class RecognitionPredictor(BasePredictor):
         pbar = tqdm(total=len(self.prompt_queue), desc='Recognizing Text')
         while self.prompt_queue or self.num_active_slots > 0:
             if (self.num_empty_slots / recognition_batch_size) > self.min_prefill_ratio and self.prompt_queue:
-                print('PREFILL-------------------------------------------------------------------------------')
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
@@ -557,7 +548,6 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
-                print('DECODE-------------------------------------------------------------------------------')
                 updated_inputs, outputs = self.decode(current_inputs)
 
                 # TODO Find a cleaner way of popping from the dict
@@ -567,7 +557,7 @@ class RecognitionPredictor(BasePredictor):
                         predicted_boxes[p_idx].append(outputs.bbox_preds[b_idx].cpu()[0])
                         scores[p_idx].append(outputs.scores[b_idx].cpu().item())
 
-                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == settings.RECOGNITION_MAX_TOKENS:
+                        if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.pad_token_id] or len(predicted_tokens[p_idx]) == 100:
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
 
