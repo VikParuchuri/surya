@@ -1,6 +1,6 @@
 from __future__ import annotations
 from statistics import mean
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import List, Optional
 from collections import deque
 
@@ -48,6 +48,7 @@ class RecognitionPrompt:
     task_name: TaskNames
     image: Image
     text: str
+
 
 # TODO When we evict a sample then also trim the cache as necessary from the left
 # This will also allow require modification of attention mask (position_ids should remain unchanged, since they are only for the last element)
@@ -256,10 +257,13 @@ class RecognitionPredictor(BasePredictor):
 
     def merge_cache_attention_mask(self, prefill_cache, current_attention_mask, prefill_attention_mask, merge_idxs):
         if settings.RECOGNITION_STATIC_CACHE:
-            # Attention mask is already padded to max seq len in static cache case
-            num_new_elements = len(merge_idxs)
+            # Attention masks in static caching are right padded with 1s - To account for different lengths; So we can merge easily
+            # Causal mask generation based on cache position handles the right padding values
+            prefill_attention_mask = prefill_attention_mask[:len(merge_idxs)]
+            assert current_attention_mask.shape[1] == prefill_attention_mask.shape[1]
             self.kv_cache.merge(prefill_cache, merge_idxs)
-            current_attention_mask[merge_idxs] = prefill_attention_mask[:num_new_elements]
+
+            current_attention_mask[merge_idxs] = prefill_attention_mask
         else:
             offset = self.kv_cache.merge(prefill_cache, merge_idxs)
 
@@ -271,7 +275,7 @@ class RecognitionPredictor(BasePredictor):
 
         return current_attention_mask
 
-    def static_cache_pad(self, processed_inputs, pad_value=0):
+    def static_cache_pad(self, processed_inputs):
         """
         Pads all tensors in the dictionary to a static shape (batch_size, max_seq_len),
         right-padding along the sequence dimension and bottom-padding along the batch dimension.
@@ -283,8 +287,23 @@ class RecognitionPredictor(BasePredictor):
         Returns:
             dict: A dictionary with the padded tensors.
         """
+
+        def pad_tensor(tensor: torch.Tensor, max_batch_size: int) -> torch.Tensor:
+            if tensor.shape[0] == max_batch_size:
+                return tensor  # No padding needed
+            
+            # Create a new tensor with the desired batch size
+            # and copy the original data into it
+            current_batch_size = tensor.shape[0]
+            tensor_shape = list(tensor.shape)
+            tensor_shape[0] = max_batch_size
+            
+            padded_tensor = torch.zeros(tensor_shape, dtype=tensor.dtype, device=tensor.device)
+            padded_tensor[:current_batch_size] = tensor
+    
+            return padded_tensor
+
         batch_size = self.get_batch_size()
-        max_seq_len = settings.RECOGNITION_MAX_TOKENS
         
         padded_tensors = {}
         for name, tensor in processed_inputs.items():
@@ -292,11 +311,7 @@ class RecognitionPredictor(BasePredictor):
                 padded_tensors[name] = tensor  # Skip padding for image_tiles
                 continue
             
-            pad_batch = batch_size - tensor.shape[0]
-            pad_seq = max_seq_len - tensor.shape[1]
-            
-            pad_dims = (0, 0) * (tensor.dim() - 2) + (0, pad_seq, 0, pad_batch)  # Right & bottom pad
-            padded_tensors[name] = torch.nn.functional.pad(tensor, pad_dims, value=pad_value)
+            padded_tensors[name] = pad_tensor(tensor, batch_size)
         
         return padded_tensors
 
@@ -326,12 +341,10 @@ class RecognitionPredictor(BasePredictor):
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs)
 
-        cache_position = cache_position + 1  # Increment cache position
+        cache_position = cache_position + 1
         position_ids = position_ids[:, -1:] + 1
-        if settings.RECOGNITION_STATIC_CACHE:
-            batch_indices = torch.arange(attention_mask.shape[0], device=attention_mask.device)
-            attention_mask[batch_indices, cache_position.squeeze(1)] = 1
-        else:
+        if not settings.RECOGNITION_STATIC_CACHE:
+            # Static caching attention mask is already padded to max length
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)], dim=1
             )
@@ -377,11 +390,15 @@ class RecognitionPredictor(BasePredictor):
         if settings.RECOGNITION_STATIC_CACHE:
             # Adjust for padding to max batch size
             needs_boxes += [False] * (self.get_batch_size() - len(prompts))
+            attention_mask = torch.cat(
+                [attention_mask, torch.ones(self.get_batch_size(), settings.RECOGNITION_MAX_TOKENS - attention_mask.shape[1], dtype=torch.long, device=attention_mask.device)],
+                dim=1
+            )
         cache_position = torch.arange(input_ids.shape[1], dtype=torch.long, device=input_ids.device).repeat(input_ids.shape[0], 1)
         skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
         if settings.RECOGNITION_STATIC_CACHE:
-            prefill_cache = ContinuousBatchingStaticCache(config=self.model.config.decoder, max_batch_size=self.get_batch_size(), max_cache_len=settings.RECOGNITION_MAX_TOKENS, dtype=self.model.dtype, device=self.model.device)
+            prefill_cache = ContinuousBatchingStaticCache(config=self.model.config.decoder, max_batch_size=input_ids.shape[0], max_cache_len=settings.RECOGNITION_MAX_TOKENS, dtype=self.model.dtype, device=self.model.device)
         else:
             prefill_cache = ContinuousBatchingDynamicCache()
 
@@ -411,16 +428,14 @@ class RecognitionPredictor(BasePredictor):
             self.batch_prompt_mapping[i] = prompt.id
 
         # Adjust attention mask and position ids to account for the newly generated tokens
-        cache_position = cache_position[:, prefill_seq_len - 1: prefill_seq_len] + 1
-        if settings.RECOGNITION_STATIC_CACHE:
-            attention_mask[:, prefill_seq_len] = 1
-            position_ids = position_ids[:, prefill_seq_len:prefill_seq_len + 1] + 1
-        else:
+        cache_position = cache_position[:, -1:] + 1
+        position_ids = position_ids[:, -1:] + 1
+        if not settings.RECOGNITION_STATIC_CACHE:
+            # Static cache attention mask is already padded to max length
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.shape[0], 1, dtype=torch.long, device=attention_mask.device)],
                 dim=1
             )
-            position_ids = position_ids[:, -1:] + 1
 
         if current_inputs is None:
             new_input = ContinuousBatchInput(
@@ -433,8 +448,9 @@ class RecognitionPredictor(BasePredictor):
             )
             self.kv_cache = prefill_cache
 
-            return new_input, processed_outputs, range(processed_outputs.input_ids.shape[0])
-
+            # In static caching case, the batch may be padded, and we don't want to add those elements to the predicted tokens
+            return new_input, processed_outputs, idxs_to_merge, range(len(idxs_to_merge))
+        
         # Merging input_ids, input_boxes, attention masks, cache position and position ids
         # The prefill batch may be padded for static shape, so we only consider the 'true' elements
         current_attention_mask = self.merge_cache_attention_mask(prefill_cache, current_inputs.attention_mask, attention_mask, idxs_to_merge)
@@ -466,7 +482,8 @@ class RecognitionPredictor(BasePredictor):
             cache_position=current_cache_position
         )
 
-        return new_input, processed_outputs, idxs_to_merge
+        # In static caching case, the batch may be padded, and we don't want to add those elements to the predicted tokens
+        return new_input, processed_outputs, idxs_to_merge, range(len(idxs_to_merge))
 
     def __call__(
         self,
@@ -538,14 +555,14 @@ class RecognitionPredictor(BasePredictor):
         pbar = tqdm(total=len(self.prompt_queue), desc='Recognizing Text')
         while self.prompt_queue or self.num_active_slots > 0:
             if (self.num_empty_slots / recognition_batch_size) > self.min_prefill_ratio and self.prompt_queue:
-                updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
+                updated_inputs, outputs, merge_idxs, batch_idxs = self.prefill(current_inputs)
 
-                for temp_idx, b_idx in enumerate(merge_idxs):
+                for b_idx, tensor_idx in zip(merge_idxs, batch_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
                         p_idx = self.batch_prompt_mapping[b_idx]
-                        predicted_tokens[p_idx].append(outputs.preds[temp_idx].cpu().item())
-                        predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx].cpu()[0])
-                        scores[p_idx].append(outputs.scores[temp_idx].cpu().item())
+                        predicted_tokens[p_idx].append(outputs.preds[tensor_idx].cpu().item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[tensor_idx].cpu()[0])
+                        scores[p_idx].append(outputs.scores[tensor_idx].cpu().item())
 
                         if predicted_tokens[p_idx][-1] in [self.processor.eos_token_id, self.processor.no_output_token]:
                             self.batch_prompt_mapping[b_idx] = None
@@ -681,7 +698,7 @@ class RecognitionPredictor(BasePredictor):
                     for char in text_line:
                         char.shift(poly_box.bbox[0], poly_box.bbox[1]) # Ensure character boxes match line boxes (relative to page)
 
-                    # text_line = fix_unbalanced_tags(text_line, self.processor.ocr_tokenizer.special_tokens)
+                    text_line = fix_unbalanced_tags(text_line, self.processor.ocr_tokenizer.special_tokens)
                     lines.append(TextLine(
                         text=text,
                         polygon=polygon,
