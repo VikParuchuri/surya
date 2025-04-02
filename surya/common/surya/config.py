@@ -17,7 +17,8 @@ class SuryaModelConfig(PretrainedConfig):
         eos_token_id=1,
         pad_token_id=2,
         image_token_id=3,
-        special_token_count=4,
+        register_token_id=4,
+        special_token_count=5,
         tile_size=(1024, 256),
         max_sequence_length=1536,
         special_ocr_tokens=None,
@@ -26,6 +27,7 @@ class SuryaModelConfig(PretrainedConfig):
         tasks: dict | None = None,
         bbox_embed_size: int = 64,
         unmask_image: bool = False,
+        num_register_tokens: int = 0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -34,6 +36,7 @@ class SuryaModelConfig(PretrainedConfig):
         self.bbox_size = bbox_size
         self.blank_bbox_token_id = blank_bbox_token_id
         self.image_token_id = image_token_id
+        self.register_token_id = register_token_id
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
@@ -45,6 +48,7 @@ class SuryaModelConfig(PretrainedConfig):
         self.tie_word_embeddings = True
         self.bbox_embed_size = bbox_embed_size
         self.unmask_image = unmask_image
+        self.num_register_tokens = num_register_tokens
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(

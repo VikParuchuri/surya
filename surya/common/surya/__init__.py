@@ -66,6 +66,11 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.vision_encoder.config = self.config.vision_encoder
         self.decoder.config = self.config.decoder
 
+        if self.config.num_register_tokens > 0:
+            self.register_token_embeds = nn.Parameter(torch.randn(1, self.config.num_register_tokens, self.decoder.hidden_size))
+        else:
+            self.register_token_embeds = None
+
         self.vision_projector = nn.Sequential(
             nn.Linear(self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size),
             nn.GELU(),
@@ -141,6 +146,52 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 "Image tokens were present in the input but no input images were provided"
             )
 
+        if self.config.num_register_tokens > 0:
+            expanded_register_tokens = self.register_token_embeds.expand(inputs_embeds.shape[0], 1, 1)
+            special_register_mask = (input_ids == self.config.register_token_id).unsqueeze(-1)
+            special_register_mask = special_register_mask.expand_as(inputs_embeds).to(
+                inputs_embeds.device
+            )
+
+            total_mismatch = (
+                inputs_embeds[special_register_mask].numel() != expanded_register_tokens.numel()
+            )
+            if total_mismatch:
+                n_register_tokens = torch.sum((input_ids == self.config.register_token_id))
+                n_register_features = expanded_register_tokens.shape[0] * expanded_register_tokens.shape[1]
+                print(
+                    f"register features and register tokens do not match: tokens {n_register_tokens}, features {n_register_features}. This may lead to unexpected results"
+                )
+                print(
+                    f"Skipping register embedding for {n_register_tokens} tokens due to mismatch."
+                )
+                print(
+                    f"Input embeds shape is {inputs_embeds.shape}, register features shape is {expanded_register_tokens.shape}"
+                )
+                register_tokens_by_row = torch.sum(
+                    (input_ids == self.config.register_token_id), dim=1
+                )
+                print(f"Register tokens by row: {register_tokens_by_row}")
+
+                skipped = True
+
+                # Insert pad tokens instead of register tokens
+                pad_embeds = self.embedder.embed(
+                    input_tokens=torch.full_like(input_ids, self.config.pad_token_id),
+                    input_bboxes=input_boxes,
+                )
+                # Only replace at the register token positions
+                inputs_embeds = inputs_embeds.masked_scatter(
+                    special_register_mask, pad_embeds[special_register_mask]
+                )
+            else:
+                expanded_register_tokens = expanded_register_tokens.to(
+                    inputs_embeds.device, inputs_embeds.dtype
+                )
+                inputs_embeds = inputs_embeds.masked_scatter(
+                    special_register_mask, expanded_register_tokens
+                )
+
         return inputs_embeds
 
     def forward(
@@ -184,10 +235,12 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 output_attentions
             )
             expanded_image_token_mask = (input_ids == self.config.image_token_id)[:, None, None, :]
+            expanded_register_token_mask = (input_ids == self.config.register_token_id)[:, None, None, :]
+            unmasked_position_mask = torch.logical_or(expanded_image_token_mask, expanded_register_token_mask)
             
             # Causal mask has 0s for unmasked positions, and -inf for masked positions
             # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
-            causal_mask.masked_fill_(expanded_image_token_mask, 0)
+            causal_mask.masked_fill_(unmasked_position_mask, 0)
             attention_mask = causal_mask
 
         outputs = self.decoder(
