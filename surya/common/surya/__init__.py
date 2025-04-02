@@ -156,6 +156,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         output_attentions=False,
         use_cache=False,
         logits_to_keep=None,
+        cache_position=None,
         **kwargs: KwargsForCausalLM,
     ):
         # Process the mixed batch if provided
@@ -163,6 +164,32 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             inputs_embeds = self.embed_ids_boxes_images(
                 input_ids, input_boxes, image_tiles
             )
+
+        # Special image attention mask during prefill, ignored during decoding
+        if self.config.unmask_image and inputs_embeds.shape[1] != 1:
+            print(f'Unmasking image positions')
+            if cache_position is None:
+                past_seen_tokens = (
+                    past_key_values.get_seq_length() if past_key_values is not None else 0
+                )
+                cache_position = torch.arange(
+                    past_seen_tokens,
+                    past_seen_tokens + inputs_embeds.shape[1],
+                    device=inputs_embeds.device,
+                )
+            causal_mask = self.decoder._update_causal_mask(
+                attention_mask,
+                inputs_embeds,
+                cache_position,
+                past_key_values,
+                output_attentions
+            )
+            expanded_image_token_mask = (input_ids == self.config.image_token_id)[:, None, None, :]
+            
+            # Causal mask has 0s for unmasked positions, and -inf for masked positions
+            # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
+            causal_mask.masked_fill_(expanded_image_token_mask, 0)
+            attention_mask = causal_mask
 
         outputs = self.decoder(
             input_ids=None,
@@ -172,6 +199,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             past_key_values=past_key_values,
             return_dict=True,
             use_cache=use_cache,
+            cache_position=cache_position,
             **kwargs,
         )
 

@@ -25,6 +25,7 @@ class SuryaModelConfig(PretrainedConfig):
         decoder=None,
         tasks: dict | None = None,
         bbox_embed_size: int = 64,
+        unmask_image: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -43,6 +44,7 @@ class SuryaModelConfig(PretrainedConfig):
         self.tasks = tasks
         self.tie_word_embeddings = True
         self.bbox_embed_size = bbox_embed_size
+        self.unmask_image = unmask_image
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(
