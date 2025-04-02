@@ -167,7 +167,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         # Special image attention mask during prefill, ignored during decoding
         if self.config.unmask_image and inputs_embeds.shape[1] != 1:
-            print(f'Unmasking image positions')
             if cache_position is None:
                 past_seen_tokens = (
                     past_key_values.get_seq_length() if past_key_values is not None else 0
