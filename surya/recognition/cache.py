@@ -46,8 +46,8 @@ class ContinuousBatchingDynamicCache(DynamicCache):
                     self.key_cache[layer_idx], self.value_cache[layer_idx], max(0, -offset)
                 )
 
-                adjusted_key_cache.index_copy_(0, merge_idxs_tensor, new_k)
-                adjusted_value_cache.index_copy_(0, merge_idxs_tensor, new_v)
+                adjusted_key_cache[merge_idxs_tensor] = new_k
+                adjusted_value_cache[merge_idxs_tensor] = new_v
 
                 self.key_cache[layer_idx] = adjusted_key_cache
                 self.value_cache[layer_idx] = adjusted_value_cache
@@ -66,7 +66,7 @@ class ContinuousBatchingStaticCache(StaticCache):
         cache_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        cache_position = cache_kwargs.get("cache_position")  # Shape: (batch_size,)
+        cache_position = cache_kwargs.get("cache_position")  # Shape: (batch_size, seq_len)
 
         k_out = self.key_cache[layer_idx]  # Shape: (batch, num_heads, max_seq_len, head_dim)
         v_out = self.value_cache[layer_idx]
@@ -78,15 +78,14 @@ class ContinuousBatchingStaticCache(StaticCache):
             k_out.copy_(key_states)
             v_out.copy_(value_states)
         else:
-            batch_size, num_heads, seq_len, head_dim = key_states.shape
-
+            batch_size = key_states.shape[0]
             cache_position = cache_position.to(dtype=torch.long)  # Ensure integer indices
-            cache_position = cache_position.unsqueeze(1).expand(-1, num_heads, -1)  # Correct expansion
 
-            assert cache_position.shape == key_states.shape[:3], f"Shape mismatch: {cache_position.shape} vs {key_states.shape[:3]}"
-
-            k_out.scatter_(2, cache_position.unsqueeze(-1), key_states)  # Scatter update for keys
-            v_out.scatter_(2, cache_position.unsqueeze(-1), value_states)  # Scatter update for values
+            # Loop over each batch element only
+            for b in range(batch_size):
+                pos = cache_position[b]  # (seq_len,) -> index positions for this batch
+                k_out[b, :, pos, :] = key_states[b]
+                v_out[b, :, pos, :] = value_states[b]
 
         return k_out, v_out
 
@@ -97,7 +96,6 @@ class ContinuousBatchingStaticCache(StaticCache):
     @torch._dynamo.disable
     def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
         """Returns the sequence length of the cached states that were seen by the model."""
-        return 300
         all_seq_lengths = self.key_cache[layer_idx][:, 0, :, :].sum(-1)
         return all_seq_lengths.max()
 
@@ -111,7 +109,7 @@ class ContinuousBatchingStaticCache(StaticCache):
         assert new_cache.key_cache[0].shape == self.key_cache[0].shape, "The two caches should have the same shape"
         num_new_elements = len(merge_idxs)
         merge_idxs_tensor = torch.tensor(merge_idxs, device=self.key_cache[0].device)
-        
+
         with torch.inference_mode():
             for layer_idx in range(len(self)):
                 # Merge idxs can be of less length than the prefill cache, since prefill cache may have padded batch elements
@@ -119,5 +117,5 @@ class ContinuousBatchingStaticCache(StaticCache):
                 new_k, new_v = new_k[:num_new_elements], new_v[:num_new_elements]
 
                 # In the static batching case, both prefill and current cache have the exact same shape, so no padding
-                self.key_cache[layer_idx].index_copy(0, merge_idxs_tensor, new_k)
-                self.value_cache[layer_idx].index_copy_(0, merge_idxs_tensor, new_v)
+                self.key_cache[layer_idx][merge_idxs_tensor] = new_k
+                self.value_cache[layer_idx][merge_idxs_tensor] = new_v
