@@ -394,6 +394,33 @@ class RecognitionPredictor(BasePredictor):
 
         return new_input, processed_outputs, idxs_to_merge
 
+    # Due to continuous batching, we left pad the attention mask and cache to match new sequences
+    # This function trims the attention mask and the kv cache from the left whenever possible to remove excess padding
+    def maybe_trim_cache_padding(self, current_inputs: ContinuousBatchInput):
+        attention_mask = current_inputs.attention_mask
+        active_idxs = [k for k,v in self.batch_prompt_mapping.items() if v is not None]
+
+        # No more samples running
+        if not active_idxs:
+            return current_inputs
+
+        active_attention_mask = attention_mask[active_idxs]
+        first_non_padding_idx = (active_attention_mask == 1).to(torch.int).argmax(dim=1)
+        trim_start = first_non_padding_idx.min().item()
+        
+        if trim_start == 0:
+            return current_inputs
+        
+        trimmed_attention_mask = attention_mask[:, trim_start:]
+        current_inputs.attention_mask = trimmed_attention_mask
+        
+        # Trim the cache accordingly
+        if self.kv_cache:
+            self.kv_cache.trim_left(trim_start)
+
+        return current_inputs
+
+
     def __call__(
         self,
         images: List[Image.Image],
@@ -492,6 +519,7 @@ class RecognitionPredictor(BasePredictor):
 
             # Update inputs and mark XLA step
             current_inputs = updated_inputs
+            current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
 
