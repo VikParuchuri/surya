@@ -44,7 +44,9 @@ class RecognitionModelLoader(ModelLoader):
         model = model.eval()
 
         if flash_available:
-            model.config._attn_implementation = "flash_attention_2"
+            model.config.decoder._attn_implementation = "flash_attention_2"
+        else:
+            model.config.decoder._attn_implementation = 'sdpa'
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch.set_float32_matmul_precision('high')
