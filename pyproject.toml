@@ -27,6 +27,7 @@ opencv-python-headless = "^4.11.0.86"
 einops = "^0.8.1"
 mathml-to-latex = "^1.0.0"
 
+pre-commit = "^4.2.0"
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
 pytesseract = "^0.3.10"
