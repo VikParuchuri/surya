@@ -472,6 +472,16 @@ class RecognitionPredictor(BasePredictor):
                 task_names=task_names
             )
 
+
+        # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
+        sorted_pairs = sorted(enumerate(flat['slices']), key=lambda x: -x[1].width)
+        indices, sorted_slices = zip(*sorted_pairs)
+
+        # Reorder input_text and task_names based on the new order
+        flat['slices'] = list(sorted_slices)
+        flat['input_text'] = [flat['input_text'][i] for i in indices]
+        flat['task_names'] = [flat['task_names'][i] for i in indices]
+
         predicted_tokens = [[] for _ in range(len(flat['slices']))]
         predicted_boxes = [[] for _ in range(len(flat['slices']))]
         scores = [[] for _ in range(len(flat['slices']))]
@@ -607,6 +617,9 @@ class RecognitionPredictor(BasePredictor):
                     ))
 
             char_predictions.append(img_chars)
+
+        char_predictions = sorted(zip(indices, char_predictions), key=lambda x: x[0])
+        char_predictions = [pred for _, pred in char_predictions]
 
         predictions_by_image = []
         slice_start = 0
