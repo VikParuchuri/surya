@@ -26,6 +26,7 @@ PAD_TOKEN = "<PAD>"
 NO_OUTPUT_TOKEN = "<NOP>"
 IMAGE_ROTATED_TOKEN = "<ROT>"
 REGISTER_TOKENS = ["<REG1>", "<REG2>", "<REG3>", "<REG4>"]
+NOMATH_TOKEN = "<NO-MATH>"
 
 # Task specific tokens
 OCR_WITH_BOXES_BOS_TOKEN = "<OCR-WB>"
@@ -73,6 +74,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         self.eoi_token_id = self.special_token_mapping.get(EOI_TOKEN)
         self.no_output_token = self.special_token_mapping.get(NO_OUTPUT_TOKEN)
         self.image_rotated_token = self.special_token_mapping.get(IMAGE_ROTATED_TOKEN)
+        self.nomath_token = self.special_token_mapping.get(NOMATH_TOKEN)
 
         self.bos_token_id = {
             "ocr_with_boxes": self.special_token_mapping.get(OCR_WITH_BOXES_BOS_TOKEN),

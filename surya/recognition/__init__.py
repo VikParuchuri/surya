@@ -12,6 +12,7 @@ import torch.nn.functional as F
 
 from surya.common.polygon import PolygonBox
 from surya.common.surya import SuryaModelConfig, SuryaModelOutput
+from surya.common.surya.processor import NOMATH_TOKEN
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
 from surya.detection import DetectionPredictor
@@ -729,6 +730,9 @@ class RecognitionPredictor(BasePredictor):
                     text = self.processor.ocr_tokenizer.decode(
                         token_ids, task="ocr_without_boxes"
                     )
+                    if text in [NOMATH_TOKEN]:
+                        continue
+
                     img_chars.append(
                         TextChar(
                             text=text,
