@@ -200,7 +200,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             )
 
             # If we use flash attention, the mask will be 2d, not 4d
-            if causal_mask.dim() == 4:
+            if causal_mask is None:
+                pass
+            elif causal_mask.dim() == 4:
                 expanded_register_token_mask = expanded_register_token_mask.unsqueeze(
                     1
                 ).unsqueeze(1)
