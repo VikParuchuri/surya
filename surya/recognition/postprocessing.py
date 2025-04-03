@@ -3,6 +3,7 @@ from typing import List, Dict
 
 from surya.recognition.schema import TextChar
 
+
 def escape_text(text: str) -> str:
     # Escape \n, \t, \r, \f, \b, etc.
     return text.replace("\\", "\\\\")
@@ -36,7 +37,8 @@ def truncate_repetitions(text: str, min_len=15):
     while text_to_truncate.endswith(lcs):
         text_to_truncate = text_to_truncate[:-max_rep_len]
 
-    return text[:len(text_to_truncate)]
+    return text[: len(text_to_truncate)]
+
 
 def extract_tags(proposed_tags: List[str]) -> List[str]:
     tags = []
@@ -53,12 +55,18 @@ def extract_tags(proposed_tags: List[str]) -> List[str]:
 
 
 tag_pattern = re.compile(r"<(/?)([a-z]+)([^>]*)>?", re.IGNORECASE)
-def fix_unbalanced_tags(text_chars: List[TextChar], special_tokens: Dict[str, list]) -> List[TextChar]:
+
+
+def fix_unbalanced_tags(
+    text_chars: List[TextChar], special_tokens: Dict[str, list]
+) -> List[TextChar]:
     self_closing_tags = ["br"]
 
     open_tags = []
 
-    format_tags = extract_tags(special_tokens["formatting"]) + extract_tags(special_tokens["math_external"])
+    format_tags = extract_tags(special_tokens["formatting"]) + extract_tags(
+        special_tokens["math_external"]
+    )
 
     for char in text_chars:
         if len(char.text) <= 1:
@@ -84,19 +92,16 @@ def fix_unbalanced_tags(text_chars: List[TextChar], special_tokens: Dict[str, li
         if is_closing:
             if open_tags and open_tags[-1] == tag_name:
                 open_tags.pop()
-            else:
-                return False
         else:
             open_tags.append(tag_name)
 
     for tag in open_tags:
-        text_chars.append(TextChar(
-            text=f"</{tag}>",
-            confidence=0,
-            polygon=[[0, 0], [1, 0], [1, 1], [0, 1]],
-            bbox_valid=False
-        ))
+        text_chars.append(
+            TextChar(
+                text=f"</{tag}>",
+                confidence=0,
+                polygon=[[0, 0], [1, 0], [1, 1], [0, 1]],
+                bbox_valid=False,
+            )
+        )
     return text_chars
-
-
-

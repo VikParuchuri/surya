@@ -19,6 +19,16 @@ class ContinuousBatchingCache(DynamicCache):
 
         return key_states_padded, value_states_padded
 
+    # Trim the cache from the left - Useful when longer sequences are evicted and we have long padding on the left
+    def trim_left(
+        self,
+        trim_length: int
+    ):
+        for layer_idx in range(len(self)):
+            # cache sape is (batch_size, num_kv_heads, seq_length, head_dim); Trimming from head dim
+            self.key_cache[layer_idx] = self.key_cache[layer_idx][:, :, trim_length:, :]
+            self.value_cache[layer_idx] = self.value_cache[layer_idx][:, :, trim_length:, :]
+
     def merge(
         self, 
         new_cache: DynamicCache,

@@ -225,17 +225,12 @@ class RecognitionPredictor(BasePredictor):
     ):
         batch = []
         for image, text, task_name in zip(images, input_text, task_names):
-            image, rotated = self.processor.align_long_axis(image)
-
             image_size = self.tasks[task_name]["img_size"]
             image = image.resize(image_size)
 
             # Task input is the same for all tasks for now
             text = text or ""
-            inputs = [
-                {"type": "image", "image": image, "rotated": rotated},
-                {"type": "text", "text": text},
-            ]
+            inputs = [{"type": "image", "image": image}, {"type": "text", "text": text}]
             batch.append({"task": task_name, "inputs": inputs})
 
         return batch
@@ -307,7 +302,7 @@ class RecognitionPredictor(BasePredictor):
                 position_ids=position_ids,
                 use_cache=True,
                 past_key_values=self.kv_cache,
-                num_logits_to_keep=1,
+                logits_to_keep=1,
             )
 
         processed_output: ContinuousBatchOutput = self.process_outputs(
@@ -371,7 +366,7 @@ class RecognitionPredictor(BasePredictor):
                 inputs_embeds=None,
                 past_key_values=prefill_cache,
                 use_cache=True,
-                num_logits_to_keep=1,
+                logits_to_keep=1,
             )
 
         # Process outputs
@@ -455,6 +450,32 @@ class RecognitionPredictor(BasePredictor):
 
         return new_input, processed_outputs, idxs_to_merge
 
+    # Due to continuous batching, we left pad the attention mask and cache to match new sequences
+    # This function trims the attention mask and the kv cache from the left whenever possible to remove excess padding
+    def maybe_trim_cache_padding(self, current_inputs: ContinuousBatchInput):
+        attention_mask = current_inputs.attention_mask
+        active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is not None]
+
+        # No more samples running
+        if not active_idxs:
+            return current_inputs
+
+        active_attention_mask = attention_mask[active_idxs]
+        first_non_padding_idx = (active_attention_mask == 1).to(torch.int).argmax(dim=1)
+        trim_start = first_non_padding_idx.min().item()
+
+        if trim_start == 0:
+            return current_inputs
+
+        trimmed_attention_mask = attention_mask[:, trim_start:]
+        current_inputs.attention_mask = trimmed_attention_mask
+
+        # Trim the cache accordingly
+        if self.kv_cache:
+            self.kv_cache.trim_left(trim_start)
+
+        return current_inputs
+
     def __call__(
         self,
         images: List[Image.Image],
@@ -537,11 +558,7 @@ class RecognitionPredictor(BasePredictor):
                 RecognitionPrompt(id=idx, task_name=task, text=txt, image=img)
             )
 
-        pbar = tqdm(
-            total=len(self.prompt_queue),
-            desc="Recognizing Text",
-            disable=self.disable_tqdm,
-        )
+        pbar = tqdm(total=len(self.prompt_queue), desc="Recognizing Text")
         while self.prompt_queue or self.num_active_slots > 0:
             if (
                 self.num_empty_slots / recognition_batch_size
@@ -593,6 +610,7 @@ class RecognitionPredictor(BasePredictor):
 
             # Update inputs and mark XLA step
             current_inputs = updated_inputs
+            current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
 
