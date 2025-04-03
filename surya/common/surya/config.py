@@ -25,6 +25,9 @@ class SuryaModelConfig(PretrainedConfig):
         decoder=None,
         tasks: dict | None = None,
         bbox_embed_size: int = 64,
+        register_token_ids=(4, 5, 6, 7),
+        unmask_image: bool = False,
+        num_register_tokens: int = 4,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -43,11 +46,12 @@ class SuryaModelConfig(PretrainedConfig):
         self.tasks = tasks
         self.tie_word_embeddings = True
         self.bbox_embed_size = bbox_embed_size
+        self.unmask_image = unmask_image
+        self.num_register_tokens = num_register_tokens
+        self.register_token_ids = register_token_ids
 
         if isinstance(vision_encoder, dict):
-            vision_encoder = SuryaEncoderConfig(
-                **vision_encoder
-            )
+            vision_encoder = SuryaEncoderConfig(**vision_encoder)
         elif vision_encoder is None:
             vision_encoder = SuryaEncoderConfig()
         self.vision_encoder = vision_encoder

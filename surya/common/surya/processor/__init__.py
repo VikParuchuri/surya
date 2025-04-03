@@ -25,6 +25,7 @@ IMAGE_TOKEN = "<IMAGE>"
 PAD_TOKEN = "<PAD>"
 NO_OUTPUT_TOKEN = "<NOP>"
 IMAGE_ROTATED_TOKEN = "<ROT>"
+REGISTER_TOKENS = ["<REG1>", "<REG2>", "<REG3>", "<REG4>"]
 
 # Task specific tokens
 OCR_WITH_BOXES_BOS_TOKEN = "<OCR-WB>"
@@ -44,12 +45,14 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         tile_size: Tuple[int, int],
         image_tokens_per_tile: int,
         blank_bbox_token_id: int,
+        num_register_tokens: int,
         **kwargs,
     ):
         self.image_processor = image_processor
         self.ocr_tokenizer = ocr_tokenizer
         self.tile_size = tile_size
         self.image_tokens_per_tile = image_tokens_per_tile
+        self.num_register_tokens = num_register_tokens
 
         self.tokenizer_vocab_size = 0
         for attr in self.attributes:
@@ -61,6 +64,9 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         # Create special token mapping
         self.special_token_mapping = self.ocr_tokenizer.system_tokens
 
+        self.register_token_ids = [
+            self.special_token_mapping.get(r) for r in REGISTER_TOKENS
+        ]
         self.image_token_id = self.special_token_mapping.get(IMAGE_TOKEN)
         self.pad_token_id = self.special_token_mapping.get(PAD_TOKEN)
         self.eos_token_id = self.special_token_mapping.get(EOS_TOKEN)
@@ -103,6 +109,11 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         ]
 
         super().__init__(image_processor, ocr_tokenizer)
+
+        if self.num_register_tokens > len(self.register_token_ids):
+            raise ValueError(
+                "The number of register tokens requested exceeds the number of register tokens defined in the special token mapping."
+            )
 
     @property
     def vocab_size(self):
@@ -150,6 +161,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         num_tiles = image_tiles.shape[0]
         input_ids = [self.image_token_id] * num_tiles * self.image_tokens_per_tile
+        input_ids += [self.register_token_ids][: self.num_register_tokens]
 
         # Handle the image being rotated in the imdataset
         if rotated:

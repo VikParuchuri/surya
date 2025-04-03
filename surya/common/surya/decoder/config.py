@@ -53,7 +53,7 @@ class SuryaDecoderConfig(PretrainedConfig):
         self.intermediate_size = intermediate_size
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
-        self.use_sliding_window = use_sliding_window
+        self.use_sliding_window = False  # Disable sliding window
         self.sliding_window = (
             sliding_window  # we check `use_sliding_window` in the modeling code
         )
