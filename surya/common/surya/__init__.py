@@ -1,6 +1,7 @@
 import warnings
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -48,9 +49,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         super().__init__(config)
 
         if vision_encoder is None:
-            vision_encoder = SuryaEncoderModel(
-                config.vision_encoder
-            )
+            vision_encoder = SuryaEncoderModel(config.vision_encoder)
 
         if decoder is None:
             decoder = SuryaDecoderModel(config.decoder)
@@ -67,13 +66,22 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.decoder.config = self.config.decoder
 
         self.vision_projector = nn.Sequential(
-            nn.Linear(self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size),
+            nn.Linear(
+                self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size
+            ),
             nn.GELU(),
             nn.Linear(self.decoder.config.hidden_size, self.decoder.config.hidden_size),
         )
 
         self.bbox_head = nn.Linear(config.hidden_size, 6)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
+
+        register_tokens = torch.from_numpy(
+            np.asarray(self.config.register_token_ids)
+        ).to(device=self.device, dtype=torch.long)
+        self.register_buffer(
+            "device_register_tokens", register_tokens, persistent=False
+        )
 
     def tie_weights(self):
         self._tie_weights()
@@ -98,14 +106,16 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch
         all_image_features = None
         for i in range(0, len(image_tiles), batch_size):
-            image_batch = image_tiles[i:i + batch_size]
+            image_batch = image_tiles[i : i + batch_size]
             image_features = self.vision_projector(
                 self.vision_encoder.embed_images(image_batch=image_batch)
             )
             if i == 0:
                 all_image_features = image_features
             else:
-                all_image_features = torch.cat([all_image_features, image_features], dim=0)
+                all_image_features = torch.cat(
+                    [all_image_features, image_features], dim=0
+                )
         return all_image_features
 
     def embed_ids_boxes_images(self, input_ids, input_boxes, image_tiles):
@@ -118,7 +128,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             input_tokens=input_ids, input_bboxes=input_boxes
         )
         if image_tiles is not None:
-            image_features = self.get_image_embeddings(image_tiles=image_tiles, batch_size=len(input_ids))
+            image_features = self.get_image_embeddings(
+                image_tiles=image_tiles, batch_size=len(input_ids)
+            )
 
             special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(
@@ -163,6 +175,50 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             inputs_embeds = self.embed_ids_boxes_images(
                 input_ids, input_boxes, image_tiles
             )
+
+        # In prefill, unmask the image
+        if self.config.unmask_image and inputs_embeds.shape[1] != 1:
+            # This creates a special causal mask to do bidirectional attention on the images, then passes into the decoder
+            # The decoder will not regenerate if a 4D mask is passed in
+            past_seen_tokens = 0
+            cache_position = torch.arange(
+                past_seen_tokens,
+                past_seen_tokens + inputs_embeds.shape[1],
+                device=inputs_embeds.device,
+            )
+
+            causal_mask = self.decoder._update_causal_mask(
+                attention_mask,
+                inputs_embeds,
+                cache_position,
+                past_key_values,
+                output_attentions,
+            )
+            expanded_image_token_mask = input_ids == self.config.image_token_id
+            expanded_register_token_mask = torch.isin(
+                input_ids, self.device_register_tokens
+            )
+
+            # If we use flash attention, the mask will be 2d, not 4d
+            if causal_mask.dim() == 4:
+                expanded_register_token_mask = expanded_register_token_mask.unsqueeze(
+                    1
+                ).unsqueeze(1)
+                expanded_image_token_mask = expanded_image_token_mask.unsqueeze(
+                    1
+                ).unsqueeze(1)
+
+                unmasked_position_mask = torch.logical_or(
+                    expanded_image_token_mask, expanded_register_token_mask
+                )
+
+                # Causal mask has 0s for unmasked positions, and -inf for masked positions
+                # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
+                causal_mask.masked_fill_(unmasked_position_mask, 0)
+            else:
+                raise RuntimeError(
+                    f"Cannot unmask image with flash attention.  The mask must be 4D to support this.  Current shape: {causal_mask.shape}. Attn implementation: {self.decoder.config._attn_implementation}"
+                )
 
         outputs = self.decoder(
             input_ids=None,
