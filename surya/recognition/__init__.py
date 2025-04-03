@@ -271,7 +271,7 @@ class RecognitionPredictor(BasePredictor):
                 position_ids=position_ids,
                 use_cache=True,
                 past_key_values=self.kv_cache,
-                num_logits_to_keep=1
+                logits_to_keep=1
             )
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs)
@@ -326,7 +326,7 @@ class RecognitionPredictor(BasePredictor):
                 inputs_embeds=None,
                 past_key_values=prefill_cache,
                 use_cache=True,
-                num_logits_to_keep=1
+                logits_to_keep=1
             )
 
         # Process outputs
