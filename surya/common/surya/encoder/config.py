@@ -54,7 +54,7 @@ class SuryaEncoderConfig(BackboneConfigMixin, PretrainedConfig):
         self.qkv_bias = qkv_bias
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
-        self.drop_path_rate = drop_path_rate
+        self.drop_path_rate = 0  # Set to zero for inference
         self.hidden_act = hidden_act
         self.use_absolute_embeddings = use_absolute_embeddings
         self.layer_norm_eps = layer_norm_eps
