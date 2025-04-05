@@ -1,7 +1,7 @@
 from typing import Optional
 
 import torch
-from transformers import AutoImageProcessor
+from transformers import AutoImageProcessor, HqqConfig
 
 from surya.common.load import ModelLoader
 from surya.common.surya.config import SuryaModelConfig
@@ -33,11 +33,28 @@ class RecognitionModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE_BFLOAT
 
-        model = SuryaModel.from_pretrained(self.checkpoint)
-        model = model.to(device=device, dtype=dtype)
+        quant_config = {"device_map": device, "torch_dtype": dtype}
+        if settings.RECOGNITION_MODEL_QUANTIZE:
+            try:
+                from hqq.utils.patching import prepare_for_inference
+            except ImportError as e:
+                raise RuntimeError(
+                    "`hqq` package is required for quantization. Please install it."
+                ) from e
+
+            quant_config = {
+                "quantization_config": HqqConfig(nbits=4, group_size=64),
+                "device_map": device,
+                "torch_dtype": dtype,
+            }
+
+        model = SuryaModel.from_pretrained(self.checkpoint, **quant_config)
         model = model.eval()
 
-        # Don't use flash attention because we need a custom mask
+        if settings.RECOGNITION_MODEL_QUANTIZE:
+            prepare_for_inference(model, backend="torchao_int4")
+
+            # Don't use flash attention because we need a custom mask
         model.config.decoder._attn_implementation = "sdpa"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
@@ -53,7 +70,7 @@ class RecognitionModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(
-            f"Loaded recognition model {self.checkpoint} on device {device} with dtype {dtype}"
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}"
         )
         return model
 

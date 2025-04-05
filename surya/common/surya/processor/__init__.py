@@ -260,14 +260,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
                     + input_boxes
                     + [[self.blank_bbox_token_id] * 6]
                 )
-            elif i == 2:
-                # Case for output - No specific bos token, but need to add EOS token
-                assert input_dict["type"] == "ocr", (
-                    "Expected OCR inputfor model output."
+            elif i > 1:
+                raise ValueError(
+                    f"Unexpected input type encountered in mixed input processing. We only accept input image and text. {mixed_input}"
                 )
-
-                input_ids = input_ids + [self.eos_token_id]
-                input_boxes = input_boxes + [[self.blank_bbox_token_id] * 6]
 
             # Some input types don't return any image tiles, accounting for that
             if image_tiles is not None:
