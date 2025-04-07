@@ -1,4 +1,4 @@
-from typing import TypedDict, Literal, List, Any, Tuple
+from typing import TypedDict, Literal, List, Tuple
 
 import torch
 from PIL import Image
@@ -30,19 +30,9 @@ class ImageInput(ProcessorInput):
 class TextInput(ProcessorInput):
     type: Literal["text"]
     text: str
-
-
-class OCRInput(ProcessorInput):
-    type: Literal["ocr"]
-    tokens: List[int]
-    bboxes: List[List[int]] | List[Any]
-
-
-class EmptyInput(ProcessorInput):
-    type: Literal["empty_output"]
+    math: bool
 
 
 class ProcessorOutput(TypedDict):
     input_ids: List[int]
-    input_boxes: List[List[int]]
     image_tiles: torch.Tensor | None

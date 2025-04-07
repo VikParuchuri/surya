@@ -1,7 +1,6 @@
 import warnings
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -76,13 +75,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.bbox_head = nn.Linear(config.hidden_size, 6)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
 
-        register_tokens = torch.from_numpy(
-            np.asarray(self.config.register_token_ids)
-        ).to(device=self.device, dtype=torch.long)
-        self.register_buffer(
-            "device_register_tokens", register_tokens, persistent=False
-        )
-
     def tie_weights(self):
         self._tie_weights()
 
@@ -118,15 +110,13 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 )
         return all_image_features
 
-    def embed_ids_boxes_images(self, input_ids, input_boxes, image_tiles):
+    def embed_ids_boxes_images(self, input_ids, image_tiles):
         """
         Insert embedded image tiles into the corresponding positions into the full input sequence
 
         Positions to insert new tokens are indicated by the special image token index
         """
-        inputs_embeds = self.embedder.embed(
-            input_tokens=input_ids, input_bboxes=input_boxes
-        )
+        inputs_embeds = self.embedder.embed(input_tokens=input_ids)
         if image_tiles is not None:
             image_features = self.get_image_embeddings(
                 image_tiles=image_tiles, batch_size=len(input_ids)
@@ -155,10 +145,19 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         return inputs_embeds
 
+    def create_eoi_mask(self, tensor: torch.Tensor):
+        positions = (tensor == self.config.eoi_token_id).nonzero(as_tuple=True)
+        eoi_indices = positions[1].unsqueeze(1)
+        col_indices = torch.arange(tensor.shape[1], device=tensor.device)
+        col_indices = col_indices.expand_as(tensor)
+        mask = col_indices <= eoi_indices
+        mask[tensor == self.config.pad_token_id] = False  # Don't attend to pad tokens
+
+        return mask
+
     def forward(
         self,
         input_ids=None,
-        input_boxes=None,
         image_tiles=None,
         inputs_embeds=None,
         attention_mask=None,
@@ -172,9 +171,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     ):
         # Process the mixed batch if provided
         if inputs_embeds is None:
-            inputs_embeds = self.embed_ids_boxes_images(
-                input_ids, input_boxes, image_tiles
-            )
+            inputs_embeds = self.embed_ids_boxes_images(input_ids, image_tiles)
 
         # In prefill, unmask the image
         if self.config.unmask_image and inputs_embeds.shape[1] != 1:
@@ -186,7 +183,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 past_seen_tokens + inputs_embeds.shape[1],
                 device=inputs_embeds.device,
             )
-
             causal_mask = self.decoder._update_causal_mask(
                 attention_mask,
                 inputs_embeds,
@@ -194,31 +190,24 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 past_key_values,
                 output_attentions,
             )
-            expanded_image_token_mask = input_ids == self.config.image_token_id
-            expanded_register_token_mask = torch.isin(
-                input_ids, self.device_register_tokens
-            )
+
+            expanded_eoi_mask = self.create_eoi_mask(input_ids)
 
             # If we use flash attention, the mask will be 2d, not 4d
-            if causal_mask.dim() == 4:
-                expanded_register_token_mask = expanded_register_token_mask.unsqueeze(
-                    1
-                ).unsqueeze(1)
-                expanded_image_token_mask = expanded_image_token_mask.unsqueeze(
-                    1
-                ).unsqueeze(1)
-
-                unmasked_position_mask = torch.logical_or(
-                    expanded_image_token_mask, expanded_register_token_mask
-                )
+            if causal_mask is None:
+                pass
+            elif causal_mask.dim() == 4:
+                expanded_eoi_mask = expanded_eoi_mask.unsqueeze(1).unsqueeze(1)
 
                 # Causal mask has 0s for unmasked positions, and -inf for masked positions
                 # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
-                causal_mask.masked_fill_(unmasked_position_mask, 0)
+                causal_mask.masked_fill_(expanded_eoi_mask, 0)
             else:
                 raise RuntimeError(
                     f"Cannot unmask image with flash attention.  The mask must be 4D to support this.  Current shape: {causal_mask.shape}. Attn implementation: {self.decoder.config._attn_implementation}"
                 )
+
+            attention_mask = causal_mask
 
         outputs = self.decoder(
             input_ids=None,
@@ -235,6 +224,8 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         # Only keep the last `logits_to_keep` logits, should bring down memory usage during inference
         if logits_to_keep is not None:
             hidden_states = hidden_states[:, -logits_to_keep:, :]
+
+        hidden_states = hidden_states.contiguous()
         bbox_logits = F.sigmoid(self.bbox_head(hidden_states))
         lm_logits = self.lm_head(hidden_states)
 

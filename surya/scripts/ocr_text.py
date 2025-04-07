@@ -12,8 +12,11 @@ from surya.scripts.config import CLILoader
 
 @click.command(help="OCR text.")
 @click.option("--task_name", type=str, default="ocr_with_boxes")
+@click.option(
+    "--disable_math", is_flag=True, default=False, help="Do not recognize math in OCR."
+)
 @CLILoader.common_options
-def ocr_text_cli(input_path: str, task_name: str, **kwargs):
+def ocr_text_cli(input_path: str, task_name: str, disable_math: bool, **kwargs):
     loader = CLILoader(input_path, kwargs, highres=True)
     task_names = [task_name] * len(loader.images)
 
@@ -25,18 +28,23 @@ def ocr_text_cli(input_path: str, task_name: str, **kwargs):
         loader.images,
         task_names=task_names,
         det_predictor=det_predictor,
-        highres_images=loader.highres_images
+        highres_images=loader.highres_images,
+        math_mode=not disable_math,
     )
 
     if loader.debug:
         print(f"OCR took {time.time() - start:.2f} seconds")
-        max_chars = max([len(l.text) for p in predictions_by_image for l in p.text_lines])
+        max_chars = max(
+            [len(line.text) for p in predictions_by_image for line in p.text_lines]
+        )
         print(f"Max chars: {max_chars}")
 
     if loader.save_images:
-        for idx, (name, image, pred) in enumerate(zip(loader.names, loader.images, predictions_by_image)):
-            bboxes = [l.bbox for l in pred.text_lines]
-            pred_text = [l.text for l in pred.text_lines]
+        for idx, (name, image, pred) in enumerate(
+            zip(loader.names, loader.images, predictions_by_image)
+        ):
+            bboxes = [line.bbox for line in pred.text_lines]
+            pred_text = [line.text for line in pred.text_lines]
             page_image = draw_text_on_image(bboxes, pred_text, image.size)
             page_image.save(os.path.join(loader.result_path, f"{name}_{idx}_text.png"))
 
@@ -46,7 +54,9 @@ def ocr_text_cli(input_path: str, task_name: str, **kwargs):
         out_pred["page"] = len(out_preds[name]) + 1
         out_preds[name].append(out_pred)
 
-    with open(os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8") as f:
+    with open(
+        os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8"
+    ) as f:
         json.dump(out_preds, f, ensure_ascii=False)
 
     print(f"Wrote results to {loader.result_path}")

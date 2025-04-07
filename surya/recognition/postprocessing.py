@@ -4,11 +4,6 @@ from typing import List, Dict
 from surya.recognition.schema import TextChar
 
 
-def escape_text(text: str) -> str:
-    # Escape \n, \t, \r, \f, \b, etc.
-    return text.replace("\\", "\\\\")
-
-
 def truncate_repetitions(text: str, min_len=15):
     # From nougat, with some cleanup
     if len(text) < 2 * min_len:
