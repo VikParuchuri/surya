@@ -1,5 +1,4 @@
 from __future__ import annotations
-from statistics import mean
 from dataclasses import dataclass
 from typing import List, Optional
 from collections import deque
@@ -673,11 +672,7 @@ class RecognitionPredictor(BasePredictor):
                     or past_special_token
                 ) and detokenize_sequence:
                     chars = [dt[0] for dt in detokenize_sequence]
-                    scores = (
-                        mean([dt[1] for dt in detokenize_sequence])
-                        if detokenize_sequence
-                        else 0
-                    )
+                    scores = [dt[1] for dt in detokenize_sequence]
                     bboxes = [dt[2] for dt in detokenize_sequence]
 
                     if past_char_qwen_token:
@@ -732,7 +727,7 @@ class RecognitionPredictor(BasePredictor):
                             TextChar(
                                 text=text_line,
                                 polygon=bboxes[bbox_idx],
-                                confidence=seq_score,
+                                confidence=seq_score[bbox_idx],
                                 bbox_valid=True,
                             )
                         )
@@ -751,7 +746,7 @@ class RecognitionPredictor(BasePredictor):
                         TextChar(
                             text=text,
                             polygon=blank_bbox,
-                            confidence=seq_score,
+                            confidence=seq_score[0],
                             bbox_valid=False,
                         )
                     )
@@ -763,7 +758,7 @@ class RecognitionPredictor(BasePredictor):
                         TextChar(
                             text=text,
                             polygon=blank_bbox,
-                            confidence=seq_score,
+                            confidence=seq_score[0],
                             bbox_valid=False,
                         )
                     )

@@ -148,27 +148,36 @@ def ocr(
     highres_img: Image.Image,
     skip_text_detection: bool = False,
     recognize_math: bool = True,
+    with_bboxes: bool = True,
 ) -> (Image.Image, OCRResult):
     if skip_text_detection:
         img = highres_img
-        img_pred = predictors["recognition"](
-            [img],
-            bboxes=[[[0, 0, img.width, img.height]]],
-            math_mode=recognize_math,
-        )[0]
+        bboxes = [[[0, 0, img.width, img.height]]]
     else:
-        img_pred = predictors["recognition"](
-            [img],
-            det_predictor=predictors["detection"],
-            highres_images=[highres_img],
-            math_mode=recognize_math,
-        )[0]
+        bboxes = None
+
+    if with_bboxes:
+        tasks = ["ocr_with_boxes"]
+    else:
+        tasks = ["ocr_without_boxes"]
+
+    img_pred = predictors["recognition"](
+        [img],
+        task_names=tasks,
+        bboxes=bboxes,
+        det_predictor=predictors["detection"],
+        highres_images=[highres_img],
+        math_mode=recognize_math,
+    )[0]
 
     bboxes = [line.bbox for line in img_pred.text_lines]
     text = [line.text for line in img_pred.text_lines]
     rec_img = draw_text_on_image(bboxes, text, img.size)
 
-    word_boxes = [word.bbox for line in img_pred.text_lines for word in line.words]
+    word_boxes = []
+    for line in img_pred.text_lines:
+        if line.words:
+            word_boxes.extend([word.bbox for word in line.words])
 
     box_img = img.copy()
     draw = ImageDraw.Draw(box_img)
@@ -274,6 +283,11 @@ recognize_math = st.sidebar.checkbox(
     value=True,
     help="Enable math mode in OCR - this will recognize math.",
 )
+ocr_with_boxes = st.sidebar.checkbox(
+    "OCR with boxes",
+    value=True,
+    help="Enable OCR with boxes - this will predict character-level boxes.",
+)
 
 if pil_image is None:
     st.stop()
@@ -309,7 +323,11 @@ if run_layout_det:
 # Run OCR
 if run_text_rec:
     rec_img, pred, box_img = ocr(
-        pil_image, pil_image_highres, skip_text_detection, recognize_math
+        pil_image,
+        pil_image_highres,
+        skip_text_detection,
+        recognize_math,
+        with_bboxes=ocr_with_boxes,
     )
     with col1:
         st.image(rec_img, caption="OCR Result", use_container_width=True)

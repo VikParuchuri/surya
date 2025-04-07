@@ -58,11 +58,7 @@ def words_from_chars(chars: List[TextChar]):
             continue
 
         if not word:
-            word = TextWord(
-                polygon=char.polygon,
-                text=char.text,
-                confidence=char.confidence,
-            )
+            word = TextWord(**char.model_dump())
         elif not char.text.strip():
             if word:
                 words.append(word)
