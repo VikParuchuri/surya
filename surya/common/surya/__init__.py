@@ -203,9 +203,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
                 causal_mask.masked_fill_(expanded_eoi_mask, 0)
             else:
-                raise RuntimeError(
-                    f"Cannot unmask image with flash attention.  The mask must be 4D to support this.  Current shape: {causal_mask.shape}. Attn implementation: {self.decoder.config._attn_implementation}"
-                )
+                # Flash attention case, since 4D mask cannot be used in this case. We set `is_causal=False` during prefill
+                # inside the model attention call to cover for this case
+                assert causal_mask.dim() == 2, f"Causal mask is not supported for flash attention, attention mask should be 2D but mask has shape {causal_mask.shape}"
 
             attention_mask = causal_mask
 
