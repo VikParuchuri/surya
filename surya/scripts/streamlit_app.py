@@ -150,9 +150,10 @@ def ocr(
     recognize_math: bool = True,
 ) -> (Image.Image, OCRResult):
     if skip_text_detection:
+        img = highres_img
         img_pred = predictors["recognition"](
-            [highres_img],
-            bboxes=[[[0, 0, highres_img.width, highres_img.height]]],
+            [img],
+            bboxes=[[[0, 0, img.width, img.height]]],
             math_mode=recognize_math,
         )[0]
     else:
@@ -169,7 +170,7 @@ def ocr(
 
     word_boxes = [word.bbox for line in img_pred.text_lines for word in line.words]
 
-    box_img = rec_img.copy()
+    box_img = img.copy()
     draw = ImageDraw.Draw(box_img)
     for word_box in word_boxes:
         draw.rectangle(word_box, outline="red", width=2)

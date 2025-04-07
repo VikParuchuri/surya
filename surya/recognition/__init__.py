@@ -127,6 +127,7 @@ class RecognitionPredictor(BasePredictor):
         slice_map = []
         all_polygons = []
         all_task_names = []
+        all_res_scales = []
 
         for idx, (det_pred, image, highres_image, task_name) in enumerate(
             zip(det_predictions, images, highres_images, task_names)
@@ -143,18 +144,23 @@ class RecognitionPredictor(BasePredictor):
                     for polygon in polygons
                 ]
                 slices = slice_polys_from_image(highres_image, scaled_polygons)
+                res_scales = [(width_scaler, height_scaler) for _ in range(len(slices))]
             else:
                 slices = slice_polys_from_image(image, polygons)
+                res_scales = [(1, 1) for _ in range(len(slices))]
+
             slice_map.append(len(slices))
             all_slices.extend(slices)
             all_polygons.extend(polygons)
             all_task_names.extend([task_name] * len(slices))
+            all_res_scales.extend(res_scales)
 
         assert (
             len(all_slices)
             == sum(slice_map)
             == len(all_polygons)
             == len(all_task_names)
+            == len(all_res_scales)
         )
 
         return {
@@ -163,6 +169,7 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons,
             "task_names": all_task_names,
             "input_text": [None] * len(all_slices),
+            "res_scales": all_res_scales,
         }
 
     def slice_bboxes(
@@ -219,6 +226,7 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons,
             "input_text": all_text,
             "task_names": all_task_names,
+            "res_scales": [(1, 1) for _ in range(len(all_slices))],
         }
 
     def prepare_input(
@@ -768,10 +776,11 @@ class RecognitionPredictor(BasePredictor):
             slice_end = slice_start + flat["slice_map"][idx]
             image_lines = char_predictions[slice_start:slice_end]
             polygons = flat["polygons"][slice_start:slice_end]
+            res_scales = flat["res_scales"][slice_start:slice_end]
             slice_start = slice_end
 
             lines = []
-            for text_line, polygon in zip(image_lines, polygons):
+            for text_line, polygon, res_scale in zip(image_lines, polygons, res_scales):
                 # Special case when input text is good
                 if not text_line:
                     lines.append(
@@ -788,6 +797,9 @@ class RecognitionPredictor(BasePredictor):
                     confidence = float(np.mean([char.confidence for char in text_line]))
                     poly_box = PolygonBox(polygon=polygon)
                     for char in text_line:
+                        char.rescale(
+                            res_scale, (1, 1)
+                        )  # Rescale from highres if needed
                         char.shift(
                             poly_box.bbox[0], poly_box.bbox[1]
                         )  # Ensure character boxes match line boxes (relative to page)
