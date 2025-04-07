@@ -548,6 +548,9 @@ class RecognitionPredictor(BasePredictor):
                 task_names=task_names,
             )
 
+        # No images passed, or no boxes passed, or no text detected in the images
+        if len(flat['slices']) == 0:
+            return []
 
         # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
         sorted_pairs = sorted(enumerate(flat['slices']), key=lambda x: -x[1].width)
