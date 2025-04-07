@@ -10,6 +10,12 @@ from surya.common.surya.processor.__init__ import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
 from surya.settings import settings
 
+try:
+    import flash_attn
+    flash_available = True
+except ImportError:
+    flash_available = False
+
 torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)
 if not settings.ENABLE_EFFICIENT_ATTENTION:
     print("Efficient attention is disabled. This will use significantly more VRAM.")
@@ -56,8 +62,10 @@ class RecognitionModelLoader(ModelLoader):
         else:
             model = model.to(device=device, dtype=dtype)
 
-        # Don't use flash attention because we need a custom mask
-        model.config.decoder._attn_implementation = "sdpa"
+        if flash_available:
+            model.config.decoder._attn_implementation = "flash_attention_2"
+        else:
+            model.config.decoder._attn_implementation = "sdpa"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch.set_float32_matmul_precision("high")
