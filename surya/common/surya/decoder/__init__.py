@@ -170,6 +170,20 @@ class Qwen2Attention(nn.Module):
             query_states, key_states, cos, sin
         )
 
+        # IMPORTANT: Do not use causal mask for prefill; Matches training
+        # This is required for flash attn, which doesn't support a 4D mask as input
+        # The `is_causal` argument is ignored by SDPA since we pass a 4D attention mask
+        if self.config._attn_implementation == 'flash_attention_2':
+            is_prefill = all((
+                input_shape[1] > 1,
+                (past_key_value is None) or (past_key_value.get_seq_length(self.layer_idx) == 0)
+            ))
+            
+            if is_prefill:
+                self.is_causal = False
+            else:
+                self.is_causal = True
+
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
