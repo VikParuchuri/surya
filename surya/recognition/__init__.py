@@ -21,10 +21,14 @@ from surya.input.processing import (
     slice_polys_from_image,
     slice_bboxes_from_image,
 )
-from surya.layout import prediction_to_polygon
+from surya.layout import prediction_to_polygon, LayoutPredictor
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
-from surya.recognition.util import sort_text_lines, clean_close_polygons
+from surya.recognition.util import (
+    sort_text_lines,
+    clean_close_polygons,
+    words_from_chars,
+)
 from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
 from surya.recognition.cache import ContinuousBatchingCache
 from surya.settings import settings
@@ -33,7 +37,6 @@ from surya.settings import settings
 @dataclass
 class ContinuousBatchInput:
     input_ids: torch.Tensor
-    input_boxes: torch.Tensor
     attention_mask: torch.Tensor
     position_ids: torch.Tensor
     skip_box_idxs: torch.Tensor
@@ -42,7 +45,6 @@ class ContinuousBatchInput:
 @dataclass
 class ContinuousBatchOutput:
     input_ids: torch.Tensor
-    input_boxes: torch.Tensor
     preds: torch.Tensor
     bbox_preds: torch.Tensor
     done: torch.Tensor
@@ -55,6 +57,7 @@ class RecognitionPrompt:
     task_name: TaskNames
     image: Image
     text: str
+    math_mode: bool
 
 
 # TODO When we evict a sample then also trim the cache as necessary from the left
@@ -223,15 +226,21 @@ class RecognitionPredictor(BasePredictor):
         task_names: List[str],
         images: List[Image.Image],
         input_text: List[str | None],
+        math_modes: List[bool],
     ):
         batch = []
-        for image, text, task_name in zip(images, input_text, task_names):
+        for image, text, task_name, math_mode in zip(
+            images, input_text, task_names, math_modes
+        ):
             image_size = self.tasks[task_name]["img_size"]
             image = image.resize(image_size)
 
             # Task input is the same for all tasks for now
             text = text or ""
-            inputs = [{"type": "image", "image": image}, {"type": "text", "text": text}]
+            inputs = [
+                {"type": "image", "image": image},
+                {"type": "text", "text": text, "math": math_mode},
+            ]
             batch.append({"task": task_name, "inputs": inputs})
 
         return batch
@@ -281,7 +290,6 @@ class RecognitionPredictor(BasePredictor):
 
         return ContinuousBatchOutput(
             input_ids=input_ids,
-            input_boxes=input_boxes,
             preds=preds,
             bbox_preds=input_boxes,
             done=done,
@@ -290,7 +298,6 @@ class RecognitionPredictor(BasePredictor):
 
     def decode(self, current_inputs: Optional[ContinuousBatchInput] = None):
         input_ids = current_inputs.input_ids
-        input_boxes = current_inputs.input_boxes
         attention_mask = current_inputs.attention_mask
         position_ids = current_inputs.position_ids
         skip_box_idxs = current_inputs.skip_box_idxs
@@ -298,7 +305,6 @@ class RecognitionPredictor(BasePredictor):
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
-                input_boxes=input_boxes,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 use_cache=True,
@@ -325,7 +331,6 @@ class RecognitionPredictor(BasePredictor):
         position_ids = position_ids[:, -1:] + 1
         new_input = ContinuousBatchInput(
             input_ids=processed_output.input_ids,
-            input_boxes=processed_output.input_boxes,
             attention_mask=attention_mask,
             position_ids=position_ids,
             skip_box_idxs=skip_box_idxs,
@@ -343,12 +348,14 @@ class RecognitionPredictor(BasePredictor):
             task_names=[p.task_name for p in prompts],
             images=[p.image for p in prompts],
             input_text=[p.text for p in prompts],
+            math_modes=[
+                p.math_mode for p in prompts
+            ],  # Pass math mode to the processor
         )
         processed_inputs = self.processor(batch_input, padding_side="left").to(
             device=self.model.device, dtype=self.model.dtype
         )
         input_ids = processed_inputs["input_ids"]
-        input_boxes = processed_inputs["input_boxes"]
         image_tiles = processed_inputs["image_tiles"]
         attention_mask = processed_inputs["attention_mask"]
         position_ids = processed_inputs["position_ids"]
@@ -360,7 +367,6 @@ class RecognitionPredictor(BasePredictor):
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
-                input_boxes=input_boxes,
                 image_tiles=image_tiles,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
@@ -407,7 +413,6 @@ class RecognitionPredictor(BasePredictor):
         if current_inputs is None:
             new_input = ContinuousBatchInput(
                 input_ids=processed_outputs.input_ids,
-                input_boxes=processed_outputs.input_boxes,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 skip_box_idxs=skip_box_idxs,
@@ -419,12 +424,9 @@ class RecognitionPredictor(BasePredictor):
                 range(processed_outputs.input_ids.shape[0]),
             )
 
-        # Merging input_ids, input_boxes, attention masks and position ids
+        # Merging input_ids, attention masks and position ids
         current_input_ids = current_inputs.input_ids
         current_input_ids[idxs_to_merge] = processed_outputs.input_ids
-
-        current_input_boxes = current_inputs.input_boxes
-        current_input_boxes[idxs_to_merge] = processed_outputs.input_boxes
 
         current_attention_mask = current_inputs.attention_mask
         if offset > 0:
@@ -443,7 +445,6 @@ class RecognitionPredictor(BasePredictor):
 
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
-            input_boxes=current_input_boxes,
             attention_mask=current_attention_mask,
             position_ids=current_position_ids,
             skip_box_idxs=current_skip_box_idxs,
@@ -482,13 +483,16 @@ class RecognitionPredictor(BasePredictor):
         images: List[Image.Image],
         task_names: List[str] | None = None,
         det_predictor: DetectionPredictor | None = None,
+        layout_predictor: LayoutPredictor | None = None,
         detection_batch_size: int | None = None,
         recognition_batch_size: int | None = None,
+        layout_batch_size: int | None = None,
         highres_images: List[Image.Image] | None = None,
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[str | None] | None = None,
         sort_lines: bool = True,
+        math_mode: bool = True,
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
@@ -556,7 +560,9 @@ class RecognitionPredictor(BasePredictor):
             zip(flat["slices"], flat["input_text"], flat["task_names"])
         ):
             self.prompt_queue.append(
-                RecognitionPrompt(id=idx, task_name=task, text=txt, image=img)
+                RecognitionPrompt(
+                    id=idx, task_name=task, text=txt, image=img, math_mode=math_mode
+                )
             )
 
         pbar = tqdm(total=len(self.prompt_queue), desc="Recognizing Text")
@@ -795,6 +801,7 @@ class RecognitionPredictor(BasePredictor):
                             polygon=polygon,
                             chars=text_line,
                             confidence=confidence,
+                            words=words_from_chars(text_line),
                         )
                     )
 

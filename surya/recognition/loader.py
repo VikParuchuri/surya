@@ -33,7 +33,7 @@ class RecognitionModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE_BFLOAT
 
-        quant_config = {"device_map": device, "torch_dtype": dtype}
+        quant_config = {}
         if settings.RECOGNITION_MODEL_QUANTIZE:
             try:
                 from hqq.utils.patching import prepare_for_inference
@@ -53,8 +53,10 @@ class RecognitionModelLoader(ModelLoader):
 
         if settings.RECOGNITION_MODEL_QUANTIZE:
             prepare_for_inference(model, backend="torchao_int4")
+        else:
+            model = model.to(device=device, dtype=dtype)
 
-            # Don't use flash attention because we need a custom mask
+        # Don't use flash attention because we need a custom mask
         model.config.decoder._attn_implementation = "sdpa"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:

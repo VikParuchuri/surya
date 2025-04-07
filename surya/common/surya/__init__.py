@@ -110,15 +110,13 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 )
         return all_image_features
 
-    def embed_ids_boxes_images(self, input_ids, input_boxes, image_tiles):
+    def embed_ids_boxes_images(self, input_ids, image_tiles):
         """
         Insert embedded image tiles into the corresponding positions into the full input sequence
 
         Positions to insert new tokens are indicated by the special image token index
         """
-        inputs_embeds = self.embedder.embed(
-            input_tokens=input_ids, input_bboxes=input_boxes
-        )
+        inputs_embeds = self.embedder.embed(input_tokens=input_ids)
         if image_tiles is not None:
             image_features = self.get_image_embeddings(
                 image_tiles=image_tiles, batch_size=len(input_ids)
@@ -160,7 +158,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     def forward(
         self,
         input_ids=None,
-        input_boxes=None,
         image_tiles=None,
         inputs_embeds=None,
         attention_mask=None,
@@ -174,9 +171,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     ):
         # Process the mixed batch if provided
         if inputs_embeds is None:
-            inputs_embeds = self.embed_ids_boxes_images(
-                input_ids, input_boxes, image_tiles
-            )
+            inputs_embeds = self.embed_ids_boxes_images(input_ids, image_tiles)
 
         # In prefill, unmask the image
         if self.config.unmask_image and inputs_embeds.shape[1] != 1:

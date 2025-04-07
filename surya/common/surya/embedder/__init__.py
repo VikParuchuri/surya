@@ -8,7 +8,8 @@ class SimpleTokenEmbedder(nn.Module):
         self.token_embed = nn.Embedding(config.vocab_size, config.hidden_size)
 
     def embed(
-        self, input_tokens: torch.Tensor, input_bboxes: torch.Tensor
+        self,
+        input_tokens: torch.Tensor,
     ) -> torch.Tensor:
         token_embeds = self.token_embed(input_tokens)
         embeddings = token_embeds
