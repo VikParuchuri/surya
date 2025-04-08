@@ -20,7 +20,7 @@ from surya.input.processing import (
     slice_polys_from_image,
     slice_bboxes_from_image,
 )
-from surya.layout import prediction_to_polygon, LayoutPredictor
+from surya.layout import prediction_to_polygon
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import (
@@ -504,10 +504,8 @@ class RecognitionPredictor(BasePredictor):
         images: List[Image.Image],
         task_names: List[str] | None = None,
         det_predictor: DetectionPredictor | None = None,
-        layout_predictor: LayoutPredictor | None = None,
         detection_batch_size: int | None = None,
         recognition_batch_size: int | None = None,
-        layout_batch_size: int | None = None,
         highres_images: List[Image.Image] | None = None,
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
@@ -570,17 +568,17 @@ class RecognitionPredictor(BasePredictor):
             )
 
         # No images passed, or no boxes passed, or no text detected in the images
-        if len(flat['slices']) == 0:
+        if len(flat["slices"]) == 0:
             return []
 
         # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
-        sorted_pairs = sorted(enumerate(flat['slices']), key=lambda x: -x[1].width)
+        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].width)
         indices, sorted_slices = zip(*sorted_pairs)
 
         # Reorder input_text and task_names based on the new order
-        flat['slices'] = list(sorted_slices)
-        flat['input_text'] = [flat['input_text'][i] for i in indices]
-        flat['task_names'] = [flat['task_names'][i] for i in indices]
+        flat["slices"] = list(sorted_slices)
+        flat["input_text"] = [flat["input_text"][i] for i in indices]
+        flat["task_names"] = [flat["task_names"][i] for i in indices]
 
         predicted_tokens = [[] for _ in range(len(flat["slices"]))]
         predicted_boxes = [[] for _ in range(len(flat["slices"]))]
