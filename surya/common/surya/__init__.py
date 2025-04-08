@@ -116,6 +116,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         Positions to insert new tokens are indicated by the special image token index
         """
+        # This is batched in the inner call
         inputs_embeds = self.embedder.embed(input_tokens=input_ids)
         if image_tiles is not None:
             image_features = self.get_image_embeddings(

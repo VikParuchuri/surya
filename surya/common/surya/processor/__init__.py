@@ -16,6 +16,7 @@ from surya.common.surya.processor.schema import (
     ImageInput,
     ProcessorOutput,
 )
+from surya.common.surya.schema import TaskNames
 
 # Task agnostic tokens - Every task will use these in some form or another
 EOS_TOKEN = "</S>"
@@ -76,11 +77,13 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         self.nomath_token = self.special_token_mapping.get(NOMATH_TOKEN)
 
         self.bos_token_id = {
-            "ocr_with_boxes": self.special_token_mapping.get(OCR_WITH_BOXES_BOS_TOKEN),
-            "ocr_without_boxes": self.special_token_mapping.get(
+            TaskNames.ocr_with_boxes: self.special_token_mapping.get(
+                OCR_WITH_BOXES_BOS_TOKEN
+            ),
+            TaskNames.ocr_without_boxes: self.special_token_mapping.get(
                 OCR_WITHOUT_BOXES_BOS_TOKEN
             ),
-            "block_without_boxes": self.special_token_mapping.get(
+            TaskNames.block_without_boxes: self.special_token_mapping.get(
                 BLOCK_WITHOUT_BOXES_TOKEN
             ),
         }
@@ -201,7 +204,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     # The task is expected to have - image_dict, user_input_dict, output_dict
     # use_input_dict is allowed to have an empty input which is fine, but needs to be present
     def _process_ocr_with_boxes(
-        self, mixed_input: List[dict], bos_token_id: int, task: str = "ocr_with_boxes"
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = TaskNames.ocr_with_boxes,
     ):
         processed_input_ids = []
         all_image_tiles = []

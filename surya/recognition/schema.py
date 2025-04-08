@@ -5,12 +5,6 @@ from pydantic import BaseModel
 from surya.common.polygon import PolygonBox
 
 
-class TaskNames:
-    block_without_boxes = "block_without_boxes"
-    ocr_with_boxes = "ocr_with_boxes"
-    ocr_without_boxes = "ocr_without_boxes"
-
-
 class TextChar(PolygonBox):
     text: str
     bbox_valid: bool = True  # This is false when the given bbox is not valid

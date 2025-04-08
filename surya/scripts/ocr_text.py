@@ -4,6 +4,7 @@ import json
 import time
 from collections import defaultdict
 
+from surya.common.surya.schema import TaskNames
 from surya.detection import DetectionPredictor
 from surya.debug.text import draw_text_on_image
 from surya.recognition import RecognitionPredictor
@@ -11,7 +12,7 @@ from surya.scripts.config import CLILoader
 
 
 @click.command(help="OCR text.")
-@click.option("--task_name", type=str, default="ocr_with_boxes")
+@click.option("--task_name", type=str, default=TaskNames.ocr_with_boxes)
 @click.option(
     "--disable_math", is_flag=True, default=False, help="Do not recognize math in OCR."
 )

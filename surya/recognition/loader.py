@@ -1,7 +1,7 @@
 from typing import Optional
 
 import torch
-from transformers import AutoImageProcessor, HqqConfig
+from transformers import AutoImageProcessor
 
 from surya.common.load import ModelLoader
 from surya.common.surya.config import SuryaModelConfig
@@ -42,24 +42,25 @@ class RecognitionModelLoader(ModelLoader):
         quant_config = {}
         if settings.RECOGNITION_MODEL_QUANTIZE:
             try:
-                from hqq.utils.patching import prepare_for_inference
+                from torchao.quantization import Int4WeightOnlyConfig
+                from transformers import TorchAoConfig
             except ImportError as e:
                 raise RuntimeError(
                     "`hqq` package is required for quantization. Please install it."
                 ) from e
 
+            quant_config = Int4WeightOnlyConfig(group_size=64)
+            quantization_config = TorchAoConfig(quant_type=quant_config)
             quant_config = {
-                "quantization_config": HqqConfig(nbits=4, group_size=64),
+                "quantization_config": quantization_config,
                 "device_map": device,
-                "torch_dtype": dtype,
+                "torch_dtype": "auto",
             }
 
         model = SuryaModel.from_pretrained(self.checkpoint, **quant_config)
         model = model.eval()
 
-        if settings.RECOGNITION_MODEL_QUANTIZE:
-            prepare_for_inference(model, backend="torchao_int4")
-        else:
+        if not settings.RECOGNITION_MODEL_QUANTIZE:
             model = model.to(device=device, dtype=dtype)
 
         if flash_available:

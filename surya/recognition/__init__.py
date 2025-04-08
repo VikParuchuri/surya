@@ -1,5 +1,4 @@
 from __future__ import annotations
-from statistics import mean
 from dataclasses import dataclass
 from typing import List, Optional
 from collections import deque
@@ -29,7 +28,8 @@ from surya.recognition.util import (
     clean_close_polygons,
     words_from_chars,
 )
-from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
+from surya.recognition.schema import TextLine, OCRResult, TextChar
+from surya.common.surya.schema import TaskNames
 from surya.recognition.cache import ContinuousBatchingCache
 from surya.settings import settings
 
@@ -69,9 +69,21 @@ class RecognitionPredictor(BasePredictor):
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
     min_prefill_ratio: int = 0.2
     tasks = {
-        TaskNames.ocr_with_boxes: {"needs_bboxes": True, "img_size": (1024, 256)},
-        TaskNames.ocr_without_boxes: {"needs_bboxes": False, "img_size": (1024, 256)},
-        TaskNames.block_without_boxes: {"needs_bboxes": False, "img_size": (1024, 768)},
+        TaskNames.ocr_with_boxes: {
+            "needs_bboxes": True,
+            "img_size": (1024, 256),
+            "max_tokens": 400,
+        },
+        TaskNames.ocr_without_boxes: {
+            "needs_bboxes": False,
+            "img_size": (1024, 256),
+            "max_tokens": 256,
+        },
+        TaskNames.block_without_boxes: {
+            "needs_bboxes": False,
+            "img_size": (1024, 768),
+            "max_tokens": 1024,
+        },
     }
 
     def __init__(self, checkpoint=None, device=settings.TORCH_DEVICE_MODEL, dtype=None):
@@ -127,6 +139,7 @@ class RecognitionPredictor(BasePredictor):
         slice_map = []
         all_polygons = []
         all_task_names = []
+        all_res_scales = []
 
         for idx, (det_pred, image, highres_image, task_name) in enumerate(
             zip(det_predictions, images, highres_images, task_names)
@@ -143,18 +156,23 @@ class RecognitionPredictor(BasePredictor):
                     for polygon in polygons
                 ]
                 slices = slice_polys_from_image(highres_image, scaled_polygons)
+                res_scales = [(width_scaler, height_scaler) for _ in range(len(slices))]
             else:
                 slices = slice_polys_from_image(image, polygons)
+                res_scales = [(1, 1) for _ in range(len(slices))]
+
             slice_map.append(len(slices))
             all_slices.extend(slices)
             all_polygons.extend(polygons)
             all_task_names.extend([task_name] * len(slices))
+            all_res_scales.extend(res_scales)
 
         assert (
             len(all_slices)
             == sum(slice_map)
             == len(all_polygons)
             == len(all_task_names)
+            == len(all_res_scales)
         )
 
         return {
@@ -163,6 +181,7 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons,
             "task_names": all_task_names,
             "input_text": [None] * len(all_slices),
+            "res_scales": all_res_scales,
         }
 
     def slice_bboxes(
@@ -219,6 +238,7 @@ class RecognitionPredictor(BasePredictor):
             "polygons": all_polygons,
             "input_text": all_text,
             "task_names": all_task_names,
+            "res_scales": [(1, 1) for _ in range(len(all_slices))],
         }
 
     def prepare_input(
@@ -233,12 +253,13 @@ class RecognitionPredictor(BasePredictor):
             images, input_text, task_names, math_modes
         ):
             image_size = self.tasks[task_name]["img_size"]
+            image, rotated = self.processor.align_long_axis(image)
             image = image.resize(image_size)
 
             # Task input is the same for all tasks for now
             text = text or ""
             inputs = [
-                {"type": "image", "image": image},
+                {"type": "image", "image": image, "rotated": rotated},
                 {"type": "text", "text": text, "math": math_mode},
             ]
             batch.append({"task": task_name, "inputs": inputs})
@@ -569,6 +590,8 @@ class RecognitionPredictor(BasePredictor):
             recognition_batch_size = self.get_batch_size()
         current_inputs = None
         self.setup_cache(recognition_batch_size)
+
+        batch_max_tokens = {}
         for idx, (img, txt, task) in enumerate(
             zip(flat["slices"], flat["input_text"], flat["task_names"])
         ):
@@ -576,6 +599,9 @@ class RecognitionPredictor(BasePredictor):
                 RecognitionPrompt(
                     id=idx, task_name=task, text=txt, image=img, math_mode=math_mode
                 )
+            )
+            batch_max_tokens[idx] = (
+                settings.RECOGNITION_MAX_TOKENS or self.tasks[task]["max_tokens"]
             )
 
         pbar = tqdm(total=len(self.prompt_queue), desc="Recognizing Text")
@@ -622,8 +648,7 @@ class RecognitionPredictor(BasePredictor):
                                 self.processor.eos_token_id,
                                 self.processor.pad_token_id,
                             ]
-                            or len(predicted_tokens[p_idx])
-                            == settings.RECOGNITION_MAX_TOKENS
+                            or len(predicted_tokens[p_idx]) >= batch_max_tokens[p_idx]
                         ):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
@@ -678,11 +703,7 @@ class RecognitionPredictor(BasePredictor):
                     or past_special_token
                 ) and detokenize_sequence:
                     chars = [dt[0] for dt in detokenize_sequence]
-                    scores = (
-                        mean([dt[1] for dt in detokenize_sequence])
-                        if detokenize_sequence
-                        else 0
-                    )
+                    scores = [dt[1] for dt in detokenize_sequence]
                     bboxes = [dt[2] for dt in detokenize_sequence]
 
                     if past_char_qwen_token:
@@ -726,7 +747,7 @@ class RecognitionPredictor(BasePredictor):
                 blank_bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
                 if token_type == "ocr":
                     text = self.processor.ocr_tokenizer.decode(
-                        token_ids, task="ocr_with_boxes"
+                        token_ids, task=TaskNames.ocr_with_boxes
                     )
                     bboxes = clean_close_polygons(
                         bboxes
@@ -737,7 +758,7 @@ class RecognitionPredictor(BasePredictor):
                             TextChar(
                                 text=text_line,
                                 polygon=bboxes[bbox_idx],
-                                confidence=seq_score,
+                                confidence=seq_score[bbox_idx],
                                 bbox_valid=True,
                             )
                         )
@@ -756,19 +777,19 @@ class RecognitionPredictor(BasePredictor):
                         TextChar(
                             text=text,
                             polygon=blank_bbox,
-                            confidence=seq_score,
+                            confidence=seq_score[0],
                             bbox_valid=False,
                         )
                     )
                 else:
                     text = self.processor.ocr_tokenizer.decode(
-                        token_ids, task="block_without_boxes"
+                        token_ids, task=TaskNames.block_without_boxes
                     )
                     img_chars.append(
                         TextChar(
                             text=text,
                             polygon=blank_bbox,
-                            confidence=seq_score,
+                            confidence=seq_score[0],
                             bbox_valid=False,
                         )
                     )
@@ -784,10 +805,11 @@ class RecognitionPredictor(BasePredictor):
             slice_end = slice_start + flat["slice_map"][idx]
             image_lines = char_predictions[slice_start:slice_end]
             polygons = flat["polygons"][slice_start:slice_end]
+            res_scales = flat["res_scales"][slice_start:slice_end]
             slice_start = slice_end
 
             lines = []
-            for text_line, polygon in zip(image_lines, polygons):
+            for text_line, polygon, res_scale in zip(image_lines, polygons, res_scales):
                 # Special case when input text is good
                 if not text_line:
                     lines.append(
@@ -804,6 +826,9 @@ class RecognitionPredictor(BasePredictor):
                     confidence = float(np.mean([char.confidence for char in text_line]))
                     poly_box = PolygonBox(polygon=polygon)
                     for char in text_line:
+                        char.rescale(
+                            res_scale, (1, 1)
+                        )  # Rescale from highres if needed
                         char.shift(
                             poly_box.bbox[0], poly_box.bbox[1]
                         )  # Ensure character boxes match line boxes (relative to page)

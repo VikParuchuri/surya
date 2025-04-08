@@ -1,12 +1,13 @@
 import os
+
 import click
 import json
 import time
 from collections import defaultdict
 
 from surya.scripts.config import CLILoader
-from surya.recognition import RecognitionPredictor, TaskNames
-from surya.util.mathml import mathml_to_latex
+from surya.recognition import RecognitionPredictor
+from surya.common.surya.schema import TaskNames
 
 
 @click.command(help="OCR LaTeX equations.")
@@ -25,7 +26,7 @@ def ocr_latex_cli(input_path: str, **kwargs):
         bboxes=bboxes,
     )
 
-    latex_predictions = [mathml_to_latex(p.text_lines[0].text) for p in predictions_by_image]
+    latex_predictions = [p.text_lines[0].text for p in predictions_by_image]
 
     if loader.debug:
         print(f"OCR took {time.time() - start:.2f} seconds")
@@ -40,7 +41,9 @@ def ocr_latex_cli(input_path: str, **kwargs):
         }
         out_preds[name].append(out_pred)
 
-    with open(os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8") as f:
+    with open(
+        os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8"
+    ) as f:
         json.dump(out_preds, f, ensure_ascii=False)
 
     print(f"Wrote results to {loader.result_path}")
