@@ -5,6 +5,7 @@ from typing import List
 import pypdfium2
 import streamlit as st
 
+from surya.common.surya.schema import TaskNames
 from surya.models import load_predictors
 
 from surya.debug.draw import draw_polys_on_image, draw_bboxes_on_image
@@ -157,9 +158,9 @@ def ocr(
         bboxes = None
 
     if with_bboxes:
-        tasks = ["ocr_with_boxes"]
+        tasks = [TaskNames.ocr_with_boxes]
     else:
-        tasks = ["ocr_without_boxes"]
+        tasks = [TaskNames.ocr_without_boxes]
 
     img_pred = predictors["recognition"](
         [img],

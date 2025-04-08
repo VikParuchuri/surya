@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr1.12"
     RECOGNITION_MODEL_QUANTIZE: bool = False
-    RECOGNITION_MAX_TOKENS: int = 768
+    RECOGNITION_MAX_TOKENS: Optional[int] = None
     RECOGNITION_BATCH_SIZE: Optional[int] = (
         None  # Defaults to 8 for CPU/MPS, 256 otherwise
     )

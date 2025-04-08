@@ -28,7 +28,8 @@ from surya.recognition.util import (
     clean_close_polygons,
     words_from_chars,
 )
-from surya.recognition.schema import TextLine, OCRResult, TextChar, TaskNames
+from surya.recognition.schema import TextLine, OCRResult, TextChar
+from surya.common.surya.schema import TaskNames
 from surya.recognition.cache import ContinuousBatchingCache
 from surya.settings import settings
 
@@ -68,9 +69,21 @@ class RecognitionPredictor(BasePredictor):
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
     min_prefill_ratio: int = 0.2
     tasks = {
-        TaskNames.ocr_with_boxes: {"needs_bboxes": True, "img_size": (1024, 256)},
-        TaskNames.ocr_without_boxes: {"needs_bboxes": False, "img_size": (1024, 256)},
-        TaskNames.block_without_boxes: {"needs_bboxes": False, "img_size": (1024, 768)},
+        TaskNames.ocr_with_boxes: {
+            "needs_bboxes": True,
+            "img_size": (1024, 256),
+            "max_tokens": 400,
+        },
+        TaskNames.ocr_without_boxes: {
+            "needs_bboxes": False,
+            "img_size": (1024, 256),
+            "max_tokens": 256,
+        },
+        TaskNames.block_without_boxes: {
+            "needs_bboxes": False,
+            "img_size": (1024, 768),
+            "max_tokens": 1024,
+        },
     }
 
     def __init__(self, checkpoint=None, device=settings.TORCH_DEVICE_MODEL, dtype=None):
@@ -564,6 +577,8 @@ class RecognitionPredictor(BasePredictor):
             recognition_batch_size = self.get_batch_size()
         current_inputs = None
         self.setup_cache(recognition_batch_size)
+
+        batch_max_tokens = {}
         for idx, (img, txt, task) in enumerate(
             zip(flat["slices"], flat["input_text"], flat["task_names"])
         ):
@@ -571,6 +586,9 @@ class RecognitionPredictor(BasePredictor):
                 RecognitionPrompt(
                     id=idx, task_name=task, text=txt, image=img, math_mode=math_mode
                 )
+            )
+            batch_max_tokens[idx] = (
+                settings.RECOGNITION_MAX_TOKENS or self.tasks[task]["max_tokens"]
             )
 
         pbar = tqdm(total=len(self.prompt_queue), desc="Recognizing Text")
@@ -617,8 +635,7 @@ class RecognitionPredictor(BasePredictor):
                                 self.processor.eos_token_id,
                                 self.processor.pad_token_id,
                             ]
-                            or len(predicted_tokens[p_idx])
-                            == settings.RECOGNITION_MAX_TOKENS
+                            or len(predicted_tokens[p_idx]) >= batch_max_tokens[p_idx]
                         ):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
@@ -717,7 +734,7 @@ class RecognitionPredictor(BasePredictor):
                 blank_bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
                 if token_type == "ocr":
                     text = self.processor.ocr_tokenizer.decode(
-                        token_ids, task="ocr_with_boxes"
+                        token_ids, task=TaskNames.ocr_with_boxes
                     )
                     bboxes = clean_close_polygons(
                         bboxes
@@ -753,7 +770,7 @@ class RecognitionPredictor(BasePredictor):
                     )
                 else:
                     text = self.processor.ocr_tokenizer.decode(
-                        token_ids, task="block_without_boxes"
+                        token_ids, task=TaskNames.block_without_boxes
                     )
                     img_chars.append(
                         TextChar(

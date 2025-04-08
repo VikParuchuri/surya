@@ -1,10 +1,13 @@
 import os
+import re
 from typing import List
 
-from surya.recognition import RecognitionPredictor, TaskNames
-from surya.util.mathml import mathml_to_latex
+from surya.recognition import RecognitionPredictor
+from surya.common.surya.schema import TaskNames
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1" # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = (
+    "1"  # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
+)
 
 import io
 
@@ -21,6 +24,13 @@ MAX_WIDTH = 800
 MAX_HEIGHT = 1000
 
 
+def replace_fences(text):
+    text = re.sub(r'<math display="block">(.*?)</math>', r"$$\1$$", text)
+    text = re.sub(r"<math>(.*?)</math>", r"$\1$", text)
+    text = re.sub(r'<math display="inline">(.*?)</math>', r"$\1$", text)
+    return text
+
+
 @st.cache_resource()
 def load_predictor():
     return RecognitionPredictor()
@@ -30,8 +40,10 @@ def load_predictor():
 def inference(pil_image: Image.Image, bbox: List[float]):
     input_img = pil_image.crop(bbox)
     bbox = [0, 0, input_img.width, input_img.height]
-    model_output = predictor([input_img], [TaskNames.block_without_boxes], bboxes=[[bbox]])
-    return model_output[0].text_lines[0].text, mathml_to_latex(model_output[0].text_lines[0].text)
+    model_output = predictor(
+        [input_img], [TaskNames.block_without_boxes], bboxes=[[bbox]]
+    )
+    return model_output[0].text_lines[0].text
 
 
 def open_pdf(pdf_file):
@@ -66,6 +78,7 @@ def resize_image(pil_image):
         return
     pil_image.thumbnail((MAX_WIDTH, MAX_HEIGHT), Image.Resampling.LANCZOS)
 
+
 def get_canvas_hash(pil_image):
     return hashlib.md5(pil_image.tobytes()).hexdigest()
 
@@ -78,11 +91,13 @@ After the model loads, upload an image or a pdf, then draw a box around the equa
 """
 
 st.markdown(top_message)
-col1, col2 = st.columns([.7, .3])
+col1, col2 = st.columns([0.7, 0.3])
 
 predictor = load_predictor()
 
-in_file = st.sidebar.file_uploader("PDF file or image:", type=["pdf", "png", "jpg", "jpeg", "gif", "webp"])
+in_file = st.sidebar.file_uploader(
+    "PDF file or image:", type=["pdf", "png", "jpg", "jpeg", "gif", "webp"]
+)
 if in_file is None:
     st.stop()
 
@@ -93,8 +108,9 @@ filetype = in_file.type
 page_count = None
 if "pdf" in filetype:
     page_count = page_counter(in_file)
-    page_number = st.sidebar.number_input(f"Page number out of {page_count}:", min_value=1, value=1,
-                                          max_value=page_count)
+    page_number = st.sidebar.number_input(
+        f"Page number out of {page_count}:", min_value=1, value=1, max_value=page_count
+    )
     pil_image = get_page_image(in_file, page_number, dpi=settings.IMAGE_DPI_HIGHRES)
 else:
     pil_image = Image.open(in_file).convert("RGB")
@@ -125,7 +141,9 @@ with col1:
 if not canvas_result.json_data:
     st.stop()
 
-objects = pd.json_normalize(canvas_result.json_data["objects"])  # need to convert obj to str because PyArrow
+objects = pd.json_normalize(
+    canvas_result.json_data["objects"]
+)  # need to convert obj to str because PyArrow
 bbox_list = None
 if objects.shape[0] > 0:
     boxes = objects[objects["type"] == "rect"][["left", "top", "width", "height"]]
@@ -136,10 +154,9 @@ if objects.shape[0] > 0:
 if bbox_list:
     with col2:
         texts = [inference(pil_image, bbox) for bbox in bbox_list]
-        for idx, (mathml, latex) in enumerate(reversed(texts)):
+        for idx, latex in enumerate(reversed(texts)):
             st.markdown(f"### {len(texts) - idx}")
-            st.markdown(mathml, unsafe_allow_html=True)
-            st.code(mathml)
+            st.markdown(replace_fences(latex), unsafe_allow_html=True)
             st.code(latex)
             st.divider()
 

@@ -9,14 +9,12 @@ import datasets
 from tabulate import tabulate
 from bs4 import BeautifulSoup
 
-from surya.recognition.schema import TaskNames
+from surya.common.surya.schema import TaskNames
 from surya.settings import settings
 from surya.recognition import RecognitionPredictor, OCRResult
 import json
 import io
 from rapidfuzz.distance import Levenshtein
-
-from surya.util.mathml import mathml_to_latex
 
 
 def normalize_text(text):
@@ -43,7 +41,10 @@ def inference_texify(source_data, predictor: RecognitionPredictor):
     bboxes = [[[0, 0, image.width, image.height]] for image in images]
     texify_predictions: List[OCRResult] = predictor(images, tasks, bboxes=bboxes)
     out_data = [
-        {"text": mathml_to_latex(texify_predictions[i].text_lines[0].text), "equation": source_data[i]["equation"]}
+        {
+            "text": texify_predictions[i].text_lines[0].text,
+            "equation": source_data[i]["equation"],
+        }
         for i in range(len(texify_predictions))
     ]
 
@@ -55,10 +56,23 @@ def image_to_bmp(image):
     image.save(img_out, format="BMP")
     return img_out
 
+
 @click.command(help="Benchmark the performance of texify.")
-@click.option("--ds_name", type=str, help="Path to dataset file with source images/equations.", default=settings.TEXIFY_BENCHMARK_DATASET)
-@click.option("--results_dir", type=str, help="Path to JSON file with benchmark results.", default=os.path.join(settings.RESULT_DIR, "benchmark"))
-@click.option("--max_rows", type=int, help="Maximum number of images to benchmark.", default=None)
+@click.option(
+    "--ds_name",
+    type=str,
+    help="Path to dataset file with source images/equations.",
+    default=settings.TEXIFY_BENCHMARK_DATASET,
+)
+@click.option(
+    "--results_dir",
+    type=str,
+    help="Path to JSON file with benchmark results.",
+    default=os.path.join(settings.RESULT_DIR, "benchmark"),
+)
+@click.option(
+    "--max_rows", type=int, help="Maximum number of images to benchmark.", default=None
+)
 def main(ds_name: str, results_dir: str, max_rows: int):
     predictor = RecognitionPredictor()
     ds = datasets.load_dataset(ds_name, split="train")
@@ -76,12 +90,10 @@ def main(ds_name: str, results_dir: str, max_rows: int):
 
     write_data = {
         "scores": scores,
-        "text": [{"prediction": p, "reference": r} for p, r in zip(text, references)]
+        "text": [{"prediction": p, "reference": r} for p, r in zip(text, references)],
     }
 
-    score_table = [
-        ["texify", write_data["scores"], time_taken]
-    ]
+    score_table = [["texify", write_data["scores"], time_taken]]
     score_headers = ["edit", "time taken (s)"]
     score_dirs = ["⬇", "⬇"]
 

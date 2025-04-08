@@ -3,8 +3,6 @@ from typing import TypedDict, Literal, List, Tuple
 import torch
 from PIL import Image
 
-TASK_NAMES = ["ocr_with_boxes", "ocr_without_boxes", "block_without_boxes"]
-
 
 class TaskDict(TypedDict):
     datasets: List[str]
