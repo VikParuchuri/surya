@@ -1924,18 +1924,6 @@ files = [
 ]
 
 [[package]]
-name = "mathml-to-latex"
-version = "1.0.0"
-description = "It converts MathML to LaTeX"
-optional = false
-python-versions = ">=3.6"
-groups = ["main"]
-files = [
-    {file = "mathml_to_latex-1.0.0-py3-none-any.whl", hash = "sha256:a85ec2434da774be019ed5ea32494616baabf48471b054e3567a7700ae759572"},
-    {file = "mathml_to_latex-1.0.0.tar.gz", hash = "sha256:ba6a438526684940572d1875b4d5f2d6cb3bea52943830307d08a9fc662e4f69"},
-]
-
-[[package]]
 name = "matplotlib-inline"
 version = "0.1.7"
 description = "Inline Matplotlib backend for Jupyter"
@@ -3406,6 +3394,7 @@ groups = ["dev"]
 files = [
     {file = "pymupdf-1.25.3-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:96878e1b748f9c2011aecb2028c5f96b5a347a9a91169130ad0133053d97915e"},
     {file = "pymupdf-1.25.3-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:6ef753005b72ebfd23470f72f7e30f61e21b0b5e748045ec5b8f89e6e3068d62"},
+    {file = "pymupdf-1.25.3-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cbff443d899f37b17f1e67563cc03673d50b4bf33ccc237e73d34f18f3a07ccf"},
     {file = "pymupdf-1.25.3-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:46d90c4f9e62d1856e8db4b9f04a202ff4a7f086a816af73abdc86adb7f5e25a"},
     {file = "pymupdf-1.25.3-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:a5de51efdbe4d486b6c1111c84e8a231cbfb426f3d6ff31ab530ad70e6f39756"},
     {file = "pymupdf-1.25.3-cp39-abi3-win32.whl", hash = "sha256:bca72e6089f985d800596e22973f79cc08af6cbff1d93e5bda9248326a03857c"},
@@ -5212,4 +5201,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "8bd03f2815ececbe4d1de02be5c9a045aaf5fac3fdf4098ea51c87cbcba2317e"
+content-hash = "fa33cb2c8bfc8f62754a8067a8532da7a589e3792ef9106ae8af8f85604d8698"
