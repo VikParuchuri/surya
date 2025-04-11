@@ -8,6 +8,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 import torch.nn.functional as F
+from transformers import QuantizedCacheConfig
 
 from surya.common.polygon import PolygonBox
 from surya.common.surya import SuryaModelConfig, SuryaModelOutput
@@ -30,7 +31,10 @@ from surya.recognition.util import (
 )
 from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.common.surya.schema import TaskNames
-from surya.recognition.cache import ContinuousBatchingCache
+from surya.recognition.cache import (
+    ContinuousBatchingCache,
+    ContinuousBatchingQuantizedCache,
+)
 from surya.settings import settings
 
 
@@ -383,7 +387,23 @@ class RecognitionPredictor(BasePredictor):
         needs_boxes = [self.tasks[p.task_name]["needs_bboxes"] for p in prompts]
         skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
-        prefill_cache = ContinuousBatchingCache()
+        if settings.RECOGNITION_MODEL_QUANTIZE:
+            try:
+                import hqq  # noqa: F401
+            except Exception:
+                raise ImportError(
+                    "Please install hqq to use quantized recognition model"
+                )
+
+        # Use quantized cache if setting activated
+        cache_config = QuantizedCacheConfig(
+            "HQQ", 8, 1, 1, device=self.model.device, compute_dtype=self.model.dtype
+        )
+        prefill_cache = (
+            ContinuousBatchingCache()
+            if not settings.RECOGNITION_MODEL_QUANTIZE
+            else ContinuousBatchingQuantizedCache(cache_config)
+        )
 
         with settings.INFERENCE_MODE():
             outputs = self.model(

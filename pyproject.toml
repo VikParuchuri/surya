@@ -13,7 +13,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-transformers = "^4.41.0"
+transformers = "^4.51.2"
 torch = "^2.5.1"
 pydantic = "^2.5.3"
 pydantic-settings = "^2.1.0"

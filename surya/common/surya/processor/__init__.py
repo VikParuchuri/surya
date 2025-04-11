@@ -165,7 +165,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         num_tiles = image_tiles.shape[0]
         input_ids = [self.image_token_id] * num_tiles * self.image_tokens_per_tile
-        input_ids += [self.register_token_ids][: self.num_register_tokens]
+        input_ids += self.register_token_ids[: self.num_register_tokens]
 
         # Handle the image being rotated in the imdataset
         if rotated:

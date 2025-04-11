@@ -5,23 +5,10 @@ from transformers import AutoImageProcessor
 
 from surya.common.load import ModelLoader
 from surya.common.surya.config import SuryaModelConfig
-from surya.common.surya.__init__ import SuryaModel
-from surya.common.surya.processor.__init__ import SuryaOCRProcessor
+from surya.common.surya import SuryaModel
+from surya.common.surya.processor import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
 from surya.settings import settings
-
-try:
-    import flash_attn
-    flash_available = True
-except ImportError:
-    flash_available = False
-
-torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)
-if not settings.ENABLE_EFFICIENT_ATTENTION:
-    print("Efficient attention is disabled. This will use significantly more VRAM.")
-    torch.backends.cuda.enable_mem_efficient_sdp(False)
-    torch.backends.cuda.enable_flash_sdp(False)
-    torch.backends.cuda.enable_math_sdp(True)
 
 
 class RecognitionModelLoader(ModelLoader):
@@ -39,34 +26,12 @@ class RecognitionModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE_BFLOAT
 
-        quant_config = {}
-        if settings.RECOGNITION_MODEL_QUANTIZE:
-            try:
-                from torchao.quantization import Int4WeightOnlyConfig
-                from transformers import TorchAoConfig
-            except ImportError as e:
-                raise RuntimeError(
-                    "`hqq` package is required for quantization. Please install it."
-                ) from e
-
-            quant_config = Int4WeightOnlyConfig(group_size=64)
-            quantization_config = TorchAoConfig(quant_type=quant_config)
-            quant_config = {
-                "quantization_config": quantization_config,
-                "device_map": device,
-                "torch_dtype": "auto",
-            }
-
-        model = SuryaModel.from_pretrained(self.checkpoint, **quant_config)
+        model = SuryaModel.from_pretrained(self.checkpoint, torch_dtype=dtype).to(
+            device
+        )
         model = model.eval()
 
-        if not settings.RECOGNITION_MODEL_QUANTIZE:
-            model = model.to(device=device, dtype=dtype)
-
-        if flash_available:
-            model.config.decoder._attn_implementation = "flash_attention_2"
-        else:
-            model.config.decoder._attn_implementation = "sdpa"
+        model.config.decoder._attn_implementation = "sdpa"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch.set_float32_matmul_precision("high")
@@ -81,7 +46,7 @@ class RecognitionModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}"
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}"
         )
         return model
 
