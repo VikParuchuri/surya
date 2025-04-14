@@ -121,17 +121,19 @@ class ContinuousBatchingQuantizedCache(HQQQuantizedCache, ContinuousBatchingMixi
         self, layer_idx: int, key_cache: torch.Tensor, value_cache: torch.Tensor
     ):
         if key_cache.shape[-2] < self.residual_length:
-            self.key_cache[layer_idx] = key_cache
-            self.value_cache[layer_idx] = value_cache
-            self._quantized_key_cache[layer_idx] = torch.zeros(
-                0,
-                dtype=self.key_cache[layer_idx].dtype,
-                device=self.key_cache[layer_idx].device,
+            # HF quantized cache is setup so prefill is always quantized
+            # So we treat this as a prefill case
+            self.key_cache[layer_idx] = torch.zeros(
+                0, dtype=key_cache.dtype, device=key_cache.device
             )
-            self._quantized_value_cache[layer_idx] = torch.zeros(
-                0,
-                dtype=self.value_cache[layer_idx].dtype,
-                device=self.value_cache[layer_idx].device,
+            self.value_cache[layer_idx] = torch.zeros(
+                0, dtype=value_cache.dtype, device=value_cache.device
+            )
+            self._quantized_key_cache[layer_idx] = self._quantize(
+                key_cache.contiguous(), axis=self.axis_key
+            )
+            self._quantized_value_cache[layer_idx] = self._quantize(
+                value_cache.contiguous(), axis=self.axis_value
             )
         else:
             self.key_cache[layer_idx] = key_cache[:, :, self.residual_length :, :]
@@ -148,38 +150,12 @@ class ContinuousBatchingQuantizedCache(HQQQuantizedCache, ContinuousBatchingMixi
             self._quantized_value_cache[layer_idx] = quant_value_cache
 
     def trim_left(self, trim_length: int):
-        for layer_idx in range(len(self)):
-            # cache shape is (batch_size, num_kv_heads, seq_length, head_dim)
-            unquant_len = self.key_cache[layer_idx].shape[-2]
-            quant_len = self._quantized_key_cache[layer_idx].shape[-2]
-            cache_len = unquant_len + quant_len
-            to_keep = cache_len - trim_length
-            cut_from_unquant = 0
-            if to_keep < unquant_len:
-                # Remove the whole quantized cache
-                cut_from_unquant = unquant_len - to_keep
-                self._quantized_key_cache[layer_idx] = torch.zeros(
-                    0,
-                    dtype=self._quantized_key_cache[layer_idx].dtype,
-                    device=self._quantized_key_cache[layer_idx].device,
-                )
-                self._quantized_value_cache[layer_idx] = torch.zeros(
-                    0,
-                    dtype=self._quantized_value_cache[layer_idx].dtype,
-                    device=self._quantized_value_cache[layer_idx].device,
-                )
-            else:
-                # Remove from the quantized cache
-                self._quantized_key_cache[layer_idx] = self._quantized_key_cache[
-                    layer_idx
-                ][:, :, trim_length:, :]
-                self._quantized_value_cache[layer_idx] = self._quantized_value_cache[
-                    layer_idx
-                ][:, :, trim_length:, :]
+        if trim_length == 0:
+            return
 
-            self.key_cache[layer_idx] = self.key_cache[layer_idx][
-                :, :, cut_from_unquant:, :
-            ]
-            self.value_cache[layer_idx] = self.value_cache[layer_idx][
-                :, :, cut_from_unquant:, :
-            ]
+        for layer_idx in range(len(self.key_cache)):
+            full_key_cache, full_value_cache = self.get_full_cache(layer_idx)
+
+            full_key_cache = full_key_cache[:, :, trim_length:, :]
+            full_value_cache = full_value_cache[:, :, trim_length:, :]
+            self.set_full_cache(layer_idx, full_key_cache, full_value_cache)
