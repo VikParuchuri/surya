@@ -622,7 +622,11 @@ class RecognitionPredictor(BasePredictor):
                 settings.RECOGNITION_MAX_TOKENS or self.tasks[task]["max_tokens"]
             )
 
-        pbar = tqdm(total=len(self.prompt_queue), desc="Recognizing Text")
+        pbar = tqdm(
+            total=len(self.prompt_queue),
+            desc="Recognizing Text",
+            disable=self.disable_tqdm,
+        )
         while self.prompt_queue or self.num_active_slots > 0:
             if (
                 self.num_empty_slots / recognition_batch_size

@@ -41,6 +41,7 @@ class ContinuousBatchingMixin:
 
     # Trim the cache from the left - Useful when longer sequences are evicted and we have long padding on the left
     def trim_left(self, trim_length: int):
+        self._seen_tokens -= trim_length
         for layer_idx in range(len(self)):
             # cache sape is (batch_size, num_kv_heads, seq_length, head_dim); Trimming from head dim
             self.key_cache[layer_idx] = self.key_cache[layer_idx][:, :, trim_length:, :]
@@ -68,6 +69,11 @@ class ContinuousBatchingMixin:
         offset = (
             current_seq_length - new_cache_seq_length
         )  # Generally positive, but negative case is handled too
+        if offset > 0:
+            new_cache._seen_tokens += offset
+        elif offset < 0:
+            self._seen_tokens += abs(offset)
+
         with torch.inference_mode():
             # As long as we set the attention mask and position ids correctly, padding value can be anything
             for layer_idx in range(len(self)):
@@ -88,23 +94,19 @@ class ContinuousBatchingMixin:
                         old_v,
                     )
 
-                # TODO Make this assignment batched?
-                for i, merge_idx in enumerate(merge_idxs):
-                    adjusted_key_cache[merge_idx] = new_k[i]
-                    adjusted_value_cache[merge_idx] = new_v[i]
+                adjusted_key_cache[merge_idxs] = new_k[list(range(len(merge_idxs)))]
+                adjusted_value_cache[merge_idxs] = new_v[list(range(len(merge_idxs)))]
 
-                    self.set_full_cache(
-                        layer_idx, adjusted_key_cache, adjusted_value_cache
-                    )
+                self.set_full_cache(layer_idx, adjusted_key_cache, adjusted_value_cache)
 
         return offset
 
 
-class ContinuousBatchingCache(DynamicCache, ContinuousBatchingMixin):
+class ContinuousBatchingCache(ContinuousBatchingMixin, DynamicCache):
     pass
 
 
-class ContinuousBatchingQuantizedCache(HQQQuantizedCache, ContinuousBatchingMixin):
+class ContinuousBatchingQuantizedCache(ContinuousBatchingMixin, HQQQuantizedCache):
     def get_full_cache(self, layer_idx: int):
         unquant_key_cache = self.key_cache[layer_idx]
         unquant_value_cache = self.value_cache[layer_idx]
@@ -153,9 +155,29 @@ class ContinuousBatchingQuantizedCache(HQQQuantizedCache, ContinuousBatchingMixi
         if trim_length == 0:
             return
 
-        for layer_idx in range(len(self.key_cache)):
-            full_key_cache, full_value_cache = self.get_full_cache(layer_idx)
+        self._seen_tokens -= trim_length
+        to_keep = self._seen_tokens - trim_length
+        quantized_to_keep = to_keep - self.residual_length
 
-            full_key_cache = full_key_cache[:, :, trim_length:, :]
-            full_value_cache = full_value_cache[:, :, trim_length:, :]
-            self.set_full_cache(layer_idx, full_key_cache, full_value_cache)
+        for layer_idx in range(len(self.key_cache)):
+            if quantized_to_keep > 0:
+                dequant_key = self._dequantize(self._quantized_key_cache[layer_idx])[
+                    :, :, trim_length:, :
+                ]
+                dequant_value = self._dequantize(
+                    self._quantized_value_cache[layer_idx]
+                )[:, :, trim_length:, :]
+                self._quantized_key_cache[layer_idx] = self._quantize(
+                    dequant_key, axis=self.axis_key
+                )
+                self._quantized_value_cache[layer_idx] = self._quantize(
+                    dequant_value, axis=self.axis_value
+                )
+            else:
+                main_to_keep = self._seen_tokens - trim_length
+                main_start_idx = self.residual_length - main_to_keep
+
+                full_key_cache = self.key_cache[layer_idx][:, :, main_start_idx:, :]
+                full_value_cache = self.value_cache[layer_idx][:, :, main_start_idx:, :]
+
+                self.set_full_cache(layer_idx, full_key_cache, full_value_cache)

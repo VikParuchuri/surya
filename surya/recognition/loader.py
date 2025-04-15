@@ -46,7 +46,7 @@ class RecognitionModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}"
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}.  Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
         )
         return model
 
