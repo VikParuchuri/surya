@@ -71,7 +71,7 @@ class RecognitionPredictor(BasePredictor):
     batch_size = settings.RECOGNITION_BATCH_SIZE
     torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
-    min_prefill_ratio: int = 0.2
+    min_prefill_ratio: int = 0.3
     tasks = {
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,

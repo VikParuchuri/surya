@@ -97,8 +97,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     def get_image_embeddings(self, image_tiles, batch_size: int):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch
         all_image_features = None
-        for i in range(0, len(image_tiles), batch_size):
-            image_batch = image_tiles[i : i + batch_size]
+        bs = max(batch_size // 2, 1)
+        for i in range(0, len(image_tiles), bs):
+            image_batch = image_tiles[i : i + bs]
             image_features = self.vision_projector(
                 self.vision_encoder.embed_images(image_batch=image_batch)
             )
@@ -206,7 +207,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             else:
                 # Flash attention case, since 4D mask cannot be used in this case. We set `is_causal=False` during prefill
                 # inside the model attention call to cover for this case
-                assert causal_mask.dim() == 2, f"Causal mask is not supported for flash attention, attention mask should be 2D but mask has shape {causal_mask.shape}"
+                assert causal_mask.dim() == 2, (
+                    f"Causal mask is not supported for flash attention, attention mask should be 2D but mask has shape {causal_mask.shape}"
+                )
 
             attention_mask = causal_mask
 
