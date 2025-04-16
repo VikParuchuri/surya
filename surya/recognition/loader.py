@@ -32,10 +32,8 @@ class RecognitionModelLoader(ModelLoader):
         )
         model = model.eval()
 
-        if is_flash_attn_2_available():
-            model.config.decoder._attn_implementation = "flash_attention_2"
-        else:
-            model.config.decoder._attn_implementation = "sdpa"
+        model.config.decoder._attn_implementation = "sdpa"
+        is_using_flash_attn = torch.backends.cuda.flash_sdp_enabled()
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch._dynamo.config.cache_size_limit = 16
@@ -49,7 +47,7 @@ class RecognitionModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}.  Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}, FA2 enabled: {is_using_flash_attn}.  Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
         )
         return model
 
