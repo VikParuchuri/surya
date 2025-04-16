@@ -8,7 +8,7 @@ from tokenizers import AddedToken
 from transformers import PreTrainedTokenizer, Qwen2Tokenizer
 
 from surya.common.s3 import S3DownloaderMixin
-from surya.common.surya.processor.schema import TASK_NAMES
+from surya.common.surya.schema import TASK_NAMES, TaskNames
 from surya.settings import settings
 
 
@@ -66,9 +66,7 @@ class InnerOCRTokenizer:
     def _tokenize(self, text: str) -> List[int]:
         tokens = []
         in_math = False
-        text = html.unescape(
-            text
-        )  # Unescape html entities like &lt; in equations
+        text = html.unescape(text)  # Unescape html entities like &lt; in equations
         while text:
             # Look for EOS, PAD, etc. tokens
             match = self.SYSTEM_TAG_PATTERN.search(text)
@@ -246,7 +244,9 @@ class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
         super().__init__(**kwargs)
 
         self.qwen_offset = len(self.qwen_tokenizer)
-        self.special_token_offset = self.qwen_offset + self.ocr_tokenizer.SPECIAL_TOKEN_OFFSET
+        self.special_token_offset = (
+            self.qwen_offset + self.ocr_tokenizer.SPECIAL_TOKEN_OFFSET
+        )
 
     def get_vocab(self) -> Dict[str, int]:
         return self.qwen_tokenizer.get_vocab()
@@ -265,10 +265,10 @@ class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
         return self.ocr_tokenizer.vocab_size + self.qwen_offset
 
     def _tokenize(self, text: str, **kwargs):
-        task = kwargs.get("task", "ocr_with_boxes")
+        task = kwargs.get("task", TaskNames.ocr_with_boxes)
         assert task in TASK_NAMES, f"Invalid task: {task}"
 
-        if task in ["ocr_with_boxes", "ocr_without_boxes"]:
+        if task in [TaskNames.ocr_with_boxes, TaskNames.ocr_without_boxes]:
             tokens = self.ocr_tokenizer._tokenize(text)
         else:
             tokens = self.qwen_tokenizer(text)["input_ids"]
@@ -305,7 +305,7 @@ class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
         if isinstance(token_ids, (np.ndarray, torch.Tensor)):
             token_ids = token_ids.tolist()
 
-        if task_name in ["ocr_with_boxes", "ocr_without_boxes"]:
+        if task_name in [TaskNames.ocr_with_boxes, TaskNames.ocr_without_boxes]:
             decoded_text = self.ocr_tokenizer.decode(token_ids)
         else:
             decoded_text = self.qwen_tokenizer.decode(token_ids)

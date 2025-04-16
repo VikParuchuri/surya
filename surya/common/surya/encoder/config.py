@@ -38,6 +38,7 @@ class SuryaEncoderConfig(BackboneConfigMixin, PretrainedConfig):
         out_features=None,
         out_indices=None,
         num_patches=256,
+        use_positional_embeddings=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -54,13 +55,14 @@ class SuryaEncoderConfig(BackboneConfigMixin, PretrainedConfig):
         self.qkv_bias = qkv_bias
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
-        self.drop_path_rate = drop_path_rate
+        self.drop_path_rate = 0  # Set to zero for inference
         self.hidden_act = hidden_act
         self.use_absolute_embeddings = use_absolute_embeddings
         self.layer_norm_eps = layer_norm_eps
         self.initializer_range = initializer_range
         self.encoder_stride = encoder_stride
         self.num_patches = num_patches
+        self.use_positional_embeddings = use_positional_embeddings
         # we set the hidden_size attribute in order to make Swin work with VisionEncoderDecoderModel
         # this indicates the channel dimension after the last stage of the model
         self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))

@@ -48,9 +48,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         super().__init__(config)
 
         if vision_encoder is None:
-            vision_encoder = SuryaEncoderModel(
-                config.vision_encoder
-            )
+            vision_encoder = SuryaEncoderModel(config.vision_encoder)
 
         if decoder is None:
             decoder = SuryaDecoderModel(config.decoder)
@@ -67,7 +65,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.decoder.config = self.config.decoder
 
         self.vision_projector = nn.Sequential(
-            nn.Linear(self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size),
+            nn.Linear(
+                self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size
+            ),
             nn.GELU(),
             nn.Linear(self.decoder.config.hidden_size, self.decoder.config.hidden_size),
         )
@@ -97,28 +97,32 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     def get_image_embeddings(self, image_tiles, batch_size: int):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch
         all_image_features = None
-        for i in range(0, len(image_tiles), batch_size):
-            image_batch = image_tiles[i:i + batch_size]
+        bs = max(batch_size // 2, 1)
+        for i in range(0, len(image_tiles), bs):
+            image_batch = image_tiles[i : i + bs]
             image_features = self.vision_projector(
                 self.vision_encoder.embed_images(image_batch=image_batch)
             )
             if i == 0:
                 all_image_features = image_features
             else:
-                all_image_features = torch.cat([all_image_features, image_features], dim=0)
+                all_image_features = torch.cat(
+                    [all_image_features, image_features], dim=0
+                )
         return all_image_features
 
-    def embed_ids_boxes_images(self, input_ids, input_boxes, image_tiles):
+    def embed_ids_boxes_images(self, input_ids, image_tiles):
         """
         Insert embedded image tiles into the corresponding positions into the full input sequence
 
         Positions to insert new tokens are indicated by the special image token index
         """
-        inputs_embeds = self.embedder.embed(
-            input_tokens=input_ids, input_bboxes=input_boxes
-        )
+        # This is batched in the inner call
+        inputs_embeds = self.embedder.embed(input_tokens=input_ids)
         if image_tiles is not None:
-            image_features = self.get_image_embeddings(image_tiles=image_tiles, batch_size=len(input_ids))
+            image_features = self.get_image_embeddings(
+                image_tiles=image_tiles, batch_size=len(input_ids)
+            )
 
             special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(
@@ -143,10 +147,19 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         return inputs_embeds
 
+    def create_eoi_mask(self, tensor: torch.Tensor):
+        positions = (tensor == self.config.eoi_token_id).nonzero(as_tuple=True)
+        eoi_indices = positions[1].unsqueeze(1)
+        col_indices = torch.arange(tensor.shape[1], device=tensor.device)
+        col_indices = col_indices.expand_as(tensor)
+        mask = col_indices <= eoi_indices
+        mask[tensor == self.config.pad_token_id] = False  # Don't attend to pad tokens
+
+        return mask
+
     def forward(
         self,
         input_ids=None,
-        input_boxes=None,
         image_tiles=None,
         inputs_embeds=None,
         attention_mask=None,
@@ -160,9 +173,45 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     ):
         # Process the mixed batch if provided
         if inputs_embeds is None:
-            inputs_embeds = self.embed_ids_boxes_images(
-                input_ids, input_boxes, image_tiles
+            inputs_embeds = self.embed_ids_boxes_images(input_ids, image_tiles)
+
+        # In prefill, unmask the image
+        if self.config.unmask_image and inputs_embeds.shape[1] != 1:
+            # This creates a special causal mask to do bidirectional attention on the images, then passes into the decoder
+            # The decoder will not regenerate if a 4D mask is passed in
+            past_seen_tokens = 0
+            cache_position = torch.arange(
+                past_seen_tokens,
+                past_seen_tokens + inputs_embeds.shape[1],
+                device=inputs_embeds.device,
             )
+            causal_mask = self.decoder._update_causal_mask(
+                attention_mask,
+                inputs_embeds,
+                cache_position,
+                past_key_values,
+                output_attentions,
+            )
+
+            expanded_eoi_mask = self.create_eoi_mask(input_ids)
+
+            # If we use flash attention, the mask will be 2d, not 4d
+            if causal_mask is None:
+                pass
+            elif causal_mask.dim() == 4:
+                expanded_eoi_mask = expanded_eoi_mask.unsqueeze(1).unsqueeze(1)
+
+                # Causal mask has 0s for unmasked positions, and -inf for masked positions
+                # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
+                causal_mask.masked_fill_(expanded_eoi_mask, 0)
+            else:
+                # Flash attention case, since 4D mask cannot be used in this case. We set `is_causal=False` during prefill
+                # inside the model attention call to cover for this case
+                assert causal_mask.dim() == 2, (
+                    f"Causal mask is not supported for flash attention, attention mask should be 2D but mask has shape {causal_mask.shape}"
+                )
+
+            attention_mask = causal_mask
 
         outputs = self.decoder(
             input_ids=None,
@@ -179,6 +228,8 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         # Only keep the last `logits_to_keep` logits, should bring down memory usage during inference
         if logits_to_keep is not None:
             hidden_states = hidden_states[:, -logits_to_keep:, :]
+
+        hidden_states = hidden_states.contiguous()
         bbox_logits = F.sigmoid(self.bbox_head(hidden_states))
         lm_logits = self.lm_head(hidden_states)
 

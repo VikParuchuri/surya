@@ -13,11 +13,10 @@ from transformers.tokenization_utils import PreTrainedTokenizer
 from surya.common.s3 import S3DownloaderMixin
 from surya.common.surya.processor.schema import (
     TextInput,
-    OCRInput,
     ImageInput,
-    EmptyInput,
     ProcessorOutput,
 )
+from surya.common.surya.schema import TaskNames
 
 # Task agnostic tokens - Every task will use these in some form or another
 EOS_TOKEN = "</S>"
@@ -26,11 +25,14 @@ IMAGE_TOKEN = "<IMAGE>"
 PAD_TOKEN = "<PAD>"
 NO_OUTPUT_TOKEN = "<NOP>"
 IMAGE_ROTATED_TOKEN = "<ROT>"
+REGISTER_TOKENS = ["<REG1>", "<REG2>", "<REG3>", "<REG4>"]
+NOMATH_TOKEN = "<NO-MATH>"
 
 # Task specific tokens
 OCR_WITH_BOXES_BOS_TOKEN = "<OCR-WB>"
 OCR_WITHOUT_BOXES_BOS_TOKEN = "<OCR-WOB>"
 BLOCK_WITHOUT_BOXES_TOKEN = "<BLOCKS-WOB>"
+
 
 class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor", "ocr_tokenizer"]
@@ -44,12 +46,14 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         tile_size: Tuple[int, int],
         image_tokens_per_tile: int,
         blank_bbox_token_id: int,
+        num_register_tokens: int,
         **kwargs,
     ):
         self.image_processor = image_processor
         self.ocr_tokenizer = ocr_tokenizer
         self.tile_size = tile_size
         self.image_tokens_per_tile = image_tokens_per_tile
+        self.num_register_tokens = num_register_tokens
 
         self.tokenizer_vocab_size = 0
         for attr in self.attributes:
@@ -61,19 +65,25 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         # Create special token mapping
         self.special_token_mapping = self.ocr_tokenizer.system_tokens
 
+        self.register_token_ids = [
+            self.special_token_mapping.get(r) for r in REGISTER_TOKENS
+        ]
         self.image_token_id = self.special_token_mapping.get(IMAGE_TOKEN)
         self.pad_token_id = self.special_token_mapping.get(PAD_TOKEN)
         self.eos_token_id = self.special_token_mapping.get(EOS_TOKEN)
         self.eoi_token_id = self.special_token_mapping.get(EOI_TOKEN)
         self.no_output_token = self.special_token_mapping.get(NO_OUTPUT_TOKEN)
         self.image_rotated_token = self.special_token_mapping.get(IMAGE_ROTATED_TOKEN)
+        self.nomath_token = self.special_token_mapping.get(NOMATH_TOKEN)
 
         self.bos_token_id = {
-            "ocr_with_boxes": self.special_token_mapping.get(OCR_WITH_BOXES_BOS_TOKEN),
-            "ocr_without_boxes": self.special_token_mapping.get(
+            TaskNames.ocr_with_boxes: self.special_token_mapping.get(
+                OCR_WITH_BOXES_BOS_TOKEN
+            ),
+            TaskNames.ocr_without_boxes: self.special_token_mapping.get(
                 OCR_WITHOUT_BOXES_BOS_TOKEN
             ),
-            "block_without_boxes": self.special_token_mapping.get(
+            TaskNames.block_without_boxes: self.special_token_mapping.get(
                 BLOCK_WITHOUT_BOXES_TOKEN
             ),
         }
@@ -103,6 +113,11 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         ]
 
         super().__init__(image_processor, ocr_tokenizer)
+
+        if self.num_register_tokens > len(self.register_token_ids):
+            raise ValueError(
+                "The number of register tokens requested exceeds the number of register tokens defined in the special token mapping."
+            )
 
     @property
     def vocab_size(self):
@@ -150,58 +165,29 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         num_tiles = image_tiles.shape[0]
         input_ids = [self.image_token_id] * num_tiles * self.image_tokens_per_tile
+        input_ids += self.register_token_ids[: self.num_register_tokens]
 
         # Handle the image being rotated in the imdataset
         if rotated:
             input_ids = [self.image_rotated_token] + input_ids
 
-        input_bboxes = [[self.blank_bbox_token_id] * 6] * len(input_ids)
-
         return ProcessorOutput(
             input_ids=input_ids,
-            input_boxes=input_bboxes,
             image_tiles=image_tiles,
         )
 
     def _process_text_input(self, text_input: TextInput, task: str) -> ProcessorOutput:
         input_text = text_input.get("text", None)
+        math_mode = text_input.get("math", False)
+
         input_ids = self.ocr_tokenizer(input_text, tasks=task)["input_ids"][0]
         input_ids = [self.offsets["ocr"] + id for id in input_ids]
 
-        input_bboxes = [[self.blank_bbox_token_id] * 6] * len(input_ids)
+        if not math_mode:
+            input_ids.insert(0, self.nomath_token)
 
         return ProcessorOutput(
             input_ids=input_ids,
-            input_boxes=input_bboxes,
-            image_tiles=None,
-        )
-
-    def _process_ocr_input(self, ocr_input: OCRInput) -> ProcessorOutput:
-        input_ids = ocr_input["tokens"]
-        input_bboxes = ocr_input["bboxes"]
-
-        input_ids = [self.offsets["ocr"] + id for id in input_ids]
-
-        if input_bboxes:
-            # Replace empty boxes with the corresponding blank token
-            input_bboxes = [
-                [self.blank_bbox_token_id] * 6 if not b else b for b in input_bboxes
-            ]
-        else:
-            input_bboxes = [[self.blank_bbox_token_id] * 6] * len(input_ids)
-
-        if len(input_bboxes) != len(input_ids):
-            print(
-                f"Length mismatch - input ids: {len(input_ids)} Input bboxes: {len(input_bboxes)} "
-            )
-            min_length = min(len(input_ids), len(input_bboxes))
-            input_ids = input_ids[:min_length]
-            input_bboxes = input_bboxes[:min_length]
-
-        # Return `None` for the image tiles
-        return ProcessorOutput(
-            input_ids=input_ids,
-            input_boxes=input_bboxes,
             image_tiles=None,
         )
 
@@ -209,8 +195,6 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         input_type = input_dict["type"]
         if input_type == "image":
             return self._process_image_input(input_dict)
-        elif input_type == "ocr":
-            return self._process_ocr_input(input_dict)
         elif input_type == "text":
             return self._process_text_input(input_dict, task)
 
@@ -223,17 +207,15 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         self,
         mixed_input: List[dict],
         bos_token_id: int,
-        task: str = "ocr_with_boxes"
+        task: str = TaskNames.ocr_with_boxes,
     ):
         processed_input_ids = []
-        processed_input_boxes = []
         all_image_tiles = []
 
         # 1. Process the image input
         for i, input_dict in enumerate(mixed_input):
             processor_output = self._process_input(input_dict, task)
             input_ids = processor_output["input_ids"]
-            input_boxes = processor_output["input_boxes"]
             image_tiles = processor_output["image_tiles"]
 
             # Special handling of some delimiter tokens
@@ -244,45 +226,54 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
                 # Case for input - Add task specific bos token + end_of_input token
                 # We do not want the model to learn how to predict inputs. Hence IGNORE_INDEX for these
                 input_ids = [bos_token_id] + input_ids + [self.eoi_token_id]
-                input_boxes = (
-                    [[self.blank_bbox_token_id] * 6]
-                    + input_boxes
-                    + [[self.blank_bbox_token_id] * 6]
+            elif i > 1:
+                raise ValueError(
+                    f"Unexpected input type encountered in mixed input processing. We only accept input image and text. {mixed_input}"
                 )
-            elif i == 2:
-                # Case for output - No specific bos token, but need to add EOS token
-                assert input_dict["type"] == "ocr", (
-                    "Expected OCR inputfor model output."
-                )
-
-                input_ids = input_ids + [self.eos_token_id]
-                input_boxes = input_boxes + [[self.blank_bbox_token_id] * 6]
 
             # Some input types don't return any image tiles, accounting for that
             if image_tiles is not None:
                 all_image_tiles.append(image_tiles)
 
             processed_input_ids.extend(input_ids)
-            processed_input_boxes.append(torch.tensor(input_boxes, dtype=torch.int64))
 
         return (
             torch.tensor(processed_input_ids, dtype=torch.int64),
-            torch.cat(processed_input_boxes, dim=0),
             all_image_tiles,
         )
 
-    def _process_ocr_without_boxes(self, mixed_input: List[dict], bos_token_id: int, task: str = "ocr_without_boxes"):
+    def _process_ocr_without_boxes(
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = "ocr_without_boxes",
+    ):
         # Boxes are set to None, so this will work
         # TODO: improve this behavior
-        return self._process_ocr_with_boxes(mixed_input, bos_token_id=bos_token_id, task=task)
+        return self._process_ocr_with_boxes(
+            mixed_input, bos_token_id=bos_token_id, task=task
+        )
 
-    def _process_block_without_boxes(self, mixed_input: List[dict], bos_token_id: int, task: str = "block_without_boxes"):
-        return self._process_ocr_with_boxes(mixed_input, bos_token_id=bos_token_id, task=task)
+    def _process_block_without_boxes(
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = "block_without_boxes",
+    ):
+        return self._process_ocr_with_boxes(
+            mixed_input, bos_token_id=bos_token_id, task=task
+        )
+
+    def align_long_axis(self, image: Image.Image) -> Tuple[Image.Image, bool]:
+        width, height = image.size
+        if height > width:  # Rotate vertical lines
+            return image.rotate(90, expand=True), True
+
+        return image, False
 
     def __call__(self, mixed_batch: List[dict], padding_side: Optional[str] = "left"):
         all_image_tiles = []
         all_input_ids = []
-        all_input_boxes = []
 
         for b in mixed_batch:
             mixed_input = b["inputs"]
@@ -290,12 +281,11 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             assert task in self.bos_token_id, f"Task {task} has no bos token defined."
 
             # Select the correct processing function based on the task type
-            input_ids, input_boxes, image_tiles = getattr(
-                self, f"_process_{task}"
-            )(mixed_input, self.bos_token_id[task])
+            input_ids, image_tiles = getattr(self, f"_process_{task}")(
+                mixed_input, self.bos_token_id[task]
+            )
 
             all_input_ids.append(input_ids)
-            all_input_boxes.append(input_boxes)
             all_image_tiles.extend(image_tiles)
 
         # If max sequence length is None, this slicing does nothing
@@ -304,13 +294,6 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             batch_first=True,
             padding_side=padding_side,
             padding_value=self.pad_token_id,
-        )
-
-        batched_input_boxes = pad_sequence(
-            all_input_boxes,
-            batch_first=True,
-            padding_side=padding_side,
-            padding_value=self.bbox_pad_token_id,
         )
 
         attention_mask = batched_input_ids.ne(self.pad_token_id)
@@ -331,7 +314,6 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         return BatchFeature(
             {
                 "input_ids": batched_input_ids,
-                "input_boxes": batched_input_boxes,
                 "image_tiles": batched_image_tiles,
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
@@ -346,4 +328,3 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             if t not in self.special_token_mapping.values() and t != -100
         ]  # Skip special tokens and loss ignore index
         return self.ocr_tokenizer.decode(filtered_tokens, task=task)
-
