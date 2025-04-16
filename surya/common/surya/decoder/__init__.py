@@ -24,7 +24,7 @@ from transformers.utils import (
 from surya.common.surya.decoder.config import SuryaDecoderConfig
 
 from transformers.utils import is_flash_attn_2_available
-if is_flash_attn_2_available:
+if is_flash_attn_2_available():
     from surya.common.surya.flash_attn_utils import flash_attn_decode, flash_attn_prefill
 
 logger = logging.get_logger(__name__)
