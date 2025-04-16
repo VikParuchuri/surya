@@ -125,18 +125,14 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             )
 
             special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
-            special_image_mask = special_image_mask.expand_as(inputs_embeds).to(
-                inputs_embeds.device
-            )
+            special_image_mask = special_image_mask.expand_as(inputs_embeds)
             if inputs_embeds[special_image_mask].numel() != image_features.numel():
                 n_image_tokens = torch.sum((input_ids == self.config.image_token_id))
                 n_image_features = image_features.shape[0] * image_features.shape[1]
                 warnings.warn(
                     f"Image features and image tokens do not match: tokens {n_image_tokens}, features {n_image_features}. This may lead to unexpected results"
                 )
-            image_features = image_features.to(
-                inputs_embeds.device, inputs_embeds.dtype
-            )
+            image_features = image_features.to(inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(
                 special_image_mask, image_features
             )
