@@ -14,7 +14,10 @@ from surya.common.surya.config import SuryaModelConfig
 from surya.common.surya.decoder.__init__ import SuryaDecoderModel
 from surya.common.surya.embedder.__init__ import SimpleTokenEmbedder
 from surya.common.surya.encoder.__init__ import SuryaEncoderModel
-from surya.common.surya.flash_attn_utils import _get_unpad_data
+
+from transformers.utils import is_flash_attn_2_available
+if is_flash_attn_2_available():
+    from surya.common.surya.flash_attn_utils import _get_unpad_data
 
 @dataclass
 class SuryaModelOutput(CausalLMOutputWithPast):
