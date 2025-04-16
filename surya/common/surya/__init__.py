@@ -1,3 +1,4 @@
+from typing import Optional, TypedDict
 import warnings
 from dataclasses import dataclass
 
@@ -14,6 +15,9 @@ from surya.common.surya.decoder.__init__ import SuryaDecoderModel
 from surya.common.surya.embedder.__init__ import SimpleTokenEmbedder
 from surya.common.surya.encoder.__init__ import SuryaEncoderModel
 
+from transformers.utils import is_flash_attn_2_available
+if is_flash_attn_2_available():
+    from surya.common.surya.flash_attn_utils import _get_unpad_data
 
 @dataclass
 class SuryaModelOutput(CausalLMOutputWithPast):
@@ -21,8 +25,26 @@ class SuryaModelOutput(CausalLMOutputWithPast):
     lm_logits: torch.FloatTensor = None
 
 
-class KwargsForCausalLM(FlashAttentionKwargs): ...
+class FlashAttentionKwargs(TypedDict, total=False):
+    """
+    Keyword arguments for Flash Attention with Compile.
 
+    Attributes:
+        cu_seq_lens_q (`torch.LongTensor`, *optional*)
+            Gets cumlative sequence length for query state.
+        cu_seq_lens_k (`torch.LongTensor`, *optional*)
+            Gets cumlative sequence length for key state.
+        max_length_q (`int`, *optional*):
+            Maximum sequence length for query state.
+        max_length_k (`int`, *optional*):
+            Maximum sequence length for key state.
+    """
+
+    cu_seq_lens_q: Optional[torch.LongTensor]
+    cu_seq_lens_k: Optional[torch.LongTensor]
+    max_length_q: Optional[int]
+    max_length_k: Optional[int]
+class KwargsForCausalLM(FlashAttentionKwargs): ...
 
 class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     config_class = SuryaModelConfig
@@ -208,6 +230,17 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 )
 
             attention_mask = causal_mask
+
+        # Handling flash attention kwargs outside the decoder to speed up + avoid graph breaks inside the decoder
+        # Skipped during decoding since not required
+        if self.decoder.config._attn_implementation == 'flash_attention_2' and inputs_embeds.shape[1] != 1:
+            batch_size, query_length, _ = inputs_embeds.shape
+            indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
+            kwargs['batch_size'] = batch_size
+            kwargs['query_length'] = query_length
+            kwargs['indices_k'] = indices_k
+            kwargs['cu_seqlens_k'] = cu_seqlens_k
+            kwargs['max_seqlen_in_batch_k'] = max_seqlen_in_batch_k
 
         outputs = self.decoder(
             input_ids=None,

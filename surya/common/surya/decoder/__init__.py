@@ -23,6 +23,10 @@ from transformers.utils import (
 )
 from surya.common.surya.decoder.config import SuryaDecoderConfig
 
+from transformers.utils import is_flash_attn_2_available
+if is_flash_attn_2_available():
+    from surya.common.surya.flash_attn_utils import flash_attn_decode, flash_attn_prefill
+
 logger = logging.get_logger(__name__)
 
 
@@ -173,18 +177,17 @@ class Qwen2Attention(nn.Module):
         # IMPORTANT: Do not use causal mask for prefill; Matches training
         # This is required for flash attn, which doesn't support a 4D mask as input
         # The `is_causal` argument is ignored by SDPA since we pass a 4D attention mask
-        if self.config._attn_implementation == "flash_attention_2":
-            is_prefill = all(
-                (
-                    input_shape[1] > 1,
-                    (past_key_value is None)
-                    or (past_key_value.get_seq_length(self.layer_idx) == 0),
-                )
+        is_prefill = all(
+            (
+                input_shape[1] > 1,
+                (past_key_value is None)
+                or (past_key_value.get_seq_length(self.layer_idx) == 0),
             )
-            if is_prefill:
-                self.is_causal = False
-            else:
-                self.is_causal = True
+        )
+        if is_prefill:
+            self.is_causal = False
+        else:
+            self.is_causal = True
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
@@ -210,6 +213,11 @@ class Qwen2Attention(nn.Module):
                     "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
                     'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
+            elif self.config._attn_implementation == 'flash_attention_2':
+                if is_prefill:
+                    attention_interface = flash_attn_prefill
+                else:
+                    attention_interface = flash_attn_decode
             else:
                 attention_interface = ALL_ATTENTION_FUNCTIONS[
                     self.config._attn_implementation
@@ -517,19 +525,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
         output_attentions: bool,
     ):
         if self.config._attn_implementation == "flash_attention_2":
-            if attention_mask is not None and past_key_values is not None:
-                is_padding_right = (
-                    attention_mask[:, -1].sum().item() != input_tensor.size()[0]
-                )
-                if is_padding_right:
-                    raise ValueError(
-                        "You are attempting to perform batched generation with padding_side='right'"
-                        " this may lead to unexpected behaviour for Flash Attention version of Qwen2. Make sure to "
-                        " call `tokenizer.padding_side  = 'left'` before tokenizing the input. "
-                    )
-            if attention_mask is not None and 0.0 in attention_mask:
-                return attention_mask
-            return None
+            return attention_mask
 
         # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
         # order to dispatch on Flash Attention 2. This feature is not compatible with static cache, as SDPA will fail
