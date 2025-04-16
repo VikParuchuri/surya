@@ -28,21 +28,20 @@ def get_page_images(doc, indices: List, dpi=settings.IMAGE_DPI):
     return images
 
 
-def slice_bboxes_from_image(image: Image.Image, bboxes):
+def slice_bboxes_from_image(image: np.ndarray, bboxes):
     lines = []
     for bbox in bboxes:
-        line = image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
-        if line.size[0] == 0:
+        line = image[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+        if line.size == 0:
             print(f"Warning: found an empty line with bbox {bbox}")
         lines.append(line)
     return lines
 
 
-def slice_polys_from_image(image: Image.Image, polys):
-    image_array = np.array(image, dtype=np.uint8)
+def slice_polys_from_image(image: np.ndarray, polys):
     lines = []
     for idx, poly in enumerate(polys):
-        lines.append(slice_and_pad_poly(image_array, poly))
+        lines.append(slice_and_pad_poly(image, poly))
     return lines
 
 
@@ -70,6 +69,4 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
     except cv2.error as e:
         print(f"Warning: error while processing polygon: {e}")
 
-    rectangle_image = Image.fromarray(cropped_polygon)
-
-    return rectangle_image
+    return cropped_polygon

@@ -61,7 +61,7 @@ class ContinuousBatchOutput:
 class RecognitionPrompt:
     id: int
     task_name: TaskNames
-    image: Image
+    image: np.ndarray
     text: str
     math_mode: bool
 
@@ -161,9 +161,11 @@ class RecognitionPredictor(BasePredictor):
                     ]
                     for polygon in polygons
                 ]
+                highres_image = self.processor.image_processor(highres_image)
                 slices = slice_polys_from_image(highres_image, scaled_polygons)
                 res_scales = [(width_scaler, height_scaler) for _ in range(len(slices))]
             else:
+                image = self.processor.image_processor(image)
                 slices = slice_polys_from_image(image, polygons)
                 res_scales = [(1, 1) for _ in range(len(slices))]
 
@@ -206,6 +208,7 @@ class RecognitionPredictor(BasePredictor):
         all_task_names = []
 
         for idx, image in enumerate(images):
+            image = self.processor.image_processor(image)
             if polygons is not None:
                 polys = polygons[idx]
                 slices = slice_polys_from_image(image, polys)
@@ -260,7 +263,6 @@ class RecognitionPredictor(BasePredictor):
         ):
             image_size = self.tasks[task_name]["img_size"]
             image, rotated = self.processor.align_long_axis(image)
-            image = np.array(image, dtype=np.float32)
             image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
 
             # Task input is the same for all tasks for now
@@ -596,7 +598,7 @@ class RecognitionPredictor(BasePredictor):
             return []
 
         # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
-        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].width)
+        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].shape[1])
         indices, sorted_slices = zip(*sorted_pairs)
 
         # Reorder input_text and task_names based on the new order
@@ -717,7 +719,7 @@ class RecognitionPredictor(BasePredictor):
                 continue
 
             image_polygons = prediction_to_polygon_batch(
-                image_boxes, slice_image.size, bbox_size, bbox_size // 2
+                image_boxes, slice_image.shape, bbox_size, bbox_size // 2
             )
 
             detokenize_sequences = []

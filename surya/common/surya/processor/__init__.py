@@ -128,13 +128,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def vocab_size(self):
         return self.tokenizer_vocab_size
 
-    def image_processor(self, image: np.ndarray):
+    def image_processor(self, image: Image.Image):
         # Rescale
-        tensor = torch.from_numpy(
-            (
-                (image * self.rescale_factor - self.image_mean) / self.image_std
-            ).transpose((2, 0, 1))
-        )
+        image = np.asarray(image, dtype=np.float32)
+        tensor = (image * self.rescale_factor - self.image_mean) / self.image_std
         return tensor
 
     def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
@@ -161,7 +158,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             )
 
         # Do not perform resizing from the image processor, since resizing is already handled
-        img_tensor = self.image_processor(resized_image)
+        img_tensor = torch.from_numpy(resized_image.transpose((2, 0, 1)))
 
         tiles = einops.rearrange(
             img_tensor,
@@ -282,10 +279,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             mixed_input, bos_token_id=bos_token_id, task=task
         )
 
-    def align_long_axis(self, image: Image.Image) -> Tuple[Image.Image, bool]:
-        width, height = image.size
+    def align_long_axis(self, image: np.ndarray) -> Tuple[np.ndarray, bool]:
+        height, width, _ = image.shape
         if height > width:  # Rotate vertical lines
-            return image.rotate(90, expand=True), True
+            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE), True
 
         return image, False
 

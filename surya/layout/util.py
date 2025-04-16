@@ -7,8 +7,8 @@ def prediction_to_polygon_batch(
     pred: List[torch.tensor], img_size, bbox_scaler, skew_scaler, skew_min=0.001
 ):
     pred = torch.stack(pred, dim=0)
-    w_scale = img_size[0] / bbox_scaler
-    h_scale = img_size[1] / bbox_scaler
+    w_scale = img_size[1] / bbox_scaler
+    h_scale = img_size[0] / bbox_scaler
 
     cx = pred[:, 0]
     cy = pred[:, 1]
