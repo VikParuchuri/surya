@@ -619,6 +619,7 @@ class RecognitionPredictor(BasePredictor):
         )
         total_decode = 0
         prefill_time = 0
+        prefill_count = 0
         decode_time = 0
         import time
 
@@ -630,6 +631,7 @@ class RecognitionPredictor(BasePredictor):
                 start = time.time()
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
                 prefill_time += time.time() - start
+                prefill_count += 1
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
@@ -685,7 +687,7 @@ class RecognitionPredictor(BasePredictor):
 
         token_lens = Counter([len(p) for p in predicted_tokens])
         print(f"Token lengths in the batch: {sorted(token_lens.items())}")
-        print(f"Total decode steps: {total_decode}")
+        print(f"Total decode steps: {total_decode} total prefills: {prefill_count}")
         print(
             f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
         )
