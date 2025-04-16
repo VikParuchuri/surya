@@ -22,6 +22,7 @@ from transformers.utils import (
     logging,
 )
 from surya.common.surya.decoder.config import SuryaDecoderConfig
+from surya.common.surya.flash_attn_utils import flash_attn_decode, flash_attn_prefill
 
 logger = logging.get_logger(__name__)
 
@@ -173,18 +174,17 @@ class Qwen2Attention(nn.Module):
         # IMPORTANT: Do not use causal mask for prefill; Matches training
         # This is required for flash attn, which doesn't support a 4D mask as input
         # The `is_causal` argument is ignored by SDPA since we pass a 4D attention mask
-        if self.config._attn_implementation == "flash_attention_2":
-            is_prefill = all(
-                (
-                    input_shape[1] > 1,
-                    (past_key_value is None)
-                    or (past_key_value.get_seq_length(self.layer_idx) == 0),
-                )
+        is_prefill = all(
+            (
+                input_shape[1] > 1,
+                (past_key_value is None)
+                or (past_key_value.get_seq_length(self.layer_idx) == 0),
             )
-            if is_prefill:
-                self.is_causal = False
-            else:
-                self.is_causal = True
+        )
+        if is_prefill:
+            self.is_causal = False
+        else:
+            self.is_causal = True
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
@@ -210,6 +210,11 @@ class Qwen2Attention(nn.Module):
                     "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
                     'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
+            elif self.config._attn_implementation == 'flash_attention_2':
+                if is_prefill:
+                    attention_interface = flash_attn_prefill
+                else:
+                    attention_interface = flash_attn_decode
             else:
                 attention_interface = ALL_ATTENTION_FUNCTIONS[
                     self.config._attn_implementation
