@@ -283,10 +283,6 @@ class RecognitionPredictor(BasePredictor):
         next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
         preds = torch.argmax(next_token_logits, dim=-1)
 
-        is_special_token = (preds < self.processor.ocr_tokenizer.qwen_offset) | (
-            torch.isin(preds, self.device_bbox_ignore)
-        )
-
         # Handle inference completion
         done = (preds == self.processor.eos_token_id) | (
             preds == self.processor.pad_token_id
@@ -303,20 +299,7 @@ class RecognitionPredictor(BasePredictor):
 
         # Update input boxes
         box_preds = next_bbox_logits * self.model.config.bbox_size
-        expanded_blank_bbox = self.device_blank_bbox.expand(box_preds.shape)
-        box_preds = torch.where(
-            torch.isin(preds, self.device_bbox_ignore).unsqueeze(-1),
-            expanded_blank_bbox,
-            box_preds,
-        )
-        # Set bbox to blank if we're in a math section
-        box_preds = torch.where(
-            is_special_token.unsqueeze(-1), expanded_blank_bbox, box_preds
-        )
         input_boxes = box_preds.to(torch.long)
-
-        # Set blank for tasks that don't need boxes
-        input_boxes[skip_box_idxs, -1] = self.device_blank_bbox
 
         return ContinuousBatchOutput(
             input_ids=input_ids,

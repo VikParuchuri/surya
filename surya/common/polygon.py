@@ -182,16 +182,5 @@ class PolygonBox(BaseModel):
             (center[0] - other_center[0]) ** 2 + (center[1] - other_center[1]) ** 2
         ) ** 0.5
 
-    def all_close(self, other, thresh: float = 0.1):
-        close = True
-        for i in range(4):
-            if (
-                abs(self.polygon[i][0] - other.polygon[i][0]) > thresh
-                or abs(self.polygon[i][1] - other.polygon[i][1]) > thresh
-            ):
-                close = False
-                break
-        return close
-
     def __hash__(self):
         return hash(tuple(self.bbox))

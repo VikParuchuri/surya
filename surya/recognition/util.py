@@ -1,6 +1,5 @@
 from typing import List
 
-from surya.common.polygon import PolygonBox
 from surya.recognition.schema import TextLine, TextWord, TextChar
 
 
@@ -32,15 +31,24 @@ def sort_text_lines(lines: List[TextLine] | List[dict], tolerance=1.25):
     return sorted_lines
 
 
-def clean_close_polygons(bboxes: List[List[List[int]]]):
+def clean_close_polygons(bboxes: List[List[List[int]]], thresh: float = 0.1):
     if len(bboxes) < 2:
         return bboxes
 
     new_bboxes = [bboxes[0]]
     for i in range(1, len(bboxes)):
-        polygon_prev = PolygonBox(polygon=bboxes[i - 1])
-        polygon_curr = PolygonBox(polygon=bboxes[i])
-        if not polygon_curr.all_close(polygon_prev):
+        close = True
+        prev_bbox = bboxes[i - 1]
+        bbox = bboxes[i]
+        for i in range(4):
+            if (
+                abs(bbox[i][0] - prev_bbox[i][0]) > thresh
+                or abs(bbox[i][1] - prev_bbox[i][1]) > thresh
+            ):
+                close = False
+                break
+
+        if not close:
             new_bboxes.append(bboxes[i])
 
     return new_bboxes
