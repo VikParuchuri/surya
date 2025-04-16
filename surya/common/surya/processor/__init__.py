@@ -128,11 +128,11 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def vocab_size(self):
         return self.tokenizer_vocab_size
 
-    def image_processor(self, image: Image.Image):
+    def image_processor(self, image: Image.Image) -> np.ndarray:
         # Rescale
         image = np.asarray(image, dtype=np.float32)
-        tensor = (image * self.rescale_factor - self.image_mean) / self.image_std
-        return tensor
+        image_arr = (image * self.rescale_factor - self.image_mean) / self.image_std
+        return image_arr
 
     def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
         """

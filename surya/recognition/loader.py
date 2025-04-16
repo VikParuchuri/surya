@@ -26,6 +26,7 @@ class RecognitionModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE_BFLOAT
 
+        torch.set_float32_matmul_precision("high")
         model = SuryaModel.from_pretrained(self.checkpoint, torch_dtype=dtype).to(
             device
         )
@@ -37,7 +38,6 @@ class RecognitionModelLoader(ModelLoader):
             model.config.decoder._attn_implementation = "sdpa"
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
-            torch.set_float32_matmul_precision("high")
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
 

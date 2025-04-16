@@ -30,6 +30,7 @@ from surya.recognition.util import (
     sort_text_lines,
     clean_close_polygons,
     words_from_chars,
+    detect_repeat_token,
 )
 from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.common.surya.schema import TaskNames
@@ -78,17 +79,17 @@ class RecognitionPredictor(BasePredictor):
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
             "img_size": (1024, 256),
-            "max_tokens": 400,
+            "max_tokens": 224,
         },
         TaskNames.ocr_without_boxes: {
             "needs_bboxes": False,
             "img_size": (1024, 256),
-            "max_tokens": 256,
+            "max_tokens": 224,
         },
         TaskNames.block_without_boxes: {
             "needs_bboxes": False,
             "img_size": (1024, 768),
-            "max_tokens": 1024,
+            "max_tokens": 768,
         },
     }
 
@@ -662,6 +663,7 @@ class RecognitionPredictor(BasePredictor):
                                 self.processor.pad_token_id,
                             ]
                             or len(predicted_tokens[p_idx]) >= batch_max_tokens[p_idx]
+                            or detect_repeat_token(predicted_tokens[p_idx])
                         ):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
@@ -845,7 +847,6 @@ class RecognitionPredictor(BasePredictor):
                         )
                     )
                 else:
-                    text = "".join([char.text for char in text_line])
                     confidence = float(np.mean([char.confidence for char in text_line]))
                     poly_box = PolygonBox(polygon=polygon)
                     for char in text_line:
@@ -859,6 +860,7 @@ class RecognitionPredictor(BasePredictor):
                     text_line = fix_unbalanced_tags(
                         text_line, self.processor.ocr_tokenizer.special_tokens
                     )
+                    text = "".join([char.text for char in text_line])
                     lines.append(
                         TextLine(
                             text=text,

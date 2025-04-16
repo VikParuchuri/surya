@@ -11,6 +11,4 @@ class SimpleTokenEmbedder(nn.Module):
         self,
         input_tokens: torch.Tensor,
     ) -> torch.Tensor:
-        token_embeds = self.token_embed(input_tokens)
-        embeddings = token_embeds
-        return embeddings
+        return self.token_embed(input_tokens)
