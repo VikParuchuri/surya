@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from collections import deque
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
@@ -21,7 +22,8 @@ from surya.input.processing import (
     slice_polys_from_image,
     slice_bboxes_from_image,
 )
-from surya.layout import prediction_to_polygon
+
+from surya.layout.util import prediction_to_polygon_batch
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import (
@@ -59,7 +61,7 @@ class ContinuousBatchOutput:
 class RecognitionPrompt:
     id: int
     task_name: TaskNames
-    image: Image
+    image: np.ndarray
     text: str
     math_mode: bool
 
@@ -159,9 +161,11 @@ class RecognitionPredictor(BasePredictor):
                     ]
                     for polygon in polygons
                 ]
+                highres_image = self.processor.image_processor(highres_image)
                 slices = slice_polys_from_image(highres_image, scaled_polygons)
                 res_scales = [(width_scaler, height_scaler) for _ in range(len(slices))]
             else:
+                image = self.processor.image_processor(image)
                 slices = slice_polys_from_image(image, polygons)
                 res_scales = [(1, 1) for _ in range(len(slices))]
 
@@ -204,6 +208,7 @@ class RecognitionPredictor(BasePredictor):
         all_task_names = []
 
         for idx, image in enumerate(images):
+            image = self.processor.image_processor(image)
             if polygons is not None:
                 polys = polygons[idx]
                 slices = slice_polys_from_image(image, polys)
@@ -258,7 +263,7 @@ class RecognitionPredictor(BasePredictor):
         ):
             image_size = self.tasks[task_name]["img_size"]
             image, rotated = self.processor.align_long_axis(image)
-            image = image.resize(image_size)
+            image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
 
             # Task input is the same for all tasks for now
             text = text or ""
@@ -278,10 +283,6 @@ class RecognitionPredictor(BasePredictor):
         next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
         preds = torch.argmax(next_token_logits, dim=-1)
 
-        is_special_token = (preds < self.processor.ocr_tokenizer.qwen_offset) | (
-            torch.isin(preds, self.device_bbox_ignore)
-        )
-
         # Handle inference completion
         done = (preds == self.processor.eos_token_id) | (
             preds == self.processor.pad_token_id
@@ -298,20 +299,7 @@ class RecognitionPredictor(BasePredictor):
 
         # Update input boxes
         box_preds = next_bbox_logits * self.model.config.bbox_size
-        expanded_blank_bbox = self.device_blank_bbox.expand(box_preds.shape)
-        box_preds = torch.where(
-            torch.isin(preds, self.device_bbox_ignore).unsqueeze(-1),
-            expanded_blank_bbox,
-            box_preds,
-        )
-        # Set bbox to blank if we're in a math section
-        box_preds = torch.where(
-            is_special_token.unsqueeze(-1), expanded_blank_bbox, box_preds
-        )
         input_boxes = box_preds.to(torch.long)
-
-        # Set blank for tasks that don't need boxes
-        input_boxes[skip_box_idxs, -1] = self.device_blank_bbox
 
         return ContinuousBatchOutput(
             input_ids=input_ids,
@@ -532,6 +520,7 @@ class RecognitionPredictor(BasePredictor):
         input_text: List[str | None] | None = None,
         sort_lines: bool = True,
         math_mode: bool = True,
+        return_words: bool = False,
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
@@ -592,7 +581,7 @@ class RecognitionPredictor(BasePredictor):
             return []
 
         # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
-        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].width)
+        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].shape[1])
         indices, sorted_slices = zip(*sorted_pairs)
 
         # Reorder input_text and task_names based on the new order
@@ -627,22 +616,26 @@ class RecognitionPredictor(BasePredictor):
             desc="Recognizing Text",
             disable=self.disable_tqdm,
         )
+        total_decode = 0
+        prefill_time = 0
+        decode_time = 0
+        import time
+
+        total_time = time.time()
         while self.prompt_queue or self.num_active_slots > 0:
             if (
                 self.num_empty_slots / recognition_batch_size
             ) > self.min_prefill_ratio and self.prompt_queue:
+                start = time.time()
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
+                prefill_time += time.time() - start
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
                         p_idx = self.batch_prompt_mapping[b_idx]
-                        predicted_tokens[p_idx].append(
-                            outputs.preds[temp_idx].cpu().item()
-                        )
-                        predicted_boxes[p_idx].append(
-                            outputs.bbox_preds[temp_idx].cpu()[0]
-                        )
-                        scores[p_idx].append(outputs.scores[temp_idx].cpu().item())
+                        predicted_tokens[p_idx].append(outputs.preds[temp_idx].item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx][0])
+                        scores[p_idx].append(outputs.scores[temp_idx].item())
 
                         if predicted_tokens[p_idx][-1] in [
                             self.processor.eos_token_id,
@@ -651,18 +644,16 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
+                start = time.time()
                 updated_inputs, outputs = self.decode(current_inputs)
-
+                decode_time += time.time() - start
+                total_decode += 1
                 # TODO Find a cleaner way of popping from the dict
                 for b_idx, p_idx in self.batch_prompt_mapping.items():
                     if p_idx is not None:
-                        predicted_tokens[p_idx].append(
-                            outputs.preds[b_idx].cpu().item()
-                        )
-                        predicted_boxes[p_idx].append(
-                            outputs.bbox_preds[b_idx].cpu()[0]
-                        )
-                        scores[p_idx].append(outputs.scores[b_idx].cpu().item())
+                        predicted_tokens[p_idx].append(outputs.preds[b_idx].item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[b_idx][0])
+                        scores[p_idx].append(outputs.scores[b_idx].item())
 
                         if (
                             predicted_tokens[p_idx][-1]
@@ -680,12 +671,22 @@ class RecognitionPredictor(BasePredictor):
             current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
+        total_time = time.time() - total_time
 
         char_predictions = []
         needs_boxes = [
             self.tasks[task_name]["needs_bboxes"] for task_name in flat["task_names"]
         ]
         bbox_size = self.model.config.bbox_size
+
+        from collections import Counter
+
+        token_lens = Counter([len(p) for p in predicted_tokens])
+        print(f"Token lengths in the batch: {sorted(token_lens.items())}")
+        print(f"Total decode steps: {total_decode}")
+        print(
+            f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
+        )
 
         for slice_idx, (
             slice_image,
@@ -696,14 +697,13 @@ class RecognitionPredictor(BasePredictor):
         ) in enumerate(
             zip(flat["slices"], predicted_tokens, predicted_boxes, scores, needs_boxes)
         ):
-            image_polygons = [
-                prediction_to_polygon(bbox, slice_image.size, bbox_size, bbox_size // 2)
-                for bbox in image_boxes
-            ]
-
             if self.processor.no_output_token in image_tokens:
                 char_predictions.append(None)
                 continue
+
+            image_polygons = prediction_to_polygon_batch(
+                image_boxes, slice_image.shape, bbox_size, bbox_size // 2
+            )
 
             detokenize_sequences = []
             detokenize_sequence = []
@@ -786,6 +786,7 @@ class RecognitionPredictor(BasePredictor):
                         )
 
                         # Ensure we don't exceed the bbox count
+                        # Use the last bbox for the rest of the text
                         if bbox_idx < len(bboxes) - 1:
                             bbox_idx += 1
                 elif token_type == "special":
@@ -864,7 +865,7 @@ class RecognitionPredictor(BasePredictor):
                             polygon=polygon,
                             chars=text_line,
                             confidence=confidence,
-                            words=words_from_chars(text_line),
+                            words=words_from_chars(text_line) if return_words else [],
                         )
                     )
 
