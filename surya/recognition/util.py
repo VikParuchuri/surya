@@ -32,7 +32,7 @@ def sort_text_lines(lines: List[TextLine] | List[dict], tolerance=1.25):
     return sorted_lines
 
 
-def clean_close_polygons(bboxes: List[List[List[int]]], dist_thresh: int = 1):
+def clean_close_polygons(bboxes: List[List[List[int]]]):
     if len(bboxes) < 2:
         return bboxes
 
@@ -40,8 +40,7 @@ def clean_close_polygons(bboxes: List[List[List[int]]], dist_thresh: int = 1):
     for i in range(1, len(bboxes)):
         polygon_prev = PolygonBox(polygon=bboxes[i - 1])
         polygon_curr = PolygonBox(polygon=bboxes[i])
-        dist = polygon_prev.distance(polygon_curr)
-        if dist > dist_thresh:
+        if not polygon_curr.all_close(polygon_prev):
             new_bboxes.append(bboxes[i])
 
     return new_bboxes

@@ -535,6 +535,7 @@ class RecognitionPredictor(BasePredictor):
         input_text: List[str | None] | None = None,
         sort_lines: bool = True,
         math_mode: bool = True,
+        return_words: bool = False,
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
@@ -800,6 +801,7 @@ class RecognitionPredictor(BasePredictor):
                         )
 
                         # Ensure we don't exceed the bbox count
+                        # Use the last bbox for the rest of the text
                         if bbox_idx < len(bboxes) - 1:
                             bbox_idx += 1
                 elif token_type == "special":
@@ -878,7 +880,7 @@ class RecognitionPredictor(BasePredictor):
                             polygon=polygon,
                             chars=text_line,
                             confidence=confidence,
-                            words=words_from_chars(text_line),
+                            words=words_from_chars(text_line) if return_words else [],
                         )
                     )
 
