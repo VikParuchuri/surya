@@ -3,6 +3,19 @@ from typing import List
 from surya.recognition.schema import TextLine, TextWord, TextChar
 
 
+def detect_repeat_token(predicted_tokens: List[int], max_repeats: int = 40):
+    if len(predicted_tokens) < max_repeats:
+        return False
+
+    # Detect repeats containing 1 or 2 tokens
+    last_n = predicted_tokens[-max_repeats:]
+    unique_tokens = len(set(last_n))
+    if unique_tokens > 4:
+        return False
+
+    return last_n[-unique_tokens:] == last_n[-unique_tokens * 2 : -unique_tokens]
+
+
 def sort_text_lines(lines: List[TextLine] | List[dict], tolerance=1.25):
     # Sorts in reading order.  Not 100% accurate, this should only
     # be used as a starting point for more advanced sorting.
@@ -40,10 +53,10 @@ def clean_close_polygons(bboxes: List[List[List[int]]], thresh: float = 0.1):
         close = True
         prev_bbox = bboxes[i - 1]
         bbox = bboxes[i]
-        for i in range(4):
+        for j in range(4):
             if (
-                abs(bbox[i][0] - prev_bbox[i][0]) > thresh
-                or abs(bbox[i][1] - prev_bbox[i][1]) > thresh
+                abs(bbox[j][0] - prev_bbox[j][0]) > thresh
+                or abs(bbox[j][1] - prev_bbox[j][1]) > thresh
             ):
                 close = False
                 break

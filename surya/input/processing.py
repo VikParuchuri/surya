@@ -31,6 +31,18 @@ def get_page_images(doc, indices: List, dpi=settings.IMAGE_DPI):
 def slice_bboxes_from_image(image: np.ndarray, bboxes):
     lines = []
     for bbox in bboxes:
+        bbox = np.array(bbox, dtype=np.int32)
+        bbox = np.clip(bbox, 0, None)  # Ensure no negative indices
+        # Ensure bbox is within the image bounds
+        if bbox[3] <= bbox[1]:
+            bbox[3] = bbox[1] + 1
+
+        if bbox[2] <= bbox[0]:
+            bbox[2] = bbox[0] + 1
+
+        bbox[2] = min(bbox[2], image.shape[1])
+        bbox[3] = min(bbox[3], image.shape[0])
+
         line = image[bbox[1] : bbox[3], bbox[0] : bbox[2]]
         if line.size == 0:
             print(f"Warning: found an empty line with bbox {bbox}")
