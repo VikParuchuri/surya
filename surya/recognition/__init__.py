@@ -388,7 +388,6 @@ class RecognitionPredictor(BasePredictor):
         self,
         current_inputs: Optional[ContinuousBatchInput] = None
     ):
-        print('DECODE')
         # TODO Setup cache position here and in the ContinuousBatchInput
         input_ids = current_inputs.input_ids
         attention_mask = current_inputs.attention_mask
@@ -429,7 +428,6 @@ class RecognitionPredictor(BasePredictor):
         return new_input, processed_output
 
     def prefill(self, current_inputs: Optional[ContinuousBatchInput] = None):
-        print('PREFILL')
         prompts: List[RecognitionPrompt] = [
             self.prompt_queue.popleft()
             for _ in range(min(self.num_empty_slots, len(self.prompt_queue)))
