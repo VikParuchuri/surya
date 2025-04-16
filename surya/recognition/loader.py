@@ -53,7 +53,9 @@ class RecognitionModelLoader(ModelLoader):
         )
         return model
 
-    def processor(self) -> SuryaOCRProcessor:
+    def processor(
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE_BFLOAT
+    ) -> SuryaOCRProcessor:
         config: SuryaModelConfig = SuryaModelConfig.from_pretrained(self.checkpoint)
 
         ocr_tokenizer = SuryaOCRTokenizer(
@@ -67,6 +69,7 @@ class RecognitionModelLoader(ModelLoader):
             blank_bbox_token_id=config.blank_bbox_token_id,
             num_register_tokens=config.num_register_tokens,
             sequence_length=None,
+            model_device=device,
         )
         config.eos_token_id = processor.eos_token_id
         config.pad_token_id = processor.pad_token_id

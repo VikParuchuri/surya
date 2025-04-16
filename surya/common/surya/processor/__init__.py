@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import torch
 import einops
@@ -49,6 +50,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         image_tokens_per_tile: int,
         blank_bbox_token_id: int,
         num_register_tokens: int,
+        model_device: str,
         **kwargs,
     ):
         self.ocr_tokenizer = ocr_tokenizer
@@ -120,26 +122,22 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         self.image_mean = np.array(self.image_mean, dtype=np.float32)
         self.image_std = np.array(self.image_std, dtype=np.float32)
+        self.model_device = model_device
 
     @property
     def vocab_size(self):
         return self.tokenizer_vocab_size
 
-    def image_processor(self, image):
-        image = np.array(image)
-
+    def image_processor(self, image: np.ndarray):
         # Rescale
-        image = image.astype(np.float64) * self.rescale_factor
-        image = image.astype(np.float32)
+        tensor = torch.from_numpy(
+            (
+                (image * self.rescale_factor - self.image_mean) / self.image_std
+            ).transpose((2, 0, 1))
+        )
+        return tensor
 
-        # Normalize
-        image = (image - self.image_mean) / self.image_std
-
-        # Channel dim format
-        image = image.transpose((2, 0, 1))
-        return torch.from_numpy(image)
-
-    def _process_and_tile(self, image: Image.Image) -> torch.Tensor:
+    def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
         """
         Resizes the input image to the closest multiple of tile_size while preserving the aspect ratio
         and returns a tensor of image tiles.
@@ -147,7 +145,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         #TODO Pin to closest aspect ratio  - Currently pins to the next biggest grid of tiles that can fit the full image
         """
         tile_width, tile_height = self.tile_size
-        orig_width, orig_height = image.size
+        orig_height, orig_width = image.shape[:2]
 
         # Compute the scaling factor to maintain aspect ratio
         scale_w = (orig_width + tile_width - 1) // tile_width
@@ -155,7 +153,12 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         new_width = scale_w * tile_width
         new_height = scale_h * tile_height
-        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        if new_width == orig_width and new_height == orig_height:
+            resized_image = image
+        else:
+            resized_image = cv2.resize(
+                image, (new_width, new_height), interpolation=cv2.INTER_LINEAR
+            )
 
         # Do not perform resizing from the image processor, since resizing is already handled
         img_tensor = self.image_processor(resized_image)

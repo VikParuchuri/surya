@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from collections import deque
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
@@ -21,7 +22,8 @@ from surya.input.processing import (
     slice_polys_from_image,
     slice_bboxes_from_image,
 )
-from surya.layout import prediction_to_polygon
+
+from surya.layout.util import prediction_to_polygon_batch
 from surya.recognition.loader import RecognitionModelLoader
 from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import (
@@ -258,7 +260,8 @@ class RecognitionPredictor(BasePredictor):
         ):
             image_size = self.tasks[task_name]["img_size"]
             image, rotated = self.processor.align_long_axis(image)
-            image = image.resize(image_size)
+            image = np.array(image, dtype=np.float32)
+            image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
 
             # Task input is the same for all tasks for now
             text = text or ""
@@ -644,13 +647,9 @@ class RecognitionPredictor(BasePredictor):
                 for temp_idx, b_idx in enumerate(merge_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
                         p_idx = self.batch_prompt_mapping[b_idx]
-                        predicted_tokens[p_idx].append(
-                            outputs.preds[temp_idx].cpu().item()
-                        )
-                        predicted_boxes[p_idx].append(
-                            outputs.bbox_preds[temp_idx].cpu()[0]
-                        )
-                        scores[p_idx].append(outputs.scores[temp_idx].cpu().item())
+                        predicted_tokens[p_idx].append(outputs.preds[temp_idx].item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[temp_idx][0])
+                        scores[p_idx].append(outputs.scores[temp_idx].item())
 
                         if predicted_tokens[p_idx][-1] in [
                             self.processor.eos_token_id,
@@ -666,13 +665,9 @@ class RecognitionPredictor(BasePredictor):
                 # TODO Find a cleaner way of popping from the dict
                 for b_idx, p_idx in self.batch_prompt_mapping.items():
                     if p_idx is not None:
-                        predicted_tokens[p_idx].append(
-                            outputs.preds[b_idx].cpu().item()
-                        )
-                        predicted_boxes[p_idx].append(
-                            outputs.bbox_preds[b_idx].cpu()[0]
-                        )
-                        scores[p_idx].append(outputs.scores[b_idx].cpu().item())
+                        predicted_tokens[p_idx].append(outputs.preds[b_idx].item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[b_idx][0])
+                        scores[p_idx].append(outputs.scores[b_idx].item())
 
                         if (
                             predicted_tokens[p_idx][-1]
@@ -716,14 +711,13 @@ class RecognitionPredictor(BasePredictor):
         ) in enumerate(
             zip(flat["slices"], predicted_tokens, predicted_boxes, scores, needs_boxes)
         ):
-            image_polygons = [
-                prediction_to_polygon(bbox, slice_image.size, bbox_size, bbox_size // 2)
-                for bbox in image_boxes
-            ]
-
             if self.processor.no_output_token in image_tokens:
                 char_predictions.append(None)
                 continue
+
+            image_polygons = prediction_to_polygon_batch(
+                image_boxes, slice_image.size, bbox_size, bbox_size // 2
+            )
 
             detokenize_sequences = []
             detokenize_sequence = []
