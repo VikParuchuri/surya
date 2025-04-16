@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import einops
 from PIL import Image
@@ -7,7 +8,6 @@ from typing import List, Optional, Tuple
 
 from transformers.feature_extraction_utils import BatchFeature
 from transformers.processing_utils import ProcessorMixin
-from transformers.image_processing_utils import BaseImageProcessor
 from transformers.tokenization_utils import PreTrainedTokenizer
 
 from surya.common.s3 import S3DownloaderMixin
@@ -38,10 +38,12 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor", "ocr_tokenizer"]
     image_processor_class = "BaseImageProcessor"
     ocr_tokenizer_class = "PreTrainedTokenizer"
+    rescale_factor = 1 / 255.0
+    image_mean = (0.485, 0.456, 0.406)
+    image_std = (0.229, 0.224, 0.225)
 
     def __init__(
         self,
-        image_processor: BaseImageProcessor,
         ocr_tokenizer: PreTrainedTokenizer,
         tile_size: Tuple[int, int],
         image_tokens_per_tile: int,
@@ -49,7 +51,6 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         num_register_tokens: int,
         **kwargs,
     ):
-        self.image_processor = image_processor
         self.ocr_tokenizer = ocr_tokenizer
         self.tile_size = tile_size
         self.image_tokens_per_tile = image_tokens_per_tile
@@ -112,16 +113,31 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             if k == math_end_token
         ]
 
-        super().__init__(image_processor, ocr_tokenizer)
-
         if self.num_register_tokens > len(self.register_token_ids):
             raise ValueError(
                 "The number of register tokens requested exceeds the number of register tokens defined in the special token mapping."
             )
 
+        self.image_mean = np.array(self.image_mean, dtype=np.float32)
+        self.image_std = np.array(self.image_std, dtype=np.float32)
+
     @property
     def vocab_size(self):
         return self.tokenizer_vocab_size
+
+    def image_processor(self, image):
+        image = np.array(image)
+
+        # Rescale
+        image = image.astype(np.float64) * self.rescale_factor
+        image = image.astype(np.float32)
+
+        # Normalize
+        image = (image - self.image_mean) / self.image_std
+
+        # Channel dim format
+        image = image.transpose((2, 0, 1))
+        return torch.from_numpy(image)
 
     def _process_and_tile(self, image: Image.Image) -> torch.Tensor:
         """
@@ -142,9 +158,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         # Do not perform resizing from the image processor, since resizing is already handled
-        img_tensor = self.image_processor(
-            resized_image, return_tensors="pt", do_resize=False
-        )["pixel_values"][0]
+        img_tensor = self.image_processor(resized_image)
+
         tiles = einops.rearrange(
             img_tensor,
             "c (ny th) (nx tw) -> (ny nx) c th tw",

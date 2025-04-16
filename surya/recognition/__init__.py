@@ -627,11 +627,19 @@ class RecognitionPredictor(BasePredictor):
             desc="Recognizing Text",
             disable=self.disable_tqdm,
         )
+        total_decode = 0
+        prefill_time = 0
+        decode_time = 0
+        import time
+
+        total_time = time.time()
         while self.prompt_queue or self.num_active_slots > 0:
             if (
                 self.num_empty_slots / recognition_batch_size
             ) > self.min_prefill_ratio and self.prompt_queue:
+                start = time.time()
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
+                prefill_time += time.time() - start
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
@@ -651,8 +659,10 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
+                start = time.time()
                 updated_inputs, outputs = self.decode(current_inputs)
-
+                decode_time += time.time() - start
+                total_decode += 1
                 # TODO Find a cleaner way of popping from the dict
                 for b_idx, p_idx in self.batch_prompt_mapping.items():
                     if p_idx is not None:
@@ -680,12 +690,22 @@ class RecognitionPredictor(BasePredictor):
             current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
+        total_time = time.time() - total_time
 
         char_predictions = []
         needs_boxes = [
             self.tasks[task_name]["needs_bboxes"] for task_name in flat["task_names"]
         ]
         bbox_size = self.model.config.bbox_size
+
+        from collections import Counter
+
+        token_lens = Counter([len(p) for p in predicted_tokens])
+        print(f"Token lengths in the batch: {sorted(token_lens.items())}")
+        print(f"Total decode steps: {total_decode}")
+        print(
+            f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
+        )
 
         for slice_idx, (
             slice_image,
