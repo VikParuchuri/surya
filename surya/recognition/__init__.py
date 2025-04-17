@@ -46,7 +46,6 @@ class ContinuousBatchInput:
     input_ids: torch.Tensor
     attention_mask: torch.Tensor
     position_ids: torch.Tensor
-    skip_box_idxs: torch.Tensor
 
 
 @dataclass
@@ -74,7 +73,7 @@ class RecognitionPredictor(BasePredictor):
     batch_size = settings.RECOGNITION_BATCH_SIZE
     torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
-    min_prefill_ratio: int = 0.3
+    min_prefill_ratio: int = 0.2
     tasks = {
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
@@ -102,7 +101,7 @@ class RecognitionPredictor(BasePredictor):
         config: SuryaModelConfig = self.model.config
         # Setup various tokens on-device
         self.device_bbox_ignore = torch.from_numpy(
-            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64)
+            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64),
         ).to(self.model.device)
         self.device_blank_bbox = (
             torch.from_numpy(np.asarray([config.blank_bbox_token_id] * 6))
@@ -270,15 +269,13 @@ class RecognitionPredictor(BasePredictor):
             text = text or ""
             inputs = [
                 {"type": "image", "image": image, "rotated": rotated},
-                {"type": "text", "text": text, "math": math_mode},
+                {"type": "text", "text": text.strip(), "math": math_mode},
             ]
             batch.append({"task": task_name, "inputs": inputs})
 
         return batch
 
-    def process_outputs(
-        self, outputs: SuryaModelOutput, skip_box_idxs: torch.Tensor
-    ) -> ContinuousBatchOutput:
+    def process_outputs(self, outputs: SuryaModelOutput) -> ContinuousBatchOutput:
         # Get logits and initial preds
         next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
         next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
@@ -314,7 +311,6 @@ class RecognitionPredictor(BasePredictor):
         input_ids = current_inputs.input_ids
         attention_mask = current_inputs.attention_mask
         position_ids = current_inputs.position_ids
-        skip_box_idxs = current_inputs.skip_box_idxs
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
@@ -326,9 +322,7 @@ class RecognitionPredictor(BasePredictor):
                 logits_to_keep=1,
             )
 
-        processed_output: ContinuousBatchOutput = self.process_outputs(
-            outputs, skip_box_idxs=skip_box_idxs
-        )
+        processed_output: ContinuousBatchOutput = self.process_outputs(outputs)
 
         attention_mask = torch.cat(
             [
@@ -347,7 +341,6 @@ class RecognitionPredictor(BasePredictor):
             input_ids=processed_output.input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
-            skip_box_idxs=skip_box_idxs,
         )
 
         return new_input, processed_output
@@ -373,8 +366,6 @@ class RecognitionPredictor(BasePredictor):
         image_tiles = processed_inputs["image_tiles"]
         attention_mask = processed_inputs["attention_mask"]
         position_ids = processed_inputs["position_ids"]
-        needs_boxes = [self.tasks[p.task_name]["needs_bboxes"] for p in prompts]
-        skip_box_idxs = ~torch.from_numpy(np.array(needs_boxes)).to(self.model.device)
 
         if settings.RECOGNITION_MODEL_QUANTIZE:
             try:
@@ -407,7 +398,7 @@ class RecognitionPredictor(BasePredictor):
             )
 
         # Process outputs
-        processed_outputs = self.process_outputs(outputs, skip_box_idxs=skip_box_idxs)
+        processed_outputs = self.process_outputs(outputs)
 
         # Merge new kv cache with existing, update batch mapping
         non_active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is None]
@@ -420,7 +411,9 @@ class RecognitionPredictor(BasePredictor):
             self.batch_prompt_mapping[i] = prompt.id
 
         if self.kv_cache:
-            offset = self.kv_cache.merge(prefill_cache, idxs_to_merge)
+            offset = self.kv_cache.merge(
+                prefill_cache, idxs_to_merge, self.model.device
+            )
         else:
             self.kv_cache = prefill_cache
             offset = 0
@@ -445,7 +438,6 @@ class RecognitionPredictor(BasePredictor):
                 input_ids=processed_outputs.input_ids,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
-                skip_box_idxs=skip_box_idxs,
             )
 
             return (
@@ -470,14 +462,10 @@ class RecognitionPredictor(BasePredictor):
         current_position_ids = current_inputs.position_ids
         current_position_ids[idxs_to_merge] = position_ids
 
-        current_skip_box_idxs = current_inputs.skip_box_idxs
-        current_skip_box_idxs[idxs_to_merge] = skip_box_idxs
-
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
             attention_mask=current_attention_mask,
             position_ids=current_position_ids,
-            skip_box_idxs=current_skip_box_idxs,
         )
 
         return new_input, processed_outputs, idxs_to_merge
@@ -619,6 +607,7 @@ class RecognitionPredictor(BasePredictor):
         )
         total_decode = 0
         prefill_time = 0
+        prefill_count = 0
         decode_time = 0
         import time
 
@@ -630,6 +619,7 @@ class RecognitionPredictor(BasePredictor):
                 start = time.time()
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
                 prefill_time += time.time() - start
+                prefill_count += 1
 
                 for temp_idx, b_idx in enumerate(merge_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
@@ -685,7 +675,7 @@ class RecognitionPredictor(BasePredictor):
 
         token_lens = Counter([len(p) for p in predicted_tokens])
         print(f"Token lengths in the batch: {sorted(token_lens.items())}")
-        print(f"Total decode steps: {total_decode}")
+        print(f"Total decode steps: {total_decode} total prefills: {prefill_count}")
         print(
             f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
         )

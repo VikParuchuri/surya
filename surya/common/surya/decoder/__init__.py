@@ -24,8 +24,12 @@ from transformers.utils import (
 from surya.common.surya.decoder.config import SuryaDecoderConfig
 
 from transformers.utils import is_flash_attn_2_available
+
 if is_flash_attn_2_available():
-    from surya.common.surya.flash_attn_utils import flash_attn_decode, flash_attn_prefill
+    from surya.common.surya.flash_attn_utils import (
+        flash_attn_decode,
+        flash_attn_prefill,
+    )
 
 logger = logging.get_logger(__name__)
 
@@ -213,7 +217,7 @@ class Qwen2Attention(nn.Module):
                     "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
                     'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
-            elif self.config._attn_implementation == 'flash_attention_2':
+            elif self.config._attn_implementation == "flash_attention_2":
                 if is_prefill:
                     attention_interface = flash_attn_prefill
                 else:
@@ -337,57 +341,24 @@ class Qwen2RotaryEmbedding(nn.Module):
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.original_inv_freq = self.inv_freq
+        self.cached_inv_freq = None
 
-    def _dynamic_frequency_update(self, position_ids, device):
-        """
-        dynamic RoPE layers should recompute `inv_freq` in the following situations:
-        1 - growing beyond the cached sequence length (allow scaling)
-        2 - the current sequence length is in the original scale (avoid losing precision with small sequences)
-        """
-        seq_len = torch.max(position_ids) + 1
-        if seq_len > self.max_seq_len_cached:  # growth
-            inv_freq, self.attention_scaling = self.rope_init_fn(
-                self.config, device, seq_len=seq_len
-            )
-            self.register_buffer(
-                "inv_freq", inv_freq, persistent=False
-            )  # TODO joao: may break with compilation
-            self.max_seq_len_cached = seq_len
-
-        if (
-            seq_len < self.original_max_seq_len
-            and self.max_seq_len_cached > self.original_max_seq_len
-        ):  # reset
-            # This .to() is needed if the model has been moved to a device after being initialized (because
-            # the buffer is automatically moved, but not the original copy)
-            self.original_inv_freq = self.original_inv_freq.to(device)
-            self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
-            self.max_seq_len_cached = self.original_max_seq_len
+    def device_inv_freq(self, x: torch.Tensor):
+        if self.cached_inv_freq is None or self.cached_inv_freq.device != x.device:
+            self.cached_inv_freq = self.inv_freq[None, :, None].float().to(x.device)
+        return self.cached_inv_freq
 
     @torch.no_grad()
     def forward(self, x, position_ids):
-        if "dynamic" in self.rope_type:
-            self._dynamic_frequency_update(position_ids, device=x.device)
-
         # Core RoPE block
-        inv_freq_expanded = (
-            self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1)
-        )
+        inv_freq_expanded = self.device_inv_freq(x).expand(position_ids.shape[0], -1, 1)
         position_ids_expanded = position_ids[:, None, :].float()
+
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
-        device_type = x.device.type
-        device_type = (
-            device_type
-            if isinstance(device_type, str) and device_type != "mps"
-            else "cpu"
-        )
-        with torch.autocast(device_type=device_type, enabled=False):
-            freqs = (
-                inv_freq_expanded.float().to(x.device) @ position_ids_expanded.float()
-            ).transpose(1, 2)
-            emb = torch.cat((freqs, freqs), dim=-1)
-            cos = emb.cos()
-            sin = emb.sin()
+        freqs = (inv_freq_expanded @ position_ids_expanded).transpose(1, 2)
+        emb = torch.cat((freqs, freqs), dim=-1)
+        cos = emb.cos()
+        sin = emb.sin()
 
         # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
         cos = cos * self.attention_scaling
@@ -468,17 +439,6 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
             return_dict if return_dict is not None else self.config.use_return_dict
         )
 
-        if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
-
-        if self.gradient_checkpointing and self.training and use_cache:
-            logger.warning_once(
-                "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`."
-            )
-            use_cache = False
-
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
@@ -512,7 +472,6 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         # decoder layers
-
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
             layer_outputs = decoder_layer(
                 hidden_states,
