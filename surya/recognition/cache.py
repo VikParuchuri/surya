@@ -54,7 +54,12 @@ class ContinuousBatchingMixin:
         self.key_cache[layer_idx] = key_cache
         self.value_cache[layer_idx] = value_cache
 
-    def merge(self, new_cache: "ContinuousBatchingCache", merge_idxs: List[int]):
+    def merge(
+        self,
+        new_cache: "ContinuousBatchingCache",
+        merge_idxs: List[int],
+        device: torch.device,
+    ):
         assert len(new_cache) == len(self), (
             "The two caches should have the same number of layers"
         )
@@ -69,6 +74,8 @@ class ContinuousBatchingMixin:
             new_cache._seen_tokens += offset
         elif offset < 0:
             self._seen_tokens += abs(offset)
+
+        merge_idxs = torch.tensor(merge_idxs, dtype=torch.long, device=device)
 
         with torch.inference_mode():
             # As long as we set the attention mask and position ids correctly, padding value can be anything
@@ -90,8 +97,8 @@ class ContinuousBatchingMixin:
                         old_v,
                     )
 
-                adjusted_key_cache[merge_idxs] = new_k[: len(merge_idxs)]
-                adjusted_value_cache[merge_idxs] = new_v[: len(merge_idxs)]
+                adjusted_key_cache.index_put_((merge_idxs,), new_k)
+                adjusted_value_cache.index_put_((merge_idxs,), new_v)
 
                 self.set_full_cache(layer_idx, adjusted_key_cache, adjusted_value_cache)
 

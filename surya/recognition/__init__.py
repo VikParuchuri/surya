@@ -74,7 +74,7 @@ class RecognitionPredictor(BasePredictor):
     batch_size = settings.RECOGNITION_BATCH_SIZE
     torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
-    min_prefill_ratio: int = 0.3
+    min_prefill_ratio: int = 0.2
     tasks = {
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
@@ -270,7 +270,7 @@ class RecognitionPredictor(BasePredictor):
             text = text or ""
             inputs = [
                 {"type": "image", "image": image, "rotated": rotated},
-                {"type": "text", "text": text, "math": math_mode},
+                {"type": "text", "text": text.strip(), "math": math_mode},
             ]
             batch.append({"task": task_name, "inputs": inputs})
 
@@ -420,7 +420,9 @@ class RecognitionPredictor(BasePredictor):
             self.batch_prompt_mapping[i] = prompt.id
 
         if self.kv_cache:
-            offset = self.kv_cache.merge(prefill_cache, idxs_to_merge)
+            offset = self.kv_cache.merge(
+                prefill_cache, idxs_to_merge, self.model.device
+            )
         else:
             self.kv_cache = prefill_cache
             offset = 0
