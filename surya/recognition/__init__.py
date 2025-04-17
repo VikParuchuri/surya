@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from transformers import QuantizedCacheConfig
 
 from surya.common.polygon import PolygonBox
-from surya.common.surya import SuryaModelConfig, SuryaModelOutput
+from surya.common.surya import SuryaModelOutput
 from surya.common.surya.processor import NOMATH_TOKEN
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
@@ -98,25 +98,10 @@ class RecognitionPredictor(BasePredictor):
         self.prompt_queue = deque()
         self.batch_prompt_mapping = None
 
-        config: SuryaModelConfig = self.model.config
         # Setup various tokens on-device
-        self.device_bbox_ignore = torch.from_numpy(
-            np.array(self.processor.ignore_bbox_token_ids, dtype=np.int64),
-        ).to(self.model.device)
-        self.device_blank_bbox = (
-            torch.from_numpy(np.asarray([config.blank_bbox_token_id] * 6))
-            .to(self.model.device)
-            .to(torch.long)
-        )
         self.device_pad_token = torch.tensor(
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
         )
-        self.device_math_start = torch.from_numpy(
-            np.array(self.processor.math_start_token_ids, dtype=np.int64)
-        ).to(self.model.device)
-        self.device_math_end = torch.from_numpy(
-            np.array(self.processor.math_end_token_ids, dtype=np.int64)
-        ).to(self.model.device)
 
     def setup_cache(self, batch_size: int):
         self.kv_cache = None
@@ -263,7 +248,15 @@ class RecognitionPredictor(BasePredictor):
         ):
             image_size = self.tasks[task_name]["img_size"]
             image, rotated = self.processor.align_long_axis(image)
-            image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
+
+            try:
+                image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
+            except cv2.error as e:
+                print(
+                    f"Warning: Problem resizing image {image.size} to {image_size}: {e}"
+                )
+                # The image is empty if it can't be resized, so just make a blank image
+                image = np.zeros((image_size[1], image_size[0], 3), dtype=np.float32)
 
             # Task input is the same for all tasks for now
             text = text or ""
