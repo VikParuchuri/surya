@@ -286,7 +286,12 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         return image, False
 
-    def __call__(self, mixed_batch: List[dict], padding_side: Optional[str] = "left"):
+    def __call__(
+        self,
+        mixed_batch: List[dict],
+        padding_side: Optional[str] = "left",
+        device: Optional[torch.device] = None,
+    ):
         all_image_tiles = []
         all_input_ids = []
 
@@ -323,7 +328,14 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             attention_mask.to(torch.long) * position_ids
         )  # Ensure right pad ids get set to zero
 
-        batched_image_tiles = torch.cat(all_image_tiles, dim=0).pin_memory()
+        batched_image_tiles = torch.cat(all_image_tiles, dim=0)
+
+        # Pin memory for CUDA
+        if device == torch.device("cuda"):
+            batched_image_tiles = batched_image_tiles.pin_memory()
+            attention_mask = attention_mask.pin_memory()
+            batched_input_ids = batched_input_ids.pin_memory()
+            position_ids = position_ids.pin_memory()
 
         # Returning lm labels as labels, since this is used by HF to calculate num_items_per_batch which is super important for gradient accumulation
         return BatchFeature(
