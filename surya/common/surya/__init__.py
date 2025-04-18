@@ -182,6 +182,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         inputs_embeds=None,
         attention_mask=None,
         position_ids=None,
+        cache_position=None,
         past_key_values=None,
         output_hidden_states=False,
         output_attentions=False,
@@ -197,12 +198,16 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         if self.config.unmask_image and inputs_embeds.shape[1] != 1:
             # This creates a special causal mask to do bidirectional attention on the images, then passes into the decoder
             # The decoder will not regenerate if a 4D mask is passed in
-            past_seen_tokens = 0
-            cache_position = torch.arange(
-                past_seen_tokens,
-                past_seen_tokens + inputs_embeds.shape[1],
-                device=inputs_embeds.device,
-            )
+            if cache_position is None:
+                past_seen_tokens = (
+                    past_key_values.get_seq_length() if past_key_values is not None else 0
+                )
+                cache_position = torch.arange(
+                    past_seen_tokens,
+                    past_seen_tokens + inputs_embeds.shape[1],
+                    device=inputs_embeds.device,
+                ).unsqueeze(0).expand(inputs_embeds.shape[1], -1)
+
             causal_mask = self.decoder._update_causal_mask(
                 attention_mask,
                 inputs_embeds,
@@ -247,6 +252,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             position_ids=position_ids,
+            cache_position=cache_position,
             past_key_values=past_key_values,
             return_dict=True,
             use_cache=use_cache,

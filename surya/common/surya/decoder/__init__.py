@@ -453,7 +453,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
                 past_seen_tokens,
                 past_seen_tokens + inputs_embeds.shape[1],
                 device=inputs_embeds.device,
-            )
+            ).unsqueeze(0).expand(inputs_embeds.shape[1], -1)
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
@@ -504,6 +504,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
         output_attentions: bool,
     ):
         if self.config._attn_implementation == "flash_attention_2":
+            # Pass through the 2D mask for flash attention, it does not support 4D masks
             return attention_mask
 
         # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
@@ -585,7 +586,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
             device (`torch.device`):
                 The device to plcae the 4D attention mask on.
             cache_position (`torch.Tensor`):
-                Indices depicting the position of the input sequence tokens in the sequence.
+                Indices depicting the position of the input sequence tokens in the sequence. Shape (batch_size, seq_len)
             batch_size (`torch.Tensor`):
                 Batch size.
             config (`Qwen2Config`):
@@ -594,36 +595,41 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
                 The cache class that is being used currently to generate
         """
         if attention_mask is not None and attention_mask.dim() == 4:
-            # In this case we assume that the mask comes already in inverted form and requires no inversion or slicing.
             causal_mask = attention_mask
         else:
             min_dtype = torch.finfo(dtype).min
+            # (batch_size, seq_len, target_len)
+            positions = torch.arange(target_length, device=device).view(1, 1, -1)
+
+            # Make sure cache_position has shape (batch_size, seq_len)
+            assert cache_position.dim() == 2, "Cache position must have shape (batch_size, seq_len)"
+
+            # (batch_size, seq_len, target_len)
+            diagonal_attend_mask = positions > cache_position.unsqueeze(-1)
+
+            if config.sliding_window is not None:
+                # TODO Check the impl below
+                raise NotImplementedError("Sliding window is currently not supported.")
+                # if (
+                #     not isinstance(past_key_values, SlidingWindowCache)
+                #     or sequence_length > target_length
+                # ):
+                #     sliding_attend_mask = positions <= (
+                #         cache_position.unsqueeze(-1) - config.sliding_window
+                #     )
+                #     diagonal_attend_mask |= sliding_attend_mask
+
+            # Build full causal mask: (batch_size, 1, seq_len, target_len)
             causal_mask = torch.full(
-                (sequence_length, target_length),
+                (batch_size, 1, sequence_length, target_length),
                 fill_value=min_dtype,
                 dtype=dtype,
                 device=device,
             )
-            diagonal_attend_mask = torch.arange(
-                target_length, device=device
-            ) > cache_position.reshape(-1, 1)
-            if config.sliding_window is not None:
-                # if we have sliding window, we should not attend to tokens beyond sliding window length, so we mask them out also
-                # the check is needed to verify is current checkpoint was trained with sliding window or not
-                if (
-                    not isinstance(past_key_values, SlidingWindowCache)
-                    or sequence_length > target_length
-                ):
-                    sliding_attend_mask = torch.arange(
-                        target_length, device=device
-                    ) <= (cache_position.reshape(-1, 1) - config.sliding_window)
-                    diagonal_attend_mask.bitwise_or_(sliding_attend_mask)
-            causal_mask *= diagonal_attend_mask
-            causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
+            causal_mask.masked_fill_(diagonal_attend_mask.unsqueeze(1), 0)
+
             if attention_mask is not None:
-                causal_mask = (
-                    causal_mask.clone()
-                )  # copy to contiguous memory for in-place edit
+                causal_mask = causal_mask.clone()  # for in-place edit
                 if attention_mask.shape[-1] > target_length:
                     attention_mask = attention_mask[:, :target_length]
                 mask_length = attention_mask.shape[-1]
@@ -634,4 +640,5 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
                 causal_mask[:, :, :, :mask_length] = causal_mask[
                     :, :, :, :mask_length
                 ].masked_fill(padding_mask, min_dtype)
+
         return causal_mask
