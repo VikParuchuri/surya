@@ -10,12 +10,15 @@ class ModelLoader:
         self.checkpoint = checkpoint
 
     def model(
-            self,
-            device: torch.device | str | None = settings.TORCH_DEVICE_MODEL,
-            dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE) -> Any:
+        self,
+        device: torch.device | str | None = settings.TORCH_DEVICE_MODEL,
+        dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE,
+    ) -> Any:
         raise NotImplementedError()
 
     def processor(
-            self
+        self,
+        device: torch.device | str | None = settings.TORCH_DEVICE_MODEL,
+        dtype: Optional[torch.dtype | str] = settings.MODEL_DTYPE,
     ) -> Any:
         raise NotImplementedError()

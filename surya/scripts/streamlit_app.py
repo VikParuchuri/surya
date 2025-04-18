@@ -169,6 +169,7 @@ def ocr(
         det_predictor=predictors["detection"],
         highres_images=[highres_img],
         math_mode=recognize_math,
+        return_words=True,
     )[0]
 
     bboxes = [line.bbox for line in img_pred.text_lines]

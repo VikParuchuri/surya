@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 import torch
 import einops
 from PIL import Image
@@ -7,7 +9,6 @@ from typing import List, Optional, Tuple
 
 from transformers.feature_extraction_utils import BatchFeature
 from transformers.processing_utils import ProcessorMixin
-from transformers.image_processing_utils import BaseImageProcessor
 from transformers.tokenization_utils import PreTrainedTokenizer
 
 from surya.common.s3 import S3DownloaderMixin
@@ -38,18 +39,20 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     attributes = ["image_processor", "ocr_tokenizer"]
     image_processor_class = "BaseImageProcessor"
     ocr_tokenizer_class = "PreTrainedTokenizer"
+    rescale_factor = 1 / 255.0
+    image_mean = (0.485, 0.456, 0.406)
+    image_std = (0.229, 0.224, 0.225)
 
     def __init__(
         self,
-        image_processor: BaseImageProcessor,
         ocr_tokenizer: PreTrainedTokenizer,
         tile_size: Tuple[int, int],
         image_tokens_per_tile: int,
         blank_bbox_token_id: int,
         num_register_tokens: int,
+        model_device: str,
         **kwargs,
     ):
-        self.image_processor = image_processor
         self.ocr_tokenizer = ocr_tokenizer
         self.tile_size = tile_size
         self.image_tokens_per_tile = image_tokens_per_tile
@@ -112,18 +115,26 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             if k == math_end_token
         ]
 
-        super().__init__(image_processor, ocr_tokenizer)
-
         if self.num_register_tokens > len(self.register_token_ids):
             raise ValueError(
                 "The number of register tokens requested exceeds the number of register tokens defined in the special token mapping."
             )
 
+        self.image_mean = np.array(self.image_mean, dtype=np.float32)
+        self.image_std = np.array(self.image_std, dtype=np.float32)
+        self.model_device = model_device
+
     @property
     def vocab_size(self):
         return self.tokenizer_vocab_size
 
-    def _process_and_tile(self, image: Image.Image) -> torch.Tensor:
+    def image_processor(self, image: Image.Image) -> np.ndarray:
+        # Rescale
+        image = np.asarray(image, dtype=np.float32)
+        image_arr = (image * self.rescale_factor - self.image_mean) / self.image_std
+        return image_arr
+
+    def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
         """
         Resizes the input image to the closest multiple of tile_size while preserving the aspect ratio
         and returns a tensor of image tiles.
@@ -131,7 +142,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         #TODO Pin to closest aspect ratio  - Currently pins to the next biggest grid of tiles that can fit the full image
         """
         tile_width, tile_height = self.tile_size
-        orig_width, orig_height = image.size
+        orig_height, orig_width = image.shape[:2]
 
         # Compute the scaling factor to maintain aspect ratio
         scale_w = (orig_width + tile_width - 1) // tile_width
@@ -139,12 +150,16 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         new_width = scale_w * tile_width
         new_height = scale_h * tile_height
-        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        if new_width == orig_width and new_height == orig_height:
+            resized_image = image
+        else:
+            resized_image = cv2.resize(
+                image, (new_width, new_height), interpolation=cv2.INTER_LINEAR
+            )
 
         # Do not perform resizing from the image processor, since resizing is already handled
-        img_tensor = self.image_processor(
-            resized_image, return_tensors="pt", do_resize=False
-        )["pixel_values"][0]
+        img_tensor = torch.from_numpy(resized_image.transpose((2, 0, 1)))
+
         tiles = einops.rearrange(
             img_tensor,
             "c (ny th) (nx tw) -> (ny nx) c th tw",
@@ -264,10 +279,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             mixed_input, bos_token_id=bos_token_id, task=task
         )
 
-    def align_long_axis(self, image: Image.Image) -> Tuple[Image.Image, bool]:
-        width, height = image.size
+    def align_long_axis(self, image: np.ndarray) -> Tuple[np.ndarray, bool]:
+        height, width, _ = image.shape
         if height > width:  # Rotate vertical lines
-            return image.rotate(90, expand=True), True
+            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE), True
 
         return image, False
 
