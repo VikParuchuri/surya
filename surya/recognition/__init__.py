@@ -710,14 +710,14 @@ class RecognitionPredictor(BasePredictor):
                 self.num_empty_slots / recognition_batch_size
             ) > self.min_prefill_ratio and self.prompt_queue:
                 start = time.time()
-                updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
+                updated_inputs, outputs, merge_idxs, batch_idxs = self.prefill(current_inputs)
                 prefill_time += time.time() - start
 
                 for b_idx, tensor_idx in zip(merge_idxs, batch_idxs):
                     if self.batch_prompt_mapping[b_idx] is not None:
                         p_idx = self.batch_prompt_mapping[b_idx]
-                        predicted_tokens[p_idx].append(outputs.preds[tensor_idx].cpu().item())
-                        predicted_boxes[p_idx].append(outputs.bbox_preds[tensor_idx].cpu()[0])
+                        predicted_tokens[p_idx].append(outputs.preds[tensor_idx].item())
+                        predicted_boxes[p_idx].append(outputs.bbox_preds[tensor_idx][0])
                         scores[p_idx].append(outputs.scores[tensor_idx].cpu().item())
 
                         if predicted_tokens[p_idx][-1] in [

@@ -32,7 +32,7 @@ class RecognitionModelLoader(ModelLoader):
         )
         model = model.eval()
 
-        model.config.decoder._attn_implementation = "sdpa"
+        model.config.decoder._attn_implementation = "flash_attention_2"
         is_using_flash_attn = torch.backends.cuda.flash_sdp_enabled()
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
