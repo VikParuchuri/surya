@@ -66,8 +66,6 @@ class RecognitionPrompt:
     math_mode: bool
 
 
-# TODO When we evict a sample then also trim the cache as necessary from the left
-# This will also allow require modification of attention mask (position_ids should remain unchanged, since they are only for the last element)
 class RecognitionPredictor(BasePredictor):
     model_loader_cls = RecognitionModelLoader
     batch_size = settings.RECOGNITION_BATCH_SIZE
@@ -583,6 +581,7 @@ class RecognitionPredictor(BasePredictor):
         prefill_time = 0
         prefill_count = 0
         decode_time = 0
+        total_repeats = 0
         import time
 
         total_time = time.time()
@@ -640,17 +639,21 @@ class RecognitionPredictor(BasePredictor):
 
                         scores[p_idx].append(scores_cpu[b_idx].item())
 
+                        repeats = len(predicted_tokens[p_idx]) >= batch_max_tokens[
+                            p_idx
+                        ] or detect_repeat_token(predicted_tokens[p_idx])
                         if (
                             predicted_tokens[p_idx][-1]
                             in [
                                 self.processor.eos_token_id,
                                 self.processor.pad_token_id,
                             ]
-                            or len(predicted_tokens[p_idx]) >= batch_max_tokens[p_idx]
-                            or detect_repeat_token(predicted_tokens[p_idx])
+                            or repeats
                         ):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
+                            if repeats:
+                                total_repeats += 1
 
             # Update inputs and mark XLA step
             current_inputs = updated_inputs
@@ -669,7 +672,9 @@ class RecognitionPredictor(BasePredictor):
 
         token_lens = Counter([len(p) for p in predicted_tokens])
         print(f"Token lengths in the batch: {sorted(token_lens.items())}")
-        print(f"Total decode steps: {total_decode} total prefills: {prefill_count}")
+        print(
+            f"Total decode steps: {total_decode} total prefills: {prefill_count} total repeats: {total_repeats}"
+        )
         print(
             f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
         )
