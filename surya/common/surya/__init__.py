@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from transformers import PreTrainedModel
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers.cache_utils import StaticCache
 
 from surya.common.s3 import S3DownloaderMixin
 from surya.common.surya.config import SuryaModelConfig
@@ -202,11 +203,12 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 past_seen_tokens = (
                     past_key_values.get_seq_length() if past_key_values is not None else 0
                 )
+                batch_size, seq_len = inputs_embeds.shape[:2]
                 cache_position = torch.arange(
                     past_seen_tokens,
-                    past_seen_tokens + inputs_embeds.shape[1],
+                    past_seen_tokens + seq_len,
                     device=inputs_embeds.device,
-                ).unsqueeze(0).expand(inputs_embeds.shape[1], -1)
+                ).unsqueeze(0).expand(batch_size, -1)
 
             causal_mask = self.decoder._update_causal_mask(
                 attention_mask,
@@ -251,6 +253,8 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             kwargs['indices_q'] = indices_q
             kwargs['cu_seqlens_q'] = cu_seqlens_q
             kwargs['max_seqlen_in_batch_q'] = max_seqlen_in_batch_q
+        elif inputs_embeds.shape[1] == 1 and isinstance(past_key_values, StaticCache):
+            kwargs['cache_seqlens'] = cache_position.clone().to(torch.int32).squeeze(1)        #FA2 requires seq lens to be int32
 
         outputs = self.decoder(
             input_ids=None,

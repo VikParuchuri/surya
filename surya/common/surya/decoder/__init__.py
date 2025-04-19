@@ -449,11 +449,12 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
             past_seen_tokens = (
                 past_key_values.get_seq_length() if past_key_values is not None else 0
             )
+            batch_size, seq_len = inputs_embeds.shape[:2]
             cache_position = torch.arange(
                 past_seen_tokens,
-                past_seen_tokens + inputs_embeds.shape[1],
+                past_seen_tokens + seq_len,
                 device=inputs_embeds.device,
-            ).unsqueeze(0).expand(inputs_embeds.shape[1], -1)
+            ).unsqueeze(0).expand(batch_size, -1)
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)

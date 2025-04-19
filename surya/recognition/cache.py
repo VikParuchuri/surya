@@ -1,6 +1,6 @@
 import torch
-from transformers import DynamicCache, HQQQuantizedCache
-from typing import List, Tuple
+from transformers import DynamicCache, HQQQuantizedCache, StaticCache
+from typing import Any, Dict, List, Optional, Tuple
 import torch.nn.functional as F
 
 
@@ -184,3 +184,42 @@ class ContinuousBatchingQuantizedCache(ContinuousBatchingMixin, HQQQuantizedCach
                 full_value_cache = self.value_cache[layer_idx][:, :, main_start_idx:, :]
 
                 self.set_full_cache(layer_idx, full_key_cache, full_value_cache)
+
+class ContinuousBatchingStaticCache(StaticCache):
+    def update(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Updates the static cache at specific cache positions for each batch element.
+
+        Args:
+            key_states: (batch_size, num_kv_heads, seq_len, head_dim)
+            value_states: same shape as key_states
+            cache_position: (batch_size, seq_len)
+        """
+        cache_position = cache_kwargs.get('cache_position', None)
+        assert cache_position is not None, "`cache_position` cannot be None for static cache"
+        bsz, num_heads, seq_len, head_dim = key_states.shape
+
+        k_cache = self.key_cache[layer_idx]
+        v_cache = self.value_cache[layer_idx]
+
+        new_k = key_states
+        new_v = value_states
+
+        for b in range(bsz):
+            pos = cache_position[b]  # (seq_len,)
+            k_cache[b, :, pos, :] = new_k[b]
+            v_cache[b, :, pos, :] = new_v[b]
+
+        self.key_cache[layer_idx] = k_cache
+        self.value_cache[layer_idx] = v_cache
+
+        return self.key_cache[layer_idx], self.value_cache[layer_idx]
+
+        def merge(self, *args, **kwargs):
+            raise NotImplementedError("No merging support with static cache yet!")

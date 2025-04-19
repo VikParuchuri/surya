@@ -171,8 +171,17 @@ def flash_attn_decode(
     This is the opposite of what is required by flash attention, but keeps parity with the HF convention
     """
     query_states, key_states, value_states = query_states.transpose(1,2), key_states.transpose(1,2), value_states.transpose(1,2)
-    cache_leftpad = (attention_mask == 0).cumprod(dim=1).sum(dim=1)
-    cache_leftpad = cache_leftpad.to(torch.int32)
+    
+    # Assume this is static caching case - Where masking is handled by cache positions + causal mask
+    # We can set cache_seqlens instead in this case - Which we get from kwargs (Handled before decoder call)
+    if attention_mask is None:
+        cache_seqlens = kwargs.get('cache_seqlens')
+        assert cache_seqlens is not None, "cache_seqlens is required during decocding with FA2 + StaticCache"
+        cache_leftpad = None
+    else:       # Dynamic caching case
+        cache_leftpad = (attention_mask == 0).cumprod(dim=1).sum(dim=1)
+        cache_leftpad = cache_leftpad.to(torch.int32)
+        cache_seqlens = None
     
     flash_kwargs = {'window_size': (sliding_window, sliding_window)} if sliding_window else {}
     # Returning None for attn_weights to match other attention interfaces
@@ -181,6 +190,7 @@ def flash_attn_decode(
         k_cache=key_states,
         v_cache=value_states,
         cache_leftpad=cache_leftpad,
+        cache_seqlens=cache_seqlens,
         causal=module.is_causal,
         softmax_scale=scaling,
         **flash_kwargs

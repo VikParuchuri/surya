@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 from collections import deque
 
 import cv2
@@ -37,6 +37,7 @@ from surya.common.surya.schema import TaskNames
 from surya.recognition.cache import (
     ContinuousBatchingCache,
     ContinuousBatchingQuantizedCache,
+    ContinuousBatchingStaticCache,
 )
 from surya.settings import settings
 
@@ -46,6 +47,7 @@ class ContinuousBatchInput:
     input_ids: torch.Tensor
     attention_mask: torch.Tensor
     position_ids: torch.Tensor
+    cache_position: Optional[torch.Tensor]
 
 
 @dataclass
@@ -266,6 +268,25 @@ class RecognitionPredictor(BasePredictor):
 
         return batch
 
+    def pad_to_max_batch_size(
+        self,
+        *tensors: torch.Tensor,
+        max_batch_size: int,
+        pad_value: int = 0,
+    ) -> Tuple[torch.Tensor, ...]:
+        """
+        Pads a variable number of tensors on the batch dimension (dim=0) to match `max_batch_size`.
+
+        Args:
+            *tensors: Variable number of tensors with shape (batch_size, ...).
+            max_batch_size (int): Desired batch size to pad to.
+            pad_value (int): Value to pad with (applied to all tensors).
+
+        Returns:
+            Tuple of padded tensors, each with shape (max_batch_size, ...).
+        """
+        return tuple(self.pad_to_batch_size(tensor, batch_size=max_batch_size) for tensor in tensors)
+
     def process_outputs(self, outputs: SuryaModelOutput) -> ContinuousBatchOutput:
         # Get logits and initial preds
         next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
@@ -302,12 +323,14 @@ class RecognitionPredictor(BasePredictor):
         input_ids = current_inputs.input_ids
         attention_mask = current_inputs.attention_mask
         position_ids = current_inputs.position_ids
+        cache_position = current_inputs.cache_position
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
+                cache_position=cache_position,
                 use_cache=True,
                 past_key_values=self.kv_cache,
                 logits_to_keep=1,
@@ -315,13 +338,16 @@ class RecognitionPredictor(BasePredictor):
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs)
 
-        attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1)
+        # Attention mask is None for static caching; Cache position is None for dynamic caching
+        attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1) if (attention_mask is not None) else None
+        cache_position = cache_position + 1 if (cache_position is not None) else None
 
         position_ids = position_ids[:, -1:] + 1
         new_input = ContinuousBatchInput(
             input_ids=processed_output.input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
+            cache_position=cache_position
         )
 
         return new_input, processed_output
@@ -340,39 +366,48 @@ class RecognitionPredictor(BasePredictor):
                 p.math_mode for p in prompts
             ],  # Pass math mode to the processor
         )
-        processed_inputs = self.processor(
-            batch_input, padding_side="left", device=self.model.device
-        ).to(device=self.model.device, dtype=self.model.dtype)
 
-        input_ids = processed_inputs["input_ids"]
-        image_tiles = processed_inputs["image_tiles"]
-        attention_mask = processed_inputs["attention_mask"]
-        position_ids = processed_inputs["position_ids"]
-
-        if settings.RECOGNITION_MODEL_QUANTIZE:
+        if settings.RECOGNITION_STATIC_CACHE:
+            print(f'Started init cache')
+            prefill_cache = ContinuousBatchingStaticCache(config=self.model.config.decoder, max_batch_size=self.get_batch_size(), max_cache_len=1024, device=self.model.device, dtype=self.model.dtype)
+            print(f'Ended init cache phew')
+        elif settings.RECOGNITION_MODEL_QUANTIZE:
             try:
                 import hqq  # noqa: F401
             except Exception:
                 raise ImportError(
                     "Please install hqq to use quantized recognition model"
                 )
+            # Use quantized cache if setting activated
+            cache_config = QuantizedCacheConfig(
+                "HQQ", 8, 1, 1, device=self.model.device, compute_dtype=self.model.dtype
+            )
+            prefill_cache = ContinuousBatchingQuantizedCache(cache_config)
+        else:
+            prefill_cache = ContinuousBatchingCache()
 
-        # Use quantized cache if setting activated
-        cache_config = QuantizedCacheConfig(
-            "HQQ", 8, 1, 1, device=self.model.device, compute_dtype=self.model.dtype
-        )
-        prefill_cache = (
-            ContinuousBatchingCache()
-            if not settings.RECOGNITION_MODEL_QUANTIZE
-            else ContinuousBatchingQuantizedCache(cache_config)
-        )
+        padding_side = "right" if settings.RECOGNITION_STATIC_CACHE else "left"
+        processed_inputs = self.processor(
+            batch_input, padding_side=padding_side, device=self.model.device
+        ).to(device=self.model.device, dtype=self.model.dtype)
 
+        input_ids = processed_inputs["input_ids"]
+        image_tiles = processed_inputs["image_tiles"]
+        attention_mask = processed_inputs["attention_mask"]
+        position_ids = processed_inputs["position_ids"]
+        cache_position = None       #Automatic case works for both static and dynamic batching
+        if settings.RECOGNITION_STATIC_CACHE:
+            input_ids, attention_mask, position_ids = self.pad_to_max_batch_size(input_ids, attention_mask, position_ids, max_batch_size=self.get_batch_size())
+            attention_mask = F.pad(attention_mask, (0, prefill_cache.max_cache_len - input_ids.shape[1]), mode="constant", value=0)
+
+        print('HERE?')
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
                 image_tiles=image_tiles,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
+                cache_position=cache_position,
                 inputs_embeds=None,
                 past_key_values=prefill_cache,
                 use_cache=True,
@@ -401,7 +436,12 @@ class RecognitionPredictor(BasePredictor):
             offset = 0
 
         # Adjust attention mask and position ids to account for the newly generated tokens
-        attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1)
+        if settings.RECOGNITION_STATIC_CACHE:
+            cache_position = attention_mask.sum(dim=1).unsqueeze(1).to(torch.long) + 1
+            attention_mask = None
+        else:
+            attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1)
+            cache_position = None
         position_ids = position_ids[:, -1:] + 1
 
         if current_inputs is None:
@@ -409,6 +449,7 @@ class RecognitionPredictor(BasePredictor):
                 input_ids=processed_outputs.input_ids,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
+                cache_position=cache_position
             )
 
             return (
@@ -417,6 +458,7 @@ class RecognitionPredictor(BasePredictor):
                 range(processed_outputs.input_ids.shape[0]),
             )
 
+        raise NotImplementedError()
         # Merging input_ids, attention masks and position ids
         current_input_ids = current_inputs.input_ids
         current_input_ids[idxs_to_merge] = processed_outputs.input_ids
@@ -444,6 +486,9 @@ class RecognitionPredictor(BasePredictor):
     # Due to continuous batching, we left pad the attention mask and cache to match new sequences
     # This function trims the attention mask and the kv cache from the left whenever possible to remove excess padding
     def maybe_trim_cache_padding(self, current_inputs: ContinuousBatchInput):
+        if settings.RECOGNITION_STATIC_CACHE:
+            return current_inputs
+
         attention_mask = current_inputs.attention_mask
         active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is not None]
 
@@ -594,6 +639,7 @@ class RecognitionPredictor(BasePredictor):
                 self.num_empty_slots / recognition_batch_size
             ) > self.min_prefill_ratio and self.prompt_queue:
                 start = time.time()
+                print(f'PREFILL')
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
                 prefill_time += time.time() - start
                 prefill_count += 1
@@ -619,6 +665,7 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
+                print(f'DECODE')
                 start = time.time()
                 updated_inputs, outputs = self.decode(current_inputs)
                 decode_time += time.time() - start
