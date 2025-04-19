@@ -240,12 +240,17 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         # Skipped during decoding since not required
         if self.decoder.config._attn_implementation == 'flash_attention_2' and inputs_embeds.shape[1] != 1:
             batch_size, query_length, _ = inputs_embeds.shape
+            # Attention mask may be right padded for static caching case to max length, so we use only that portion of the attention mask
+            indices_q, cu_seqlens_q, max_seqlen_in_batch_q = _get_unpad_data(attention_mask[:, :query_length])
             indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
             kwargs['batch_size'] = batch_size
             kwargs['query_length'] = query_length
             kwargs['indices_k'] = indices_k
             kwargs['cu_seqlens_k'] = cu_seqlens_k
             kwargs['max_seqlen_in_batch_k'] = max_seqlen_in_batch_k
+            kwargs['indices_q'] = indices_q
+            kwargs['cu_seqlens_q'] = cu_seqlens_q
+            kwargs['max_seqlen_in_batch_q'] = max_seqlen_in_batch_q
 
         outputs = self.decoder(
             input_ids=None,

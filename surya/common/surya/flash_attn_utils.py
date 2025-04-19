@@ -39,7 +39,10 @@ def _upad_input(
     query_length: int,
     indices_k,
     cu_seqlens_k,
-    max_seqlen_in_batch_k
+    max_seqlen_in_batch_k,
+    indices_q,
+    cu_seqlens_q,
+    max_seqlen_in_batch_q
 ):
     """
     Unpads query, key, and values tensors, using a single dimension for all tokens even though they belong to different batches.
@@ -73,18 +76,12 @@ def _upad_input(
         (max_seqlen_in_batch_q, max_seqlen_in_batch_k) (`Tuple[int]`):
             Maximum sequence length in batch (`max_seqlen_in_batch_q` for the target sequence i.e. query, `max_seqlen_in_batch_k` for the source sequence i.e. key/value).
     """
+    _, q_seq_len, _, _ = query_layer.shape
     batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
     key_layer = _index_first_axis(key_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k)
-    value_layer = _index_first_axis(
-        value_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k
-    )
-    if query_length == kv_seq_len:
-        query_layer = _index_first_axis(query_layer.reshape(batch_size * kv_seq_len, -1, head_dim), indices_k)
-        cu_seqlens_q = cu_seqlens_k
-        max_seqlen_in_batch_q = max_seqlen_in_batch_k
-        indices_q = indices_k
-    elif query_length == 1:
+    value_layer = _index_first_axis(value_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k)
+    if query_length == 1:
         max_seqlen_in_batch_q = 1
         cu_seqlens_q = torch.arange(
             batch_size + 1, dtype=torch.int32, device=query_layer.device
@@ -92,7 +89,7 @@ def _upad_input(
         indices_q = cu_seqlens_q[:-1]
         query_layer = query_layer.squeeze(1)
     else:
-        raise NotImplementedError()
+        query_layer = _index_first_axis(query_layer.reshape(batch_size * q_seq_len, -1, head_dim), indices_q)
 
     return (
         query_layer,
@@ -117,6 +114,9 @@ def flash_attn_prefill(
     indices_k: torch.Tensor,
     cu_seqlens_k: torch.Tensor,
     max_seqlen_in_batch_k: int,
+    indices_q: torch.Tensor,
+    cu_seqlens_q: torch.Tensor,
+    max_seqlen_in_batch_q: int,
     **kwargs
 ):
     """
@@ -126,14 +126,12 @@ def flash_attn_prefill(
 
     This is the opposite of what is required by flash attention, but keeps parity with the HF convention
 
-    query_length, batch_size, indices_k, cu_seqlens_k, and max_seqlen_in_batch_k should come from the flash attention kwargs
+    query_length, batch_size, indices_{q,k}, cu_seqlens_{q,k}, and max_seqlen_in_batch_{q,k} should come from the flash attention kwargs
     """
     query_states, key_states, value_states = query_states.transpose(1,2), key_states.transpose(1,2), value_states.transpose(1,2)
-    q_flash, k_flash, v_flash, indices_q, cu_seq_lens, max_seq_lens = _upad_input(
-        query_states, key_states, value_states, query_length, indices_k, cu_seqlens_k, max_seqlen_in_batch_k
+    q_flash, k_flash, v_flash, indices_q, (cu_seqlens_q, cu_seqlens_k), (max_seqlen_in_batch_q, max_seqlen_in_batch_k), = _upad_input(
+        query_states, key_states, value_states, query_length, indices_k, cu_seqlens_k, max_seqlen_in_batch_k, indices_q, cu_seqlens_q, max_seqlen_in_batch_q
     )
-    cu_seqlens_q, cu_seqlens_k = cu_seq_lens
-    max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
     flash_kwargs = {"window_size": (sliding_window, sliding_window)} if sliding_window else {}
 
