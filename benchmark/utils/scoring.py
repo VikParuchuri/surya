@@ -24,3 +24,17 @@ def overlap_score(pred_lines: List[str], reference_lines: List[str]):
     line_scores = [line_scores[i] * line_weights[i] for i in range(len(line_scores))]
 
     return line_scores, line_weights, line_match
+
+
+def overlap_score_exact(pred_lines: List[str], reference_lines: List[str]):
+    line_scores = []
+    line_weights = []
+    assert len(pred_lines) == len(reference_lines)
+
+    for i, (pred_line, ref_line) in enumerate(zip(pred_lines, reference_lines)):
+        score = fuzz.ratio(pred_line, ref_line, score_cutoff=20) / 100
+        weight = math.sqrt(len(ref_line))
+        line_scores.append(score * weight)
+        line_weights.append(weight)
+
+    return line_scores, line_weights

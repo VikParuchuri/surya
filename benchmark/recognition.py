@@ -1,12 +1,10 @@
 import re
 import unicodedata
 from collections import defaultdict
-from typing import List
-from PIL import Image
 
 import click
 
-from benchmark.utils.scoring import overlap_score
+from benchmark.utils.scoring import overlap_score, overlap_score_exact
 from surya.input.processing import convert_if_not_rgb
 from surya.debug.text import draw_text_on_image
 from surya.recognition import RecognitionPredictor
@@ -49,20 +47,6 @@ def normalize_text(text: str) -> str:
     text = re.sub(r"\\[a-zA-Z]+", "", text)
     text = unicodedata.normalize("NFKC", text)
     return text.strip()
-
-
-def slice_bboxes(images: List[Image.Image], bboxes: List[List[List[int]]]):
-    flat_slices = []
-    flat_bboxes = []
-    image_lens = []
-    for image, bbox in zip(images, bboxes):
-        image_slices = [image.crop(box) for box in bbox]
-        flat_slices.extend(image_slices)
-        flat_bboxes.extend(
-            [[0, 0, slice.width, slice.height]] for slice in image_slices
-        )
-        image_lens.append(len(image_slices))
-    return flat_slices, flat_bboxes, image_lens
 
 
 @click.command(help="Benchmark recognition model.")
@@ -132,22 +116,9 @@ def main(
         # Run through one batch to compile the model
         rec_predictor(images[:1], None, bboxes=bboxes[:1])
 
-    flat_slices, flat_bboxes, image_lens = slice_bboxes(images, bboxes)
-
     start = time.time()
-    predictions_by_slice = rec_predictor(flat_slices, None, bboxes=flat_bboxes)
+    predictions_by_image = rec_predictor(images, None, bboxes=bboxes)
     surya_time = time.time() - start
-
-    predictions_by_image = []
-    idx = 0
-    for image_len in image_lens:
-        predictions_by_image.append(
-            {
-                "lines": predictions_by_slice[idx : idx + image_len],
-                "images": flat_slices[idx : idx + image_len],
-            }
-        )
-        idx += image_len
 
     lang_list = []
     for lang in languages:
@@ -162,12 +133,11 @@ def main(
     for idx, (pred, ref_text, langs) in enumerate(
         zip(predictions_by_image, line_text, lang_list)
     ):
-        pred_text = [line.text_lines[0].text for line in pred["lines"]]
-        image_slices = pred["images"]
+        pred_text = [line.text for line in pred.text_lines]
 
         score_ref_text = [normalize_text(line) for line in ref_text]
         score_pred_text = [normalize_text(text) for text in pred_text]
-        image_scores, image_weights, image_matches = overlap_score(
+        image_scores, image_weights = overlap_score_exact(
             score_pred_text, score_ref_text
         )
         normalized_scores = [
@@ -179,19 +149,17 @@ def main(
         for lang in langs:
             surya_scores[CODE_TO_LANGUAGE[lang]].append(image_score)
 
+        assert len(pred_text) == len(ref_text) == len(bboxes[idx])
         if debug:
-            for j, (pred_line, score, image_slice) in enumerate(
-                zip(pred_text, normalized_scores, image_slices)
+            for j, (pred_line, ref_line, score, bbox) in enumerate(
+                zip(pred_text, ref_text, normalized_scores, bboxes[idx])
             ):
-                ref_match = image_matches.get(j)
-                if not ref_match:
-                    continue
+                image_slice = images[idx].crop(bbox)
 
-                bbox = bboxes[idx][ref_match]
-                ref_line = ref_text[ref_match]
                 outputs.append(
                     {
                         "image": image_slice,
+                        "bbox": bbox,
                         "score": score,
                         "pred": pred_line,
                         "ref": ref_line,

@@ -480,7 +480,7 @@ class RecognitionPredictor(BasePredictor):
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
         input_text: List[str | None] | None = None,
-        sort_lines: bool = True,
+        sort_lines: bool = False,
         math_mode: bool = True,
         return_words: bool = False,
     ) -> List[OCRResult]:

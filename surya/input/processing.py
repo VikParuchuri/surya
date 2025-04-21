@@ -43,7 +43,7 @@ def slice_bboxes_from_image(image: np.ndarray, bboxes):
         bbox[2] = min(bbox[2], image.shape[1])
         bbox[3] = min(bbox[3], image.shape[0])
 
-        line = image[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+        line = image[bbox[1] : bbox[3], bbox[0] : bbox[2]].copy()
         if line.size == 0:
             print(f"Warning: found an empty line with bbox {bbox}")
         lines.append(line)
