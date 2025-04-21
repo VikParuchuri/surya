@@ -72,6 +72,7 @@ class RecognitionPredictor(BasePredictor):
     torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
     min_prefill_ratio: int = 0.2
+    min_trim_length: int = 50
     tasks = {
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
@@ -455,7 +456,8 @@ class RecognitionPredictor(BasePredictor):
         first_non_padding_idx = (active_attention_mask == 1).to(torch.int).argmax(dim=1)
         trim_start = first_non_padding_idx.min()
 
-        if trim_start == 0:
+        # Trimming too much slows things down
+        if trim_start < self.min_trim_length:
             return current_inputs
 
         trimmed_attention_mask = attention_mask[:, trim_start:]

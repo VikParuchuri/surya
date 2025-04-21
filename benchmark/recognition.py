@@ -1,4 +1,8 @@
+import re
+import unicodedata
 from collections import defaultdict
+from typing import List
+from PIL import Image
 
 import click
 
@@ -32,6 +36,35 @@ KEY_LANGUAGES = [
 ]
 
 
+def list_in(lst: str | list, lst2: list):
+    if isinstance(lst, str):
+        lst = [lst]
+    return any([item in lst for item in lst2])
+
+
+def normalize_text(text: str) -> str:
+    # Remove HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # Remove LaTeX tags
+    text = re.sub(r"\\[a-zA-Z]+", "", text)
+    text = unicodedata.normalize("NFKC", text)
+    return text.strip()
+
+
+def slice_bboxes(images: List[Image.Image], bboxes: List[List[List[int]]]):
+    flat_slices = []
+    flat_bboxes = []
+    image_lens = []
+    for image, bbox in zip(images, bboxes):
+        image_slices = [image.crop(box) for box in bbox]
+        flat_slices.extend(image_slices)
+        flat_bboxes.extend(
+            [[0, 0, slice.width, slice.height]] for slice in image_slices
+        )
+        image_lens.append(len(image_slices))
+    return flat_slices, flat_bboxes, image_lens
+
+
 @click.command(help="Benchmark recognition model.")
 @click.option(
     "--results_dir",
@@ -55,6 +88,12 @@ KEY_LANGUAGES = [
 @click.option(
     "--textract_cpus", type=int, help="Number of CPUs to use for textract.", default=28
 )
+@click.option(
+    "--languages",
+    type=str,
+    help="Comma-separated list of languages to benchmark.",
+    default=None,
+)
 def main(
     results_dir: str,
     max_rows: int,
@@ -63,6 +102,7 @@ def main(
     textract: bool,
     tess_cpus: int,
     textract_cpus: int,
+    languages: str | None,
 ):
     rec_predictor = RecognitionPredictor()
 
@@ -71,8 +111,14 @@ def main(
         settings.RECOGNITION_BENCH_DATASET_NAME, split=split
     )
 
+    if languages:
+        languages = languages.split(",")
+        dataset = dataset.filter(
+            lambda x: list_in(x["language"], languages), num_proc=4
+        )
+
     if max_rows and max_rows < len(dataset):
-        dataset = dataset.shuffle().select(range(max_rows))
+        dataset = dataset.shuffle(seed=1).select(range(max_rows))
 
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
@@ -86,9 +132,22 @@ def main(
         # Run through one batch to compile the model
         rec_predictor(images[:1], None, bboxes=bboxes[:1])
 
+    flat_slices, flat_bboxes, image_lens = slice_bboxes(images, bboxes)
+
     start = time.time()
-    predictions_by_image = rec_predictor(images, None, bboxes=bboxes)
+    predictions_by_slice = rec_predictor(flat_slices, None, bboxes=flat_bboxes)
     surya_time = time.time() - start
+
+    predictions_by_image = []
+    idx = 0
+    for image_len in image_lens:
+        predictions_by_image.append(
+            {
+                "lines": predictions_by_slice[idx : idx + image_len],
+                "images": flat_slices[idx : idx + image_len],
+            }
+        )
+        idx += image_len
 
     lang_list = []
     for lang in languages:
@@ -99,14 +158,50 @@ def main(
 
     surya_scores = defaultdict(list)
     img_surya_scores = []
+    outputs = []
     for idx, (pred, ref_text, langs) in enumerate(
         zip(predictions_by_image, line_text, lang_list)
     ):
-        pred_text = [line.text for line in pred.text_lines]
-        image_score = overlap_score(pred_text, ref_text)
+        pred_text = [line.text_lines[0].text for line in pred["lines"]]
+        image_slices = pred["images"]
+
+        score_ref_text = [normalize_text(line) for line in ref_text]
+        score_pred_text = [normalize_text(text) for text in pred_text]
+        image_scores, image_weights, image_matches = overlap_score(
+            score_pred_text, score_ref_text
+        )
+        normalized_scores = [
+            score / weight for score, weight in zip(image_scores, image_weights)
+        ]
+        image_score = sum(image_scores) / max(1, sum(image_weights))
+
         img_surya_scores.append(image_score)
         for lang in langs:
             surya_scores[CODE_TO_LANGUAGE[lang]].append(image_score)
+
+        if debug:
+            for j, (pred_line, score, image_slice) in enumerate(
+                zip(pred_text, normalized_scores, image_slices)
+            ):
+                ref_match = image_matches.get(j)
+                if not ref_match:
+                    continue
+
+                bbox = bboxes[idx][ref_match]
+                ref_line = ref_text[ref_match]
+                outputs.append(
+                    {
+                        "image": image_slice,
+                        "score": score,
+                        "pred": pred_line,
+                        "ref": ref_line,
+                        "langs": ",".join(langs),
+                    }
+                )
+
+    if debug:
+        out_ds = datasets.Dataset.from_list(outputs)
+        out_ds.push_to_hub("datalab-to/rec_bench_outputs", private=True)
 
     flat_surya_scores = [score for lang in surya_scores for score in surya_scores[lang]]
     benchmark_stats = {
@@ -151,7 +246,8 @@ def main(
         for idx, (pred, ref_text, lang) in enumerate(
             zip(tess_predictions, tess_reference, tess_langs)
         ):
-            image_score = overlap_score(pred, ref_text)
+            image_scores, image_weights, _ = overlap_score(pred, ref_text)
+            image_score = sum(image_scores) / max(1, sum(image_weights))
             tess_scores[TESS_CODE_TO_LANGUAGE[lang]].append(image_score)
 
         flat_tess_scores = [
@@ -177,7 +273,9 @@ def main(
         for idx, (pred, ref_text, lang) in enumerate(
             zip(textract_predictions, line_text, lang_list)
         ):
-            image_score = overlap_score(pred, ref_text)
+            image_scores, image_weights, _ = overlap_score(pred, ref_text)
+            image_score = sum(image_scores) / max(1, sum(image_weights))
+
             for lang in lang:
                 textract_scores[CODE_TO_LANGUAGE[lang]].append(image_score)
 
