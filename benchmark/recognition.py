@@ -46,7 +46,7 @@ def normalize_text(text: str) -> str:
     # Remove LaTeX tags
     text = re.sub(r"\\[a-zA-Z]+", "", text)
     text = unicodedata.normalize("NFKC", text)
-    return text.strip()
+    return text.strip().lower().replace(",", ".")
 
 
 @click.command(help="Benchmark recognition model.")
@@ -141,7 +141,7 @@ def main(
             score_pred_text, score_ref_text
         )
         normalized_scores = [
-            score / weight for score, weight in zip(image_scores, image_weights)
+            score / max(1, weight) for score, weight in zip(image_scores, image_weights)
         ]
         image_score = sum(image_scores) / max(1, sum(image_weights))
 
