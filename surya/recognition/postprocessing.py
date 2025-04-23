@@ -63,7 +63,7 @@ def cleanup_math(line: str):
 
         clean_block = re.sub(r"<[^>]+>", "", block_content)
 
-        if not re.search(r"\\", clean_block):
+        if not re.search(r"[\\\_]", clean_block):
             result = result.replace(full_match, clean_block)
         else:
             result = result.replace(full_match, f"{opening_tag}{clean_block}</math>")
