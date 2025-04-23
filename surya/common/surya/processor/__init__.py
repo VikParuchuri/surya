@@ -129,10 +129,9 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         return self.tokenizer_vocab_size
 
     def image_processor(self, image: Image.Image) -> np.ndarray:
-        # Rescale
+        # Convert to array
         image = np.asarray(image, dtype=np.float32)
-        image_arr = (image * self.rescale_factor - self.image_mean) / self.image_std
-        return image_arr
+        return image
 
     def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
         """
@@ -157,7 +156,12 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
                 image, (new_width, new_height), interpolation=cv2.INTER_LINEAR
             )
 
-        # Do not perform resizing from the image processor, since resizing is already handled
+        # Handle scaling and normalization
+        resized_image = resized_image.astype(np.float64) * self.rescale_factor
+        resized_image = (
+            resized_image.astype(np.float32) - self.image_mean
+        ) / self.image_std
+
         img_tensor = torch.from_numpy(resized_image.transpose((2, 0, 1)))
 
         tiles = einops.rearrange(

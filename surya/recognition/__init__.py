@@ -24,7 +24,7 @@ from surya.input.processing import (
 )
 
 from surya.recognition.loader import RecognitionModelLoader
-from surya.recognition.postprocessing import fix_unbalanced_tags
+from surya.recognition.postprocessing import fix_unbalanced_tags, cleanup_math
 from surya.recognition.util import (
     sort_text_lines,
     clean_close_polygons,
@@ -579,14 +579,6 @@ class RecognitionPredictor(BasePredictor):
             desc="Recognizing Text",
             disable=self.disable_tqdm,
         )
-        total_decode = 0
-        prefill_time = 0
-        prefill_count = 0
-        decode_time = 0
-        total_repeats = 0
-        import time
-
-        total_time = time.time()
 
         batch_bboxes = torch.zeros(len(flat["slices"]), overall_max_tokens, 6)
         batch_pos = [0] * len(flat["slices"])
@@ -595,10 +587,7 @@ class RecognitionPredictor(BasePredictor):
             if (
                 self.num_empty_slots / recognition_batch_size
             ) > self.min_prefill_ratio and self.prompt_queue:
-                start = time.time()
                 updated_inputs, outputs, merge_idxs = self.prefill(current_inputs)
-                prefill_time += time.time() - start
-                prefill_count += 1
 
                 predicted_tokens_cpu = outputs.preds.cpu()
                 scores_cpu = outputs.scores.cpu()
@@ -621,10 +610,7 @@ class RecognitionPredictor(BasePredictor):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
             else:
-                start = time.time()
                 updated_inputs, outputs = self.decode(current_inputs)
-                decode_time += time.time() - start
-                total_decode += 1
                 # TODO Find a cleaner way of popping from the dict
                 predicted_tokens_cpu = outputs.preds.cpu()
                 scores_cpu = outputs.scores.cpu()
@@ -654,32 +640,18 @@ class RecognitionPredictor(BasePredictor):
                         ):
                             self.batch_prompt_mapping[b_idx] = None
                             pbar.update(1)
-                            if repeats:
-                                total_repeats += 1
 
             # Update inputs and mark XLA step
             current_inputs = updated_inputs
             current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
-        total_time = time.time() - total_time
 
         char_predictions = []
         needs_boxes = [
             self.tasks[task_name]["needs_bboxes"] for task_name in flat["task_names"]
         ]
         bbox_size = self.model.config.bbox_size
-
-        from collections import Counter
-
-        token_lens = Counter([len(p) for p in predicted_tokens])
-        print(f"Token lengths in the batch: {sorted(token_lens.items())}")
-        print(
-            f"Total decode steps: {total_decode} total prefills: {prefill_count} total repeats: {total_repeats}"
-        )
-        print(
-            f"Total prefill time: {prefill_time:.2f}s, decode time: {decode_time:.2f}s, total time: {total_time:.2f}s"
-        )
 
         image_sizes = [img.shape for img in flat["slices"]]
         predicted_polygons = prediction_to_polygon_batch(
@@ -861,6 +833,7 @@ class RecognitionPredictor(BasePredictor):
                         text_line, self.processor.ocr_tokenizer.special_tokens
                     )
                     text = "".join([char.text for char in text_line])
+                    text = cleanup_math(text)  # Replace empty math tags
                     lines.append(
                         TextLine(
                             text=text,
