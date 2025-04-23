@@ -840,7 +840,9 @@ class RecognitionPredictor(BasePredictor):
                             polygon=polygon,
                             chars=text_line,
                             confidence=confidence,
-                            words=words_from_chars(text_line) if return_words else [],
+                            words=words_from_chars(text_line, poly_box)
+                            if return_words
+                            else [],
                         )
                     )
 

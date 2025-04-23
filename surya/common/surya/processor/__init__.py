@@ -286,7 +286,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def align_long_axis(self, image: np.ndarray) -> Tuple[np.ndarray, bool]:
         height, width, _ = image.shape
         if height > width:  # Rotate vertical lines
-            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE), True
+            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            return image, True
 
         return image, False
 

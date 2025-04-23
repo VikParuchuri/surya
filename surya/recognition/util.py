@@ -3,6 +3,7 @@ from typing import List, Tuple
 import numpy
 import torch
 
+from surya.common.polygon import PolygonBox
 from surya.recognition.schema import TextLine, TextWord, TextChar
 
 
@@ -70,10 +71,10 @@ def clean_close_polygons(bboxes: List[List[List[int]]], thresh: float = 0.1):
     return new_bboxes
 
 
-def words_from_chars(chars: List[TextChar]):
+def words_from_chars(chars: List[TextChar], line_box: PolygonBox):
     words = []
     word = None
-    for char in chars:
+    for i, char in enumerate(chars):
         if not char.bbox_valid:
             if word:
                 words.append(word)
@@ -82,6 +83,11 @@ def words_from_chars(chars: List[TextChar]):
 
         if not word:
             word = TextWord(**char.model_dump())
+
+            # Fit bounds to line if first word
+            if i == 0:
+                word.merge_left(line_box)
+
         elif not char.text.strip():
             if word:
                 words.append(word)
@@ -90,6 +96,9 @@ def words_from_chars(chars: List[TextChar]):
             # Merge bboxes
             word.merge(char)
             word.text = word.text + char.text
+
+            if i == len(chars) - 1:
+                word.merge_right(line_box)
     if word:
         words.append(word)
 

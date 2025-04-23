@@ -87,6 +87,16 @@ class PolygonBox(BaseModel):
         y2 = max(self.bbox[3], other.bbox[3])
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
+    def merge_left(self, other):
+        x1 = min(self.bbox[0], other.bbox[0])
+        self.polygon[0][0] = x1
+        self.polygon[3][0] = x1
+
+    def merge_right(self, other):
+        x2 = max(self.bbox[2], other.bbox[2])
+        self.polygon[1][0] = x2
+        self.polygon[2][0] = x2
+
     def expand(self, x_margin: float, y_margin: float):
         new_polygon = []
         x_margin = x_margin * self.width
