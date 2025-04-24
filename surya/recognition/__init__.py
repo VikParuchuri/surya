@@ -24,7 +24,7 @@ from surya.input.processing import (
 )
 
 from surya.recognition.loader import RecognitionModelLoader
-from surya.recognition.postprocessing import fix_unbalanced_tags, cleanup_math
+from surya.recognition.postprocessing import fix_unbalanced_tags
 from surya.recognition.util import (
     sort_text_lines,
     clean_close_polygons,
@@ -833,7 +833,6 @@ class RecognitionPredictor(BasePredictor):
                         text_line, self.processor.ocr_tokenizer.special_tokens
                     )
                     text = "".join([char.text for char in text_line])
-                    text = cleanup_math(text)  # Replace empty math tags
                     lines.append(
                         TextLine(
                             text=text,

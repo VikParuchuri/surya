@@ -67,7 +67,7 @@ class Settings(BaseSettings):
         3  # Minimum number of images before we parallelize
     )
     DETECTOR_BOX_Y_EXPAND_MARGIN: float = (
-        0.025  # Margin by which to expand detected boxes vertically
+        0.05  # Margin by which to expand detected boxes vertically
     )
     COMPILE_DETECTOR: bool = False
 
