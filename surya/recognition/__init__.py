@@ -250,10 +250,7 @@ class RecognitionPredictor(BasePredictor):
 
             try:
                 image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
-            except cv2.error as e:
-                print(
-                    f"Warning: Problem resizing image {image.size} to {image_size}: {e}"
-                )
+            except cv2.error:
                 # The image is empty if it can't be resized, so just make a blank image
                 image = np.zeros((image_size[1], image_size[0], 3), dtype=np.float32)
 
