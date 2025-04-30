@@ -207,6 +207,65 @@ class Qwen2_5_VLVisionAttention(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         self.proj = nn.Linear(dim, dim)
 
+    def unroll_tensors(
+        self,
+        seqlens: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        max_seqlen: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        unrolled_attn_mask = torch.full(
+            [len(seqlens), max_seqlen, max_seqlen],
+            torch.finfo(q.dtype).min,
+            device=q.device,
+            dtype=q.dtype,
+        )
+        unrolled_q = torch.zeros(
+            [len(seqlens), max_seqlen, self.num_heads, q.shape[-1]],
+            device=q.device,
+            dtype=q.dtype,
+        )
+        unrolled_k = torch.zeros(
+            [len(seqlens), max_seqlen, self.num_heads, k.shape[-1]],
+            device=k.device,
+            dtype=k.dtype,
+        )
+        unrolled_v = torch.zeros(
+            [len(seqlens), max_seqlen, self.num_heads, v.shape[-1]],
+            device=v.device,
+            dtype=v.dtype,
+        )
+
+        for i, seqlen in enumerate(seqlens):
+            unrolled_attn_mask[i, :seqlen, :seqlen] = 0.0
+            unrolled_q[i, :seqlen] = q[cu_seqlens[i] : cu_seqlens[i + 1]]
+            unrolled_k[i, :seqlen] = k[cu_seqlens[i] : cu_seqlens[i + 1]]
+            unrolled_v[i, :seqlen] = v[cu_seqlens[i] : cu_seqlens[i + 1]]
+
+        return unrolled_q, unrolled_k, unrolled_v, unrolled_attn_mask
+
+    def unroll_output(
+        self,
+        seq_length: int,
+        seqlens: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        attn_output: torch.Tensor,
+    ) -> torch.Tensor:
+        rolled_attn_output = torch.zeros(
+            seq_length,
+            self.num_heads,
+            attn_output.shape[-1],
+            device=attn_output.device,
+            dtype=attn_output.dtype,
+        )
+        for i, seqlen in enumerate(seqlens):
+            rolled_attn_output[cu_seqlens[i] : cu_seqlens[i + 1]] = attn_output[
+                i, :seqlen
+            ]
+        return rolled_attn_output
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -215,38 +274,21 @@ class Qwen2_5_VLVisionAttention(nn.Module):
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ) -> torch.Tensor:
         seq_length = hidden_states.shape[0]
+        seqlens = cu_seqlens[1:] - cu_seqlens[:-1]
+        max_seqlen = seqlens.max().item()
+
         q, k, v = (
             self.qkv(hidden_states)
             .reshape(seq_length, 3, self.num_heads, -1)
             .permute(1, 0, 2, 3)
             .unbind(0)
         )
-        if position_embeddings is None:
-            logger.warning_once(
-                "The attention layers in this model are transitioning from computing the RoPE embeddings internally "
-                "through `rotary_pos_emb` (2D tensor of RoPE theta values), to using externally computed "
-                "`position_embeddings` (Tuple of tensors, containing cos and sin). In v4.54 `rotary_pos_emb` will be "
-                "removed and `position_embeddings` will be mandatory."
-            )
-            emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
-            cos = emb.cos()
-            sin = emb.sin()
-        else:
-            cos, sin = position_embeddings
+        cos, sin = position_embeddings
         q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
 
-        attention_mask = torch.full(
-            [1, seq_length, seq_length],
-            torch.finfo(q.dtype).min,
-            device=q.device,
-            dtype=q.dtype,
+        q, k, v, attention_mask = self.unroll_tensors(
+            seqlens, cu_seqlens, q, k, v, max_seqlen
         )
-        for i in range(1, len(cu_seqlens)):
-            attention_mask[
-                ...,
-                cu_seqlens[i - 1] : cu_seqlens[i],
-                cu_seqlens[i - 1] : cu_seqlens[i],
-            ] = 0
 
         q = q.transpose(0, 1)
         k = k.transpose(0, 1)
@@ -258,7 +300,12 @@ class Qwen2_5_VLVisionAttention(nn.Module):
         ).to(q.dtype)
         attn_output = torch.matmul(attn_weights, v)
         attn_output = attn_output.transpose(0, 1)
-        attn_output = attn_output.reshape(seq_length, -1)
+
+        rolled_attn_output = self.unroll_output(
+            seq_length, seqlens, cu_seqlens, attn_output
+        )
+
+        attn_output = rolled_attn_output.reshape(seq_length, -1)  # Flatten head dim
         attn_output = self.proj(attn_output)
         return attn_output
 

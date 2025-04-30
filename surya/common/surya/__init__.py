@@ -151,16 +151,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         return inputs_embeds
 
-    def create_eoi_mask(self, tensor: torch.Tensor):
-        positions = (tensor == self.config.eoi_token_id).nonzero(as_tuple=True)
-        eoi_indices = positions[1].unsqueeze(1)
-        col_indices = torch.arange(tensor.shape[1], device=tensor.device)
-        col_indices = col_indices.expand_as(tensor)
-        mask = col_indices <= eoi_indices
-        mask[tensor == self.config.pad_token_id] = False  # Don't attend to pad tokens
-
-        return mask
-
     def forward(
         self,
         input_ids=None,

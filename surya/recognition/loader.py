@@ -27,15 +27,18 @@ class RecognitionModelLoader(ModelLoader):
             dtype = settings.MODEL_DTYPE_BFLOAT
 
         torch.set_float32_matmul_precision("high")
-        model = SuryaModel.from_pretrained(self.checkpoint, torch_dtype=dtype).to(
-            device
-        )
-        model = model.eval()
-
+        config = SuryaModelConfig.from_pretrained(self.checkpoint)
         if is_flash_attn_2_available():
-            model.config.decoder._attn_implementation = "flash_attention_2"
+            config.decoder._attn_implementation = "flash_attention_2"
+            config.vision_encoder._attn_implementation = "flash_attention_2"
         else:
-            model.config.decoder._attn_implementation = "sdpa"
+            config.decoder._attn_implementation = "sdpa"
+            config.vision_encoder._attn_implementation = "sdpa"
+
+        model = SuryaModel.from_pretrained(
+            self.checkpoint, torch_dtype=dtype, config=config
+        ).to(device)
+        model = model.eval()
 
         if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
             torch._dynamo.config.cache_size_limit = 16
@@ -49,7 +52,7 @@ class RecognitionModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         print(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using attention mechanism {model.config.decoder._attn_implementation}, Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation} Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
         )
         return model
 

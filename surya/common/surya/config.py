@@ -54,8 +54,6 @@ class SuryaModelConfig(PretrainedConfig):
             vision_encoder = SuryaEncoderConfig()
         self.vision_encoder = vision_encoder
 
-        print(f"Vision encoder config: {self.vision_encoder}")
-
         if isinstance(decoder, dict):
             decoder = SuryaDecoderConfig(**decoder)
         elif decoder is None:
