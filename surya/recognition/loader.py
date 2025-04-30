@@ -28,6 +28,7 @@ class RecognitionModelLoader(ModelLoader):
 
         torch.set_float32_matmul_precision("high")
         config = SuryaModelConfig.from_pretrained(self.checkpoint)
+
         if is_flash_attn_2_available():
             config.decoder._attn_implementation = "flash_attention_2"
             config.vision_encoder._attn_implementation = "flash_attention_2"

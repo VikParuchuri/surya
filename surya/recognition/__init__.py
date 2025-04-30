@@ -342,13 +342,13 @@ class RecognitionPredictor(BasePredictor):
         )
         processed_inputs = self.processor(
             batch_input, padding_side="left", device=self.model.device
-        ).to(device=self.model.device, dtype=self.model.dtype)
+        ).to(device=self.model.device)
 
-        input_ids = processed_inputs["input_ids"]
-        image_tiles = processed_inputs["image_tiles"]
-        grid_thw = processed_inputs["grid_thw"]
-        attention_mask = processed_inputs["attention_mask"]
-        position_ids = processed_inputs["position_ids"]
+        input_ids = processed_inputs["input_ids"].to(dtype=torch.long)
+        image_tiles = processed_inputs["image_tiles"].to(dtype=self.model.dtype)
+        grid_thw = processed_inputs["grid_thw"].to(dtype=torch.long)
+        attention_mask = processed_inputs["attention_mask"].to(dtype=torch.long)
+        position_ids = processed_inputs["position_ids"].to(dtype=torch.long)
 
         if settings.RECOGNITION_MODEL_QUANTIZE:
             try:
