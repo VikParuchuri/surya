@@ -1,78 +1,53 @@
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
-from transformers.utils.backbone_utils import (
-    BackboneConfigMixin,
-    get_aligned_output_features_output_indices,
-)
 
 logger = logging.get_logger(__name__)
 
 
-class SuryaEncoderConfig(BackboneConfigMixin, PretrainedConfig):
-    model_type = "swin"
+class SuryaEncoderConfig(PretrainedConfig):
+    model_type = "qwen2_5_vl"
+    base_config_key = "vision_config"
 
     attribute_map = {
         "num_attention_heads": "num_heads",
-        "num_hidden_layers": "num_layers",
+        "num_hidden_layers": "depth",
     }
 
     def __init__(
         self,
-        image_size=224,
-        patch_size=4,
-        num_channels=3,
-        embed_dim=128,
-        depths=[2, 2, 12, 2],
-        num_heads=[4, 8, 16, 32],
-        window_size=8,
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        hidden_dropout_prob=0.0,
-        attention_probs_dropout_prob=0.0,
-        drop_path_rate=0.1,
-        hidden_act="gelu",
-        use_absolute_embeddings=False,
+        depth=8,
+        hidden_size=1280,
+        hidden_act="silu",
+        intermediate_size=3420,
+        num_heads=16,
+        in_channels=3,
+        patch_size=14,
+        spatial_merge_size=2,
+        spatial_patch_size=14,
+        temporal_patch_size=1,
+        tokens_per_second=4,
+        window_size=112,
+        out_hidden_size=1280,
+        fullatt_block_indexes=(7,),
         initializer_range=0.02,
-        layer_norm_eps=1e-5,
-        encoder_stride=32,
-        out_features=None,
-        out_indices=None,
-        num_patches=256,
-        use_positional_embeddings=False,
+        image_size=4096,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_channels = num_channels
-        self.embed_dim = embed_dim
-        self.depths = depths
-        self.num_layers = len(depths)
-        self.num_heads = num_heads
-        self.window_size = window_size
-        self.mlp_ratio = mlp_ratio
-        self.qkv_bias = qkv_bias
-        self.hidden_dropout_prob = hidden_dropout_prob
-        self.attention_probs_dropout_prob = attention_probs_dropout_prob
-        self.drop_path_rate = 0  # Set to zero for inference
+        self.depth = depth
+        self.hidden_size = hidden_size
         self.hidden_act = hidden_act
-        self.use_absolute_embeddings = use_absolute_embeddings
-        self.layer_norm_eps = layer_norm_eps
+        self.intermediate_size = intermediate_size
+        self.num_heads = num_heads
+        self.in_channels = in_channels
+        self.patch_size = patch_size
+        self.spatial_merge_size = spatial_merge_size
+        self.temporal_patch_size = temporal_patch_size
+        self.tokens_per_second = tokens_per_second
+        self.window_size = window_size
+        self.fullatt_block_indexes = fullatt_block_indexes
+        self.out_hidden_size = out_hidden_size
         self.initializer_range = initializer_range
-        self.encoder_stride = encoder_stride
-        self.num_patches = num_patches
-        self.use_positional_embeddings = use_positional_embeddings
-        # we set the hidden_size attribute in order to make Swin work with VisionEncoderDecoderModel
-        # this indicates the channel dimension after the last stage of the model
-        self.hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
-        self.stage_names = ["stem"] + [
-            f"stage{idx}" for idx in range(1, len(depths) + 1)
-        ]
-        self._out_features, self._out_indices = (
-            get_aligned_output_features_output_indices(
-                out_features=out_features,
-                out_indices=out_indices,
-                stage_names=self.stage_names,
-            )
-        )
+        self.spatial_patch_size = spatial_patch_size
+        self.image_size = image_size

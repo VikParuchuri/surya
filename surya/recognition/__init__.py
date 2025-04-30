@@ -249,7 +249,9 @@ class RecognitionPredictor(BasePredictor):
             image, rotated = self.processor.align_long_axis(image)
 
             try:
-                image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
+                image = self.processor.scale_to_fit(
+                    image, image_size
+                )  # Only resizes if out of bounds (max/min)
             except cv2.error:
                 # The image is empty if it can't be resized, so just make a blank image
                 image = np.zeros((image_size[1], image_size[0], 3), dtype=np.float32)
@@ -344,6 +346,7 @@ class RecognitionPredictor(BasePredictor):
 
         input_ids = processed_inputs["input_ids"]
         image_tiles = processed_inputs["image_tiles"]
+        grid_thw = processed_inputs["grid_thw"]
         attention_mask = processed_inputs["attention_mask"]
         position_ids = processed_inputs["position_ids"]
 
@@ -369,6 +372,7 @@ class RecognitionPredictor(BasePredictor):
             outputs = self.model(
                 input_ids=input_ids,
                 image_tiles=image_tiles,
+                grid_thw=grid_thw,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 inputs_embeds=None,

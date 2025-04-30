@@ -6,7 +6,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from transformers import PreTrainedModel
-from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from surya.common.s3 import S3DownloaderMixin
@@ -16,8 +15,10 @@ from surya.common.surya.embedder.__init__ import SimpleTokenEmbedder
 from surya.common.surya.encoder.__init__ import SuryaEncoderModel
 
 from transformers.utils import is_flash_attn_2_available
+
 if is_flash_attn_2_available():
     from surya.common.surya.flash_attn_utils import _get_unpad_data
+
 
 @dataclass
 class SuryaModelOutput(CausalLMOutputWithPast):
@@ -44,7 +45,10 @@ class FlashAttentionKwargs(TypedDict, total=False):
     cu_seq_lens_k: Optional[torch.LongTensor]
     max_length_q: Optional[int]
     max_length_k: Optional[int]
+
+
 class KwargsForCausalLM(FlashAttentionKwargs): ...
+
 
 class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     config_class = SuryaModelConfig
@@ -86,14 +90,6 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.vision_encoder.config = self.config.vision_encoder
         self.decoder.config = self.config.decoder
 
-        self.vision_projector = nn.Sequential(
-            nn.Linear(
-                self.vision_encoder.config.hidden_size, self.decoder.config.hidden_size
-            ),
-            nn.GELU(),
-            nn.Linear(self.decoder.config.hidden_size, self.decoder.config.hidden_size),
-        )
-
         self.bbox_head = nn.Linear(config.hidden_size, 6)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
 
@@ -116,24 +112,14 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     def set_input_embeddings(self, new_embeddings: nn.Module):
         self.embedder.token_embed = new_embeddings
 
-    def get_image_embeddings(self, image_tiles, batch_size: int):
+    def get_image_embeddings(self, pixel_values: torch.Tensor, grid_thw: torch.Tensor):
         # embed all images with the vision encoder after they have already been tiled and flattened into a single batch
-        all_image_features = None
-        bs = max(batch_size // 2, 1)
-        for i in range(0, len(image_tiles), bs):
-            image_batch = image_tiles[i : i + bs]
-            image_features = self.vision_projector(
-                self.vision_encoder.embed_images(image_batch=image_batch)
-            )
-            if i == 0:
-                all_image_features = image_features
-            else:
-                all_image_features = torch.cat(
-                    [all_image_features, image_features], dim=0
-                )
-        return all_image_features
+        embeddings = self.vision_encoder.embed_images(
+            image_batch=pixel_values, grid_thw=grid_thw
+        )
+        return embeddings
 
-    def embed_ids_boxes_images(self, input_ids, image_tiles):
+    def embed_ids_boxes_images(self, input_ids, pixel_values, grid_thw):
         """
         Insert embedded image tiles into the corresponding positions into the full input sequence
 
@@ -141,9 +127,9 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         """
         # This is batched in the inner call
         inputs_embeds = self.embedder.embed(input_tokens=input_ids)
-        if image_tiles is not None:
+        if pixel_values is not None:
             image_features = self.get_image_embeddings(
-                image_tiles=image_tiles, batch_size=len(input_ids)
+                pixel_values=pixel_values, grid_thw=grid_thw
             )
 
             special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
@@ -179,6 +165,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self,
         input_ids=None,
         image_tiles=None,
+        grid_thw=None,
         inputs_embeds=None,
         attention_mask=None,
         position_ids=None,
@@ -191,56 +178,25 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
     ):
         # Process the mixed batch if provided
         if inputs_embeds is None:
-            inputs_embeds = self.embed_ids_boxes_images(input_ids, image_tiles)
-
-        # In prefill, unmask the image
-        if self.config.unmask_image and inputs_embeds.shape[1] != 1:
-            # This creates a special causal mask to do bidirectional attention on the images, then passes into the decoder
-            # The decoder will not regenerate if a 4D mask is passed in
-            past_seen_tokens = 0
-            cache_position = torch.arange(
-                past_seen_tokens,
-                past_seen_tokens + inputs_embeds.shape[1],
-                device=inputs_embeds.device,
+            inputs_embeds = self.embed_ids_boxes_images(
+                input_ids, image_tiles, grid_thw
             )
-            causal_mask = self.decoder._update_causal_mask(
-                attention_mask,
-                inputs_embeds,
-                cache_position,
-                past_key_values,
-                output_attentions,
-            )
-
-            expanded_eoi_mask = self.create_eoi_mask(input_ids)
-
-            # If we use flash attention, the mask will be 2d, not 4d
-            if causal_mask is None:
-                pass
-            elif causal_mask.dim() == 4:
-                expanded_eoi_mask = expanded_eoi_mask.unsqueeze(1).unsqueeze(1)
-
-                # Causal mask has 0s for unmasked positions, and -inf for masked positions
-                # Image positions are causally masked by default - We unmask by setting these positions to 0 (from -inf)
-                causal_mask.masked_fill_(expanded_eoi_mask, 0)
-            else:
-                # Flash attention case, since 4D mask cannot be used in this case. We set `is_causal=False` during prefill
-                # inside the model attention call to cover for this case
-                assert causal_mask.dim() == 2, (
-                    f"Causal mask is not supported for flash attention, attention mask should be 2D but mask has shape {causal_mask.shape}"
-                )
-
-            attention_mask = causal_mask
 
         # Handling flash attention kwargs outside the decoder to speed up + avoid graph breaks inside the decoder
         # Skipped during decoding since not required
-        if self.decoder.config._attn_implementation == 'flash_attention_2' and inputs_embeds.shape[1] != 1:
+        if (
+            self.decoder.config._attn_implementation == "flash_attention_2"
+            and inputs_embeds.shape[1] != 1
+        ):
             batch_size, query_length, _ = inputs_embeds.shape
-            indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
-            kwargs['batch_size'] = batch_size
-            kwargs['query_length'] = query_length
-            kwargs['indices_k'] = indices_k
-            kwargs['cu_seqlens_k'] = cu_seqlens_k
-            kwargs['max_seqlen_in_batch_k'] = max_seqlen_in_batch_k
+            indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(
+                attention_mask
+            )
+            kwargs["batch_size"] = batch_size
+            kwargs["query_length"] = query_length
+            kwargs["indices_k"] = indices_k
+            kwargs["cu_seqlens_k"] = cu_seqlens_k
+            kwargs["max_seqlen_in_batch_k"] = max_seqlen_in_batch_k
 
         outputs = self.decoder(
             input_ids=None,

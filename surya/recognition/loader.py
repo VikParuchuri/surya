@@ -64,11 +64,11 @@ class RecognitionModelLoader(ModelLoader):
 
         processor = SuryaOCRProcessor(
             ocr_tokenizer=ocr_tokenizer,
-            tile_size=config.tile_size,
-            image_tokens_per_tile=config.vision_encoder.num_patches,
             blank_bbox_token_id=config.blank_bbox_token_id,
             num_register_tokens=config.num_register_tokens,
             sequence_length=None,
+            patch_size=config.vision_encoder.patch_size,
+            merge_size=config.vision_encoder.spatial_merge_size,
             model_device=device,
         )
         config.eos_token_id = processor.eos_token_id
