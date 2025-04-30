@@ -829,6 +829,7 @@ class RecognitionPredictor(BasePredictor):
                         char.shift(
                             poly_box.bbox[0], poly_box.bbox[1]
                         )  # Ensure character boxes match line boxes (relative to page)
+                        char.clamp(poly_box.bbox)
 
                     text_line = fix_unbalanced_tags(
                         text_line, self.processor.ocr_tokenizer.special_tokens

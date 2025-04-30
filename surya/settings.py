@@ -189,7 +189,7 @@ class Settings(BaseSettings):
         if self.TORCH_DEVICE_MODEL == "cpu":
             return torch.float32
         if self.TORCH_DEVICE_MODEL == "mps":
-            return torch.float16
+            return torch.bfloat16
         return torch.bfloat16
 
     @computed_field
