@@ -18,7 +18,6 @@ class SuryaModelConfig(PretrainedConfig):
         pad_token_id=2,
         image_token_id=3,
         special_token_count=4,
-        tile_size=(1024, 256),
         max_sequence_length=1536,
         special_ocr_tokens=None,
         vision_encoder=None,
@@ -39,7 +38,6 @@ class SuryaModelConfig(PretrainedConfig):
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
-        self.tile_size = tile_size
         self.special_ocr_tokens = special_ocr_tokens
         self.special_token_count = special_token_count  # pad, bos, etc, tokens
         self.max_sequence_length = max_sequence_length
@@ -63,3 +61,6 @@ class SuryaModelConfig(PretrainedConfig):
         self.decoder = decoder
 
         self.hidden_size = self.decoder.hidden_size
+
+        self.patch_size = self.vision_encoder.spatial_patch_size
+        self.merge_size = self.vision_encoder.spatial_merge_size

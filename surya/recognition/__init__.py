@@ -249,7 +249,9 @@ class RecognitionPredictor(BasePredictor):
             image, rotated = self.processor.align_long_axis(image)
 
             try:
-                image = cv2.resize(image, image_size, interpolation=cv2.INTER_LINEAR)
+                image = self.processor.scale_to_fit(
+                    image, image_size
+                )  # Only resizes if out of bounds (max/min)
             except cv2.error:
                 # The image is empty if it can't be resized, so just make a blank image
                 image = np.zeros((image_size[1], image_size[0], 3), dtype=np.float32)
@@ -340,12 +342,13 @@ class RecognitionPredictor(BasePredictor):
         )
         processed_inputs = self.processor(
             batch_input, padding_side="left", device=self.model.device
-        ).to(device=self.model.device, dtype=self.model.dtype)
+        ).to(device=self.model.device)
 
-        input_ids = processed_inputs["input_ids"]
-        image_tiles = processed_inputs["image_tiles"]
-        attention_mask = processed_inputs["attention_mask"]
-        position_ids = processed_inputs["position_ids"]
+        input_ids = processed_inputs["input_ids"].to(dtype=torch.long)
+        image_tiles = processed_inputs["image_tiles"].to(dtype=self.model.dtype)
+        grid_thw = processed_inputs["grid_thw"].to(dtype=torch.long)
+        attention_mask = processed_inputs["attention_mask"].to(dtype=torch.long)
+        position_ids = processed_inputs["position_ids"].to(dtype=torch.long)
 
         if settings.RECOGNITION_MODEL_QUANTIZE:
             try:
@@ -369,6 +372,7 @@ class RecognitionPredictor(BasePredictor):
             outputs = self.model(
                 input_ids=input_ids,
                 image_tiles=image_tiles,
+                grid_thw=grid_thw,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 inputs_embeds=None,
@@ -825,6 +829,7 @@ class RecognitionPredictor(BasePredictor):
                         char.shift(
                             poly_box.bbox[0], poly_box.bbox[1]
                         )  # Ensure character boxes match line boxes (relative to page)
+                        char.clamp(poly_box.bbox)
 
                     text_line = fix_unbalanced_tags(
                         text_line, self.processor.ocr_tokenizer.special_tokens

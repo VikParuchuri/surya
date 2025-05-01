@@ -34,3 +34,4 @@ class TextInput(ProcessorInput):
 class ProcessorOutput(TypedDict):
     input_ids: List[int]
     image_tiles: torch.Tensor | None
+    grid_thw: torch.Tensor | None

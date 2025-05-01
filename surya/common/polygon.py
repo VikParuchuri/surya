@@ -180,6 +180,11 @@ class PolygonBox(BaseModel):
             for corner in self.polygon:
                 corner[1] += y_shift
 
+    def clamp(self, bbox: List[float]):
+        for corner in self.polygon:
+            corner[0] = max(min(corner[0], bbox[2]), bbox[0])
+            corner[1] = max(min(corner[1], bbox[3]), bbox[1])
+
     @property
     def center(self):
         return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
