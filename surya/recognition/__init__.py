@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import re
 from dataclasses import dataclass
 from typing import List, Optional
 from collections import deque
@@ -470,88 +472,12 @@ class RecognitionPredictor(BasePredictor):
 
         return current_inputs
 
-    def __call__(
+    def prediction_loop(
         self,
-        images: List[Image.Image],
-        task_names: List[str] | None = None,
-        det_predictor: DetectionPredictor | None = None,
-        detection_batch_size: int | None = None,
+        flat: dict,
         recognition_batch_size: int | None = None,
-        highres_images: List[Image.Image] | None = None,
-        bboxes: List[List[List[int]]] | None = None,
-        polygons: List[List[List[List[int]]]] | None = None,
-        input_text: List[str | None] | None = None,
-        sort_lines: bool = False,
         math_mode: bool = True,
-        return_words: bool = False,
-    ) -> List[OCRResult]:
-        allowed_tasks = self.tasks.keys()
-        if task_names is None:
-            task_names = [TaskNames.ocr_with_boxes] * len(images)
-
-        assert all([task_name in allowed_tasks for task_name in task_names]), (
-            f"One or more tasks in {task_names} is not supported. Supported tasks are {allowed_tasks}"
-        )
-        assert len(images) == len(task_names), (
-            "You need to pass in one task name for each image"
-        )
-
-        images = convert_if_not_rgb(images)
-        if highres_images is not None:
-            assert len(images) == len(highres_images), (
-                "You need to pass in one highres image for each image"
-            )
-
-        highres_images = (
-            convert_if_not_rgb(highres_images)
-            if highres_images is not None
-            else [None] * len(images)
-        )
-
-        if bboxes is None and polygons is None:
-            assert det_predictor is not None, (
-                "You need to pass in a detection predictor if you don't provide bboxes or polygons"
-            )
-
-            # Detect then slice
-            flat = self.detect_and_slice_bboxes(
-                images,
-                task_names,
-                det_predictor,
-                detection_batch_size=detection_batch_size,
-                highres_images=highres_images,
-            )
-        else:
-            if bboxes is not None:
-                assert len(images) == len(bboxes), (
-                    "You need to pass in one list of bboxes for each image"
-                )
-            if polygons is not None:
-                assert len(images) == len(polygons), (
-                    "You need to pass in one list of polygons for each image"
-                )
-
-            flat = self.slice_bboxes(
-                images,
-                bboxes=bboxes,
-                polygons=polygons,
-                input_text=input_text,
-                task_names=task_names,
-            )
-
-        # No images passed, or no boxes passed, or no text detected in the images
-        if len(flat["slices"]) == 0:
-            return []
-
-        # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
-        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].shape[1])
-        indices, sorted_slices = zip(*sorted_pairs)
-
-        # Reorder input_text and task_names based on the new order
-        flat["slices"] = list(sorted_slices)
-        flat["input_text"] = [flat["input_text"][i] for i in indices]
-        flat["task_names"] = [flat["task_names"][i] for i in indices]
-
+    ) -> tuple:
         predicted_tokens = [[] for _ in range(len(flat["slices"]))]
         scores = [[] for _ in range(len(flat["slices"]))]
 
@@ -648,16 +574,15 @@ class RecognitionPredictor(BasePredictor):
             mark_step()
         pbar.close()
 
+        return predicted_tokens, batch_bboxes, scores
+
+    def get_bboxes_text(
+        self, flat: dict, predicted_tokens: list, scores: list, predicted_polygons: list
+    ) -> list:
         char_predictions = []
         needs_boxes = [
             self.tasks[task_name]["needs_bboxes"] for task_name in flat["task_names"]
         ]
-        bbox_size = self.model.config.bbox_size
-
-        image_sizes = [img.shape for img in flat["slices"]]
-        predicted_polygons = prediction_to_polygon_batch(
-            batch_bboxes, image_sizes, bbox_size, bbox_size // 2
-        )
 
         for slice_idx, (
             slice_image,
@@ -768,7 +693,7 @@ class RecognitionPredictor(BasePredictor):
                     text = self.processor.ocr_tokenizer.decode(
                         token_ids, task="ocr_without_boxes"
                     )
-                    if text in [NOMATH_TOKEN]:
+                    if text in [NOMATH_TOKEN] or re.match(r"<SCRIPT-\w+>", text):
                         continue
 
                     img_chars.append(
@@ -793,6 +718,105 @@ class RecognitionPredictor(BasePredictor):
                     )
 
             char_predictions.append(img_chars)
+
+        return char_predictions
+
+    def __call__(
+        self,
+        images: List[Image.Image],
+        task_names: List[str] | None = None,
+        det_predictor: DetectionPredictor | None = None,
+        detection_batch_size: int | None = None,
+        recognition_batch_size: int | None = None,
+        highres_images: List[Image.Image] | None = None,
+        bboxes: List[List[List[int]]] | None = None,
+        polygons: List[List[List[List[int]]]] | None = None,
+        input_text: List[str | None] | None = None,
+        sort_lines: bool = False,
+        math_mode: bool = True,
+        return_words: bool = False,
+    ) -> List[OCRResult]:
+        allowed_tasks = self.tasks.keys()
+        if task_names is None:
+            task_names = [TaskNames.ocr_with_boxes] * len(images)
+
+        assert all([task_name in allowed_tasks for task_name in task_names]), (
+            f"One or more tasks in {task_names} is not supported. Supported tasks are {allowed_tasks}"
+        )
+        assert len(images) == len(task_names), (
+            "You need to pass in one task name for each image"
+        )
+
+        images = convert_if_not_rgb(images)
+        if highres_images is not None:
+            assert len(images) == len(highres_images), (
+                "You need to pass in one highres image for each image"
+            )
+
+        highres_images = (
+            convert_if_not_rgb(highres_images)
+            if highres_images is not None
+            else [None] * len(images)
+        )
+
+        if bboxes is None and polygons is None:
+            assert det_predictor is not None, (
+                "You need to pass in a detection predictor if you don't provide bboxes or polygons"
+            )
+
+            # Detect then slice
+            flat = self.detect_and_slice_bboxes(
+                images,
+                task_names,
+                det_predictor,
+                detection_batch_size=detection_batch_size,
+                highres_images=highres_images,
+            )
+        else:
+            if bboxes is not None:
+                assert len(images) == len(bboxes), (
+                    "You need to pass in one list of bboxes for each image"
+                )
+            if polygons is not None:
+                assert len(images) == len(polygons), (
+                    "You need to pass in one list of polygons for each image"
+                )
+
+            flat = self.slice_bboxes(
+                images,
+                bboxes=bboxes,
+                polygons=polygons,
+                input_text=input_text,
+                task_names=task_names,
+            )
+
+        # No images passed, or no boxes passed, or no text detected in the images
+        if len(flat["slices"]) == 0:
+            return []
+
+        # Sort by line widths. Negative so that longer images come first, fits in with continuous batching better
+        sorted_pairs = sorted(enumerate(flat["slices"]), key=lambda x: -x[1].shape[1])
+        indices, sorted_slices = zip(*sorted_pairs)
+
+        # Reorder input_text and task_names based on the new order
+        flat["slices"] = list(sorted_slices)
+        flat["input_text"] = [flat["input_text"][i] for i in indices]
+        flat["task_names"] = [flat["task_names"][i] for i in indices]
+
+        # Make predictions
+        predicted_tokens, batch_bboxes, scores = self.prediction_loop(
+            flat, recognition_batch_size=recognition_batch_size, math_mode=math_mode
+        )
+
+        # Get text and bboxes in structured form
+        bbox_size = self.model.config.bbox_size
+        image_sizes = [img.shape for img in flat["slices"]]
+        predicted_polygons = prediction_to_polygon_batch(
+            batch_bboxes, image_sizes, bbox_size, bbox_size // 2
+        )
+        char_predictions = self.get_bboxes_text(
+            flat, predicted_tokens, scores, predicted_polygons
+        )
 
         char_predictions = sorted(zip(indices, char_predictions), key=lambda x: x[0])
         char_predictions = [pred for _, pred in char_predictions]
