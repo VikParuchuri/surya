@@ -128,7 +128,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         embeddings = self.vision_encoder.embed_images(
             image_batch=pixel_values, grid_thw=grid_thw
         )
-        encoding_2d = self.get_2d_learned_embedding_embedding(
+        encoding_2d = self.get_2d_learned_embeddings(
             grid_thw,
             device=embeddings.device,
             bbox_size=self.config.image_embed_encoding_size,
@@ -176,7 +176,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
         return inputs_embeds
 
-    def get_2d_learned_embedding_embedding(
+    def get_2d_learned_embeddings(
         self,
         grid_thw,
         device: str | torch.device = "cpu",
