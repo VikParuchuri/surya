@@ -27,6 +27,7 @@ class SuryaModelConfig(PretrainedConfig):
         register_token_ids=(4, 5, 6, 7),
         unmask_image: bool = False,
         num_register_tokens: int = 4,
+        image_embed_encoding_size: int = 1024,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -47,6 +48,7 @@ class SuryaModelConfig(PretrainedConfig):
         self.unmask_image = unmask_image
         self.num_register_tokens = num_register_tokens
         self.register_token_ids = register_token_ids
+        self.image_embed_encoding_size = image_embed_encoding_size
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(**vision_encoder)

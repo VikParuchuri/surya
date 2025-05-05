@@ -86,6 +86,17 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self.decoder = decoder
         self.embedder = embedder
 
+        # Simple encoding for image patches
+        self.img_w_embed = nn.Embedding(
+            self.config.image_embed_encoding_size,
+            self.config.hidden_size,
+        )
+
+        self.img_h_embed = nn.Embedding(
+            self.config.image_embed_encoding_size,
+            self.config.hidden_size,
+        )
+
         # Tying configs
         self.vision_encoder.config = self.config.vision_encoder
         self.decoder.config = self.config.decoder
@@ -117,6 +128,20 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         embeddings = self.vision_encoder.embed_images(
             image_batch=pixel_values, grid_thw=grid_thw
         )
+        encoding_2d = self.get_2d_learned_embedding_embedding(
+            grid_thw,
+            device=embeddings.device,
+            bbox_size=self.config.image_embed_encoding_size,
+        )
+        assert embeddings.shape[0] == encoding_2d.shape[0], (
+            f"Mismatch in image embedding seq len: {embeddings.shape} vs {encoding_2d.shape}"
+        )
+        assert embeddings.shape[1] == encoding_2d.shape[1], (
+            f"Mismatch in image embedding token counts: {embeddings.shape} vs {encoding_2d.shape}"
+        )
+
+        embeddings = embeddings + encoding_2d
+
         return embeddings
 
     def embed_ids_boxes_images(self, input_ids, pixel_values, grid_thw):
@@ -150,6 +175,41 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             )
 
         return inputs_embeds
+
+    def get_2d_learned_embedding_embedding(
+        self,
+        grid_thw,
+        device: str | torch.device = "cpu",
+        bbox_size: int = 1024,
+    ):
+        all_embeddings = []
+        for grid_t, grid_h, grid_w in grid_thw:
+            llm_grid_h, llm_grid_w = (
+                grid_h // self.config.merge_size,
+                grid_w // self.config.merge_size,
+            )
+
+            # Scale to 0-1024
+            llm_grid_h = (
+                torch.arange(llm_grid_h, device=device) / llm_grid_h * bbox_size
+            )
+            llm_grid_w = (
+                torch.arange(llm_grid_w, device=device) / llm_grid_w * bbox_size
+            )
+
+            llm_grid_w = llm_grid_w.to(torch.long)
+            llm_grid_h = llm_grid_h.to(torch.long)
+            llm_grid_w = self.img_w_embed(llm_grid_w)
+            llm_grid_h = self.img_h_embed(llm_grid_h)
+            full_grid = llm_grid_h[:, None] + llm_grid_w[None, :]
+
+            flattened = full_grid.flatten(
+                0, 1
+            )  # Flatten first dimension, so they are seq_len x embed_dim
+            all_embeddings.append(flattened)
+        return torch.concat(
+            all_embeddings, dim=0
+        )  # Shape is num_image_tokens x embed_dim
 
     def forward(
         self,

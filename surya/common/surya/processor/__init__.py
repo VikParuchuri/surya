@@ -138,7 +138,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def scale_to_fit(
         img: np.ndarray,
         max_size: Tuple[int, int],
-        min_size: Tuple[int, int] = (84, 28),
+        min_size: Tuple[int, int] = (84, 84),
     ):
         # Scales an image to min/max bounds properly
         height, width = img.shape[:2]

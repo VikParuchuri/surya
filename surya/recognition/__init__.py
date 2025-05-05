@@ -248,7 +248,6 @@ class RecognitionPredictor(BasePredictor):
             images, input_text, task_names, math_modes
         ):
             image_size = self.tasks[task_name]["img_size"]
-            image, rotated = self.processor.align_long_axis(image)
 
             try:
                 image = self.processor.scale_to_fit(
@@ -261,7 +260,7 @@ class RecognitionPredictor(BasePredictor):
             # Task input is the same for all tasks for now
             text = text or ""
             inputs = [
-                {"type": "image", "image": image, "rotated": rotated},
+                {"type": "image", "image": image, "rotated": False},
                 {"type": "text", "text": text.strip(), "math": math_mode},
             ]
             batch.append({"task": task_name, "inputs": inputs})
