@@ -67,7 +67,7 @@ class Settings(BaseSettings):
         3  # Minimum number of images before we parallelize
     )
     DETECTOR_BOX_Y_EXPAND_MARGIN: float = (
-        0.025  # Margin by which to expand detected boxes vertically
+        0.05  # Margin by which to expand detected boxes vertically
     )
     COMPILE_DETECTOR: bool = False
 
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     INLINE_MATH_MIN_AREA: int = 100  # Minimum area for inline math detection
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/surya-alpha"
+    RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/foundation-ocr1.18"
     RECOGNITION_MODEL_QUANTIZE: bool = False
     RECOGNITION_MAX_TOKENS: Optional[int] = None
     RECOGNITION_BATCH_SIZE: Optional[int] = (
@@ -189,7 +189,7 @@ class Settings(BaseSettings):
         if self.TORCH_DEVICE_MODEL == "cpu":
             return torch.float32
         if self.TORCH_DEVICE_MODEL == "mps":
-            return torch.float16
+            return torch.bfloat16
         return torch.bfloat16
 
     @computed_field

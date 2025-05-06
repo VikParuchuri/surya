@@ -18,7 +18,6 @@ class SuryaModelConfig(PretrainedConfig):
         pad_token_id=2,
         image_token_id=3,
         special_token_count=4,
-        tile_size=(1024, 256),
         max_sequence_length=1536,
         special_ocr_tokens=None,
         vision_encoder=None,
@@ -28,6 +27,7 @@ class SuryaModelConfig(PretrainedConfig):
         register_token_ids=(4, 5, 6, 7),
         unmask_image: bool = False,
         num_register_tokens: int = 4,
+        image_embed_encoding_size: int = 1024,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -39,7 +39,6 @@ class SuryaModelConfig(PretrainedConfig):
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
-        self.tile_size = tile_size
         self.special_ocr_tokens = special_ocr_tokens
         self.special_token_count = special_token_count  # pad, bos, etc, tokens
         self.max_sequence_length = max_sequence_length
@@ -49,6 +48,7 @@ class SuryaModelConfig(PretrainedConfig):
         self.unmask_image = unmask_image
         self.num_register_tokens = num_register_tokens
         self.register_token_ids = register_token_ids
+        self.image_embed_encoding_size = image_embed_encoding_size
 
         if isinstance(vision_encoder, dict):
             vision_encoder = SuryaEncoderConfig(**vision_encoder)
@@ -63,3 +63,6 @@ class SuryaModelConfig(PretrainedConfig):
         self.decoder = decoder
 
         self.hidden_size = self.decoder.hidden_size
+
+        self.patch_size = self.vision_encoder.spatial_patch_size
+        self.merge_size = self.vision_encoder.spatial_merge_size

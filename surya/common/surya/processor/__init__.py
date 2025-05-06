@@ -1,7 +1,8 @@
+import math
+
 import cv2
 import numpy as np
 import torch
-import einops
 from PIL import Image
 from torch.nn.utils.rnn import pad_sequence
 
@@ -46,16 +47,16 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def __init__(
         self,
         ocr_tokenizer: PreTrainedTokenizer,
-        tile_size: Tuple[int, int],
-        image_tokens_per_tile: int,
         blank_bbox_token_id: int,
         num_register_tokens: int,
+        patch_size: int,
+        merge_size: int,
         model_device: str,
         **kwargs,
     ):
         self.ocr_tokenizer = ocr_tokenizer
-        self.tile_size = tile_size
-        self.image_tokens_per_tile = image_tokens_per_tile
+        self.patch_size = patch_size
+        self.merge_size = merge_size
         self.num_register_tokens = num_register_tokens
 
         self.tokenizer_vocab_size = 0
@@ -129,57 +130,101 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         return self.tokenizer_vocab_size
 
     def image_processor(self, image: Image.Image) -> np.ndarray:
-        # Rescale
+        # Convert to array
         image = np.asarray(image, dtype=np.float32)
-        image_arr = (image * self.rescale_factor - self.image_mean) / self.image_std
-        return image_arr
+        return image
 
-    def _process_and_tile(self, image: np.ndarray) -> torch.Tensor:
+    @staticmethod
+    def scale_to_fit(
+        img: np.ndarray,
+        max_size: Tuple[int, int],
+        min_size: Tuple[int, int] = (84, 84),
+    ):
+        # Scales an image to min/max bounds properly
+        height, width = img.shape[:2]
+        max_width, max_height = max_size
+        min_pixels = min_size[0] * min_size[1]
+        img_pixels = width * height
+        max_pixels = max_width * max_height
+
+        if (width > max_width or height > max_height) and img_pixels > max_pixels:
+            # Shrink image as needed
+            new_size = (min(max_width, width), min(max_height, height))
+            img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
+        elif img_pixels < min_pixels:
+            # Increase image size as needed
+            new_size = (max(min_size[0], width), max(min_size[1], height))
+            img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
+
+        return img
+
+    def _image_processor(self, image: np.ndarray):
+        image = image.astype(np.float64) * self.rescale_factor
+        image = (image.astype(np.float32) - self.image_mean) / self.image_std
+        return image
+
+    def _process_and_tile(
+        self, image: np.ndarray
+    ) -> Tuple[torch.Tensor, Tuple[int, int, int]]:
         """
         Resizes the input image to the closest multiple of tile_size while preserving the aspect ratio
         and returns a tensor of image tiles.
-
-        #TODO Pin to closest aspect ratio  - Currently pins to the next biggest grid of tiles that can fit the full image
         """
-        tile_width, tile_height = self.tile_size
-        orig_height, orig_width = image.shape[:2]
 
-        # Compute the scaling factor to maintain aspect ratio
-        scale_w = (orig_width + tile_width - 1) // tile_width
-        scale_h = (orig_height + tile_height - 1) // tile_height
+        factor = self.patch_size * self.merge_size
 
-        new_width = scale_w * tile_width
-        new_height = scale_h * tile_height
-        if new_width == orig_width and new_height == orig_height:
-            resized_image = image
-        else:
-            resized_image = cv2.resize(
-                image, (new_width, new_height), interpolation=cv2.INTER_LINEAR
-            )
+        height, width = image.shape[:2]
 
-        # Do not perform resizing from the image processor, since resizing is already handled
-        img_tensor = torch.from_numpy(resized_image.transpose((2, 0, 1)))
+        h_bar = math.ceil(height / factor) * factor
+        w_bar = math.ceil(width / factor) * factor
+        image = cv2.resize(image, (w_bar, h_bar), interpolation=cv2.INTER_LINEAR)
 
-        tiles = einops.rearrange(
-            img_tensor,
-            "c (ny th) (nx tw) -> (ny nx) c th tw",
-            th=tile_height,
-            tw=tile_width,
+        # Handle scaling and normalization
+        image = self._image_processor(image)
+        height, width = image.shape[:2]
+
+        # Numpy array to torch tensor
+        img_tensor = torch.from_numpy(image.transpose(2, 0, 1))
+        patches = img_tensor.unsqueeze(0)
+
+        channel = patches.shape[1]
+        grid_t = patches.shape[0]
+        grid_h, grid_w = height // self.patch_size, width // self.patch_size
+
+        patches = patches.reshape(
+            grid_t,
+            1,
+            channel,
+            grid_h // self.merge_size,
+            self.merge_size,
+            self.patch_size,
+            grid_w // self.merge_size,
+            self.merge_size,
+            self.patch_size,
         )
-        return tiles
+        patches = patches.permute(0, 3, 6, 4, 7, 2, 1, 5, 8)
+        flatten_patches = patches.reshape(
+            grid_t * grid_h * grid_w, channel * 1 * self.patch_size * self.patch_size
+        )
+
+        return flatten_patches, (grid_t, grid_h, grid_w)
 
     # Handle image input dictionaries - Process image, tile accordingly, and setup the input ids and boxes correspondingly
     def _process_image_input(self, image_input: ImageInput) -> ProcessorOutput:
         rotated = image_input.get("rotated", False)
-
         image = image_input.get("image", None)
+
         assert image is not None, (
             "A PIL Image must be provided when the input type is `image`"
         )
-        image_tiles = self._process_and_tile(image)
+        image_tiles, grid_thw = self._process_and_tile(image)
 
-        num_tiles = image_tiles.shape[0]
-        input_ids = [self.image_token_id] * num_tiles * self.image_tokens_per_tile
+        num_tokens = image_tiles.shape[0] / self.merge_size**2
+        assert num_tokens.is_integer(), (
+            f"Expected number of tokens to be an integer, got {num_tokens}"
+        )
+
+        input_ids = [self.image_token_id] * int(num_tokens)
         input_ids += self.register_token_ids[: self.num_register_tokens]
 
         # Handle the image being rotated in the imdataset
@@ -189,6 +234,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         return ProcessorOutput(
             input_ids=input_ids,
             image_tiles=image_tiles,
+            grid_thw=grid_thw,
         )
 
     def _process_text_input(self, text_input: TextInput, task: str) -> ProcessorOutput:
@@ -204,6 +250,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         return ProcessorOutput(
             input_ids=input_ids,
             image_tiles=None,
+            grid_thw=None,
         )
 
     def _process_input(self, input_dict: dict, task: str):
@@ -226,12 +273,14 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     ):
         processed_input_ids = []
         all_image_tiles = []
+        all_grid_thw = []
 
         # 1. Process the image input
         for i, input_dict in enumerate(mixed_input):
             processor_output = self._process_input(input_dict, task)
             input_ids = processor_output["input_ids"]
             image_tiles = processor_output["image_tiles"]
+            grid_thw = processor_output["grid_thw"]
 
             # Special handling of some delimiter tokens
             if i == 1:
@@ -249,12 +298,14 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             # Some input types don't return any image tiles, accounting for that
             if image_tiles is not None:
                 all_image_tiles.append(image_tiles)
+                all_grid_thw.append(grid_thw)
 
             processed_input_ids.extend(input_ids)
 
         return (
             torch.tensor(processed_input_ids, dtype=torch.long),
             all_image_tiles,
+            all_grid_thw,
         )
 
     def _process_ocr_without_boxes(
@@ -282,7 +333,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def align_long_axis(self, image: np.ndarray) -> Tuple[np.ndarray, bool]:
         height, width, _ = image.shape
         if height > width:  # Rotate vertical lines
-            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE), True
+            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            return image, True
 
         return image, False
 
@@ -294,6 +346,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     ):
         all_image_tiles = []
         all_input_ids = []
+        all_grid_thw = []
 
         for b in mixed_batch:
             mixed_input = b["inputs"]
@@ -301,12 +354,13 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             assert task in self.bos_token_id, f"Task {task} has no bos token defined."
 
             # Select the correct processing function based on the task type
-            input_ids, image_tiles = getattr(self, f"_process_{task}")(
+            input_ids, image_tiles, grid_thw = getattr(self, f"_process_{task}")(
                 mixed_input, self.bos_token_id[task]
             )
 
             all_input_ids.append(input_ids)
             all_image_tiles.extend(image_tiles)
+            all_grid_thw.extend(grid_thw)
 
         # If max sequence length is None, this slicing does nothing
         batched_input_ids = pad_sequence(
@@ -329,21 +383,23 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         )  # Ensure right pad ids get set to zero
 
         batched_image_tiles = torch.cat(all_image_tiles, dim=0)
+        batched_grid_thw = torch.from_numpy(np.array(all_grid_thw))
 
         # Pin memory for CUDA
         if device == torch.device("cuda"):
             batched_image_tiles = batched_image_tiles.pin_memory()
+            batched_grid_thw = batched_grid_thw.pin_memory()
             attention_mask = attention_mask.pin_memory()
             batched_input_ids = batched_input_ids.pin_memory()
             position_ids = position_ids.pin_memory()
 
-        # Returning lm labels as labels, since this is used by HF to calculate num_items_per_batch which is super important for gradient accumulation
         return BatchFeature(
             {
                 "input_ids": batched_input_ids,
                 "image_tiles": batched_image_tiles,
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
+                "grid_thw": batched_grid_thw,
             }
         )
 

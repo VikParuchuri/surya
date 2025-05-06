@@ -52,6 +52,25 @@ def extract_tags(proposed_tags: List[str]) -> List[str]:
 tag_pattern = re.compile(r"<(/?)([a-z]+)([^>]*)>?", re.IGNORECASE)
 
 
+def cleanup_math(line: str):
+    matches = re.finditer(r"(<math[^>]*>)(.*?)</math>", line, re.DOTALL)
+    result = line
+
+    for match in matches:
+        opening_tag = match.group(1)  # The opening <math> tag with attributes
+        full_match = match.group(0)  # The entire <math>content</math> tag
+        block_content = match.group(2)  # Just the content inside the tags
+
+        clean_block = re.sub(r"<[^>]+>", "", block_content)
+
+        if not re.search(r"[\\\_]", clean_block):
+            result = result.replace(full_match, clean_block)
+        else:
+            result = result.replace(full_match, f"{opening_tag}{clean_block}</math>")
+
+    return result
+
+
 def fix_unbalanced_tags(
     text_chars: List[TextChar], special_tokens: Dict[str, list]
 ) -> List[TextChar]:

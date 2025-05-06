@@ -40,11 +40,35 @@ def list_in(lst: str | list, lst2: list):
     return any([item in lst for item in lst2])
 
 
+def standardize_bullets(text):
+    patterns = [
+        r"•\s+",
+        r"·\s+",
+        r"○\s+",
+        r"◦\s+",
+        r"▪\s+",
+        r"▫\s+",
+        r"➢\s+",
+        r"➤\s+",
+        r"★\s+",
+        r"✓\s+",
+        r"✗\s+",
+        r"✦\s+",
+        r"\\bullet\s+",
+    ]
+
+    combined_pattern = "|".join(patterns)
+    text = re.sub(combined_pattern, "*", text)
+
+    return text
+
+
 def normalize_text(text: str) -> str:
     # Remove HTML tags
     text = re.sub(r"<[^>]+>", "", text)
     # Remove LaTeX tags
     text = re.sub(r"\\[a-zA-Z]+", "", text)
+    text = standardize_bullets(text)
     text = unicodedata.normalize("NFKC", text)
     return text.strip().lower().replace(",", ".")
 

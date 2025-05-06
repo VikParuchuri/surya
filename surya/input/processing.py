@@ -69,7 +69,20 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
 
     # We mask out anything not in the polygon
     cropped_polygon = image_array[bbox[1] : bbox[3], bbox[0] : bbox[2]].copy()
+    height, width = cropped_polygon.shape[:2]
+
     coordinates = [(x - bbox[0], y - bbox[1]) for x, y in coordinates]
+
+    # Validate the cropped area
+    if any(
+        [
+            bbox[3] <= bbox[1] or bbox[2] <= bbox[0],
+            len(coordinates) < 3,
+            height == 0,
+            width == 0,
+        ]
+    ):
+        return cropped_polygon
 
     # Pad the area outside the polygon with the pad value
     try:
@@ -79,6 +92,6 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
 
         cropped_polygon[mask == 0] = settings.RECOGNITION_PAD_VALUE
     except cv2.error as e:
-        print(f"Warning: error while processing polygon: {e}")
+        print(f"Warning: issue while processing polygon: {e}")
 
     return cropped_polygon
