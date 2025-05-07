@@ -136,10 +136,6 @@ def main(
 
     print(f"Loaded {len(images)} images. Running OCR...")
 
-    if settings.RECOGNITION_STATIC_CACHE:
-        # Run through one batch to compile the model
-        rec_predictor(images[:1], None, bboxes=bboxes[:1])
-
     start = time.time()
     predictions_by_image = rec_predictor(images, None, bboxes=bboxes)
     surya_time = time.time() - start

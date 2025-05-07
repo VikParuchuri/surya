@@ -101,7 +101,6 @@ class Settings(BaseSettings):
     )
     RECOGNITION_BENCH_DATASET_NAME: str = "vikp/rec_bench"
     RECOGNITION_PAD_VALUE: int = 255  # Should be 0 or 255
-    COMPILE_RECOGNITION: bool = False  # Static cache for torch compile
 
     # Layout
     LAYOUT_MODEL_CHECKPOINT: str = "s3://layout/2025_02_18"
@@ -145,14 +144,6 @@ class Settings(BaseSettings):
             or self.COMPILE_DETECTOR
             or self.TORCH_DEVICE_MODEL == "xla"
         )  # We need to static cache and pad to batch size for XLA, since it will recompile otherwise
-
-    @computed_field
-    def RECOGNITION_STATIC_CACHE(self) -> bool:
-        return (
-            self.COMPILE_ALL
-            or self.COMPILE_RECOGNITION
-            or self.TORCH_DEVICE_MODEL == "xla"
-        )
 
     @computed_field
     def LAYOUT_STATIC_CACHE(self) -> bool:

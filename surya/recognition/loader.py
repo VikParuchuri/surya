@@ -41,17 +41,6 @@ class RecognitionModelLoader(ModelLoader):
         ).to(device)
         model = model.eval()
 
-        if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
-            torch._dynamo.config.cache_size_limit = 16
-            torch._dynamo.config.suppress_errors = False
-
-            print(
-                f"Compiling recognition model {self.checkpoint} on device {device} with dtype {dtype}"
-            )
-            compile_args = {"backend": "openxla"} if device == "xla" else {}
-            model.vision_encoder = torch.compile(model.vision_encoder, **compile_args)
-            model.decoder = torch.compile(model.decoder, **compile_args)
-
         print(
             f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation} Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
         )
