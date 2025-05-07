@@ -5,7 +5,7 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import pytest
 from PIL import Image, ImageDraw
 
-from surya.detection import DetectionPredictor, InlineDetectionPredictor
+from surya.detection import DetectionPredictor
 from surya.ocr_error import OCRErrorPredictor
 from surya.layout import LayoutPredictor
 from surya.recognition import RecognitionPredictor
@@ -45,13 +45,6 @@ def table_rec_predictor() -> TableRecPredictor:
     table_rec_predictor = TableRecPredictor()
     yield table_rec_predictor
     del table_rec_predictor
-
-
-@pytest.fixture(scope="session")
-def inline_detection_predictor() -> InlineDetectionPredictor:
-    inline_detection_predictor = InlineDetectionPredictor()
-    yield inline_detection_predictor
-    del inline_detection_predictor
 
 
 @pytest.fixture()

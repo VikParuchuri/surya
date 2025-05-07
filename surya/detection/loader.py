@@ -58,10 +58,3 @@ class DetectionModelLoader(ModelLoader):
         dtype: Optional[torch.dtype | str] = None,
     ) -> SegformerImageProcessor:
         return SegformerImageProcessor.from_pretrained(self.checkpoint)
-
-
-class InlineDetectionModelLoader(DetectionModelLoader):
-    def __init__(self, checkpoint: Optional[str] = None):
-        if checkpoint is None:
-            checkpoint = settings.INLINE_MATH_MODEL_CHECKPOINT
-        super().__init__(checkpoint)

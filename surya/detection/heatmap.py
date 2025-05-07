@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from surya.common.util import clean_boxes, rescale_bbox
+from surya.common.util import clean_boxes
 from surya.detection.affinity import get_vertical_lines
 from surya.detection import TextDetectionResult
 from surya.common.polygon import PolygonBox
@@ -32,7 +32,9 @@ def detect_boxes(linemap, text_threshold, low_text):
     text_threshold, low_text = get_dynamic_thresholds(linemap, text_threshold, low_text)
 
     text_score_comb = (linemap > low_text).astype(np.uint8)
-    label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb, connectivity=4)
+    label_count, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        text_score_comb, connectivity=4
+    )
 
     det = []
     confidences = []
@@ -45,7 +47,10 @@ def detect_boxes(linemap, text_threshold, low_text):
             continue
 
         # make segmentation map
-        x, y, w, h = stats[k, [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT]]
+        x, y, w, h = stats[
+            k,
+            [cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT],
+        ]
 
         try:
             niter = int(np.sqrt(min(w, h)))
@@ -56,7 +61,7 @@ def detect_boxes(linemap, text_threshold, low_text):
         sx, sy = max(0, x - niter - buffer), max(0, y - niter - buffer)
         ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
-        mask = (labels[sy:ey, sx:ex] == k)
+        mask = labels[sy:ey, sx:ex] == k
         line_max = np.max(linemap[sy:ey, sx:ex][mask])
 
         # thresholding
@@ -81,9 +86,12 @@ def detect_boxes(linemap, text_threshold, low_text):
         w, h = np.linalg.norm(box[0] - box[1]), np.linalg.norm(box[1] - box[2])
         box_ratio = max(w, h) / (min(w, h) + 1e-5)
         if abs(1 - box_ratio) <= 0.1:
-            l, r = np_contours[:, 0].min(), np_contours[:, 0].max()
-            t, b = np_contours[:, 1].min(), np_contours[:, 1].max()
-            box = np.array([[l, t], [r, t], [r, b], [l, b]], dtype=np.float32)
+            left, right = np_contours[:, 0].min(), np_contours[:, 0].max()
+            top, bottom = np_contours[:, 1].min(), np_contours[:, 1].max()
+            box = np.array(
+                [[left, top], [right, top], [right, bottom], [left, bottom]],
+                dtype=np.float32,
+            )
 
         # make clock-wise order
         startidx = box.sum(axis=1).argmin()
@@ -110,10 +118,15 @@ def get_detected_boxes(textmap, text_threshold=None, low_text=None) -> List[Poly
 
     boxes, confidences = detect_boxes(textmap, text_threshold, low_text)
     # From point form to box form
-    return [PolygonBox(polygon=box, confidence=confidence) for box, confidence in zip(boxes, confidences)]
+    return [
+        PolygonBox(polygon=box, confidence=confidence)
+        for box, confidence in zip(boxes, confidences)
+    ]
 
 
-def get_and_clean_boxes(textmap, processor_size, image_size, text_threshold=None, low_text=None) -> List[PolygonBox]:
+def get_and_clean_boxes(
+    textmap, processor_size, image_size, text_threshold=None, low_text=None
+) -> List[PolygonBox]:
     bboxes = get_detected_boxes(textmap, text_threshold, low_text)
     for bbox in bboxes:
         bbox.rescale(processor_size, image_size)
@@ -139,9 +152,10 @@ def parallel_get_lines(preds, orig_sizes, include_maps=False):
         vertical_lines=vertical_lines,
         heatmap=heat_img,
         affinity_map=aff_img,
-        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]],
     )
     return result
+
 
 def parallel_get_boxes(preds, orig_sizes, include_maps=False):
     heatmap, affinity_map = preds
@@ -156,50 +170,15 @@ def parallel_get_boxes(preds, orig_sizes, include_maps=False):
         # Skip for vertical boxes
         if box.height < 3 * box.width:
             box.expand(x_margin=0, y_margin=settings.DETECTOR_BOX_Y_EXPAND_MARGIN)
-            box.fit_to_bounds([0, 0, orig_sizes[0], orig_sizes[1]])     # Fix any bad expands
+            box.fit_to_bounds(
+                [0, 0, orig_sizes[0], orig_sizes[1]]
+            )  # Fix any bad expands
 
     result = TextDetectionResult(
         bboxes=bboxes,
         vertical_lines=[],
         heatmap=heat_img,
         affinity_map=aff_img,
-        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
-    )
-    return result
-
-def parallel_get_inline_boxes(preds, orig_sizes, text_boxes, include_maps=False):
-    heatmap, _ = preds
-    heatmap_size = list(reversed(heatmap.shape))
-
-    for text_box in text_boxes:
-        text_box_reshaped = rescale_bbox(text_box, orig_sizes, heatmap_size)
-        x1, y1, x2, y2 = text_box_reshaped
-
-        # Blank out above and below text boxes, so we avoid merging inline math blocks together
-        heatmap[y2:y2+settings.INLINE_MATH_TEXT_BLANK_PX, x1:x2] = 0
-        heatmap[y1-settings.INLINE_MATH_TEXT_BLANK_PX:y1, x1:x2] = 0
-        heatmap[y1:y2, x2:x2+settings.INLINE_MATH_TEXT_BLANK_PX] = 0
-        heatmap[y1:y2, x1-settings.INLINE_MATH_TEXT_BLANK_PX:x1] = 0
-
-    bboxes = get_and_clean_boxes(
-        heatmap,
-        heatmap_size,
-        orig_sizes,
-        text_threshold=settings.INLINE_MATH_THRESHOLD,
-        low_text=settings.INLINE_MATH_BLANK_THRESHOLD
-    )
-
-    bboxes = [bbox for bbox in bboxes if bbox.area > settings.INLINE_MATH_MIN_AREA]
-
-    heat_img, aff_img = None, None
-    if include_maps:
-        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
-
-    result = TextDetectionResult(
-        bboxes=bboxes,
-        vertical_lines=[],
-        heatmap=heat_img,
-        affinity_map=None,
-        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]]
+        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]],
     )
     return result

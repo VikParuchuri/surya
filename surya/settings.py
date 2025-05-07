@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 from pathlib import Path
 from platformdirs import user_cache_dir
 
+
 class Settings(BaseSettings):
     # General
     TORCH_DEVICE: Optional[str] = None
@@ -72,18 +73,6 @@ class Settings(BaseSettings):
         0.05  # Margin by which to expand detected boxes vertically
     )
     COMPILE_DETECTOR: bool = False
-
-    # Inline math detection
-    INLINE_MATH_MODEL_CHECKPOINT: str = "s3://inline_math_detection/2025_02_24"
-    INLINE_MATH_THRESHOLD: float = 0.9  # Threshold for inline math detection (above this is considered inline-math)
-    INLINE_MATH_BLANK_THRESHOLD: float = (
-        0.35  # Threshold for blank space (below this is considered blank)
-    )
-    INLINE_MATH_BENCH_DATASET_NAME: str = "datalab-to/inline_detection_bench"
-    INLINE_MATH_TEXT_BLANK_PX: int = (
-        2  # How many pixels to blank out at the botton of each text line
-    )
-    INLINE_MATH_MIN_AREA: int = 100  # Minimum area for inline math detection
 
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "datalab-to/surya_beta"
