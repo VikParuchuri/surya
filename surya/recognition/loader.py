@@ -1,19 +1,15 @@
 from typing import Optional
 
 import torch
+from transformers.utils import is_flash_attn_2_available
 
 from surya.common.load import ModelLoader
-from surya.recognition.model.config import SuryaOCRConfig, SuryaOCRDecoderConfig, DonutSwinConfig, SuryaOCRTextEncoderConfig
-from surya.recognition.model.encoderdecoder import OCREncoderDecoderModel
-from surya.recognition.processor import SuryaProcessor
+from surya.common.surya.config import SuryaModelConfig
+from surya.common.surya import SuryaModel
+from surya.common.surya.processor import SuryaOCRProcessor
+from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
 from surya.settings import settings
 
-torch.backends.cuda.enable_cudnn_sdp(settings.ENABLE_CUDNN_ATTENTION)
-if not settings.ENABLE_EFFICIENT_ATTENTION:
-    print("Efficient attention is disabled. This will use significantly more VRAM.")
-    torch.backends.cuda.enable_mem_efficient_sdp(False)
-    torch.backends.cuda.enable_flash_sdp(False)
-    torch.backends.cuda.enable_math_sdp(True)
 
 class RecognitionModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
@@ -23,46 +19,53 @@ class RecognitionModelLoader(ModelLoader):
             self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
 
     def model(
-        self,
-        device=settings.TORCH_DEVICE_MODEL,
-        dtype=settings.MODEL_DTYPE
-    ) -> OCREncoderDecoderModel:
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE_BFLOAT
+    ) -> SuryaModel:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
         if dtype is None:
-            dtype = settings.MODEL_DTYPE
+            dtype = settings.MODEL_DTYPE_BFLOAT
 
-        config = SuryaOCRConfig.from_pretrained(self.checkpoint)
-        decoder_config = config.decoder
-        decoder = SuryaOCRDecoderConfig(**decoder_config)
-        config.decoder = decoder
+        torch.set_float32_matmul_precision("high")
+        config = SuryaModelConfig.from_pretrained(self.checkpoint)
 
-        encoder_config = config.encoder
-        encoder = DonutSwinConfig(**encoder_config)
-        config.encoder = encoder
+        if is_flash_attn_2_available():
+            config.decoder._attn_implementation = "flash_attention_2"
+            config.vision_encoder._attn_implementation = "flash_attention_2"
+        else:
+            config.decoder._attn_implementation = "sdpa"
+            config.vision_encoder._attn_implementation = "sdpa"
 
-        text_encoder_config = config.text_encoder
-        text_encoder = SuryaOCRTextEncoderConfig(**text_encoder_config)
-        config.text_encoder = text_encoder
-
-        model = OCREncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
-        model = model.to(device)
+        model = SuryaModel.from_pretrained(
+            self.checkpoint, torch_dtype=dtype, config=config
+        ).to(device)
         model = model.eval()
 
-        if settings.COMPILE_ALL or settings.COMPILE_RECOGNITION:
-            torch.set_float32_matmul_precision('high')
-            torch._dynamo.config.cache_size_limit = 16
-            torch._dynamo.config.suppress_errors = False
-
-            print(f"Compiling recognition model {self.checkpoint} on device {device} with dtype {dtype}")
-            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
-            model.encoder = torch.compile(model.encoder, **compile_args)
-            model.decoder = torch.compile(model.decoder, **compile_args)
-            model.text_encoder = torch.compile(model.text_encoder, **compile_args)
-
-        print(f"Loaded recognition model {self.checkpoint} on device {device} with dtype {dtype}")
+        print(
+            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation} Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
+        )
         return model
 
-    def processor(self) -> SuryaProcessor:
-        return SuryaProcessor(self.checkpoint)
+    def processor(
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE_BFLOAT
+    ) -> SuryaOCRProcessor:
+        config: SuryaModelConfig = SuryaModelConfig.from_pretrained(self.checkpoint)
 
+        ocr_tokenizer = SuryaOCRTokenizer(
+            special_tokens=config.special_ocr_tokens, model_checkpoint=self.checkpoint
+        )
+
+        processor = SuryaOCRProcessor(
+            ocr_tokenizer=ocr_tokenizer,
+            blank_bbox_token_id=config.blank_bbox_token_id,
+            num_register_tokens=config.num_register_tokens,
+            sequence_length=None,
+            patch_size=config.vision_encoder.patch_size,
+            merge_size=config.vision_encoder.spatial_merge_size,
+            model_device=device,
+        )
+        config.eos_token_id = processor.eos_token_id
+        config.pad_token_id = processor.pad_token_id
+        config.bos_token_id = processor.bos_token_id
+
+        return processor

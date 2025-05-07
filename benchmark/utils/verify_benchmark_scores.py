@@ -5,7 +5,7 @@ import click
 def verify_layout(data):
     scores = data["metrics"]
     for layout_type, metrics in scores.items():
-        if layout_type == "List": # Skip lists since none appear early on
+        if layout_type == "List":  # Skip lists since none appear early on
             continue
 
         if metrics["precision"] <= 0.6 or metrics["recall"] <= 0.6:
@@ -17,11 +17,6 @@ def verify_det(data):
     if scores["precision"] <= 0.9 or scores["recall"] <= 0.9:
         raise ValueError("Scores do not meet the required threshold")
 
-
-def verify_inline_det(data):
-    scores = data["metrics"]["surya"]
-    if scores["precision"] <= 0.5 or scores["recall"] <= 0.5:
-        raise ValueError("Scores do not meet the required threshold")
 
 def verify_rec(data):
     scores = data["surya"]
@@ -42,17 +37,20 @@ def verify_table_rec(data):
     if row_score < 0.75 or col_score < 0.75:
         raise ValueError("Scores do not meet the required threshold")
 
+
 def verify_texify(data):
     edit_dist = data["scores"]
-    if edit_dist > .2:
+    if edit_dist > 0.2:
         raise ValueError("Scores do not meet the required threshold")
 
 
 @click.command(help="Verify benchmark scores")
 @click.argument("file_path", type=str)
-@click.option("--bench_type", type=str, help="Type of benchmark to verify", default="detection")
+@click.option(
+    "--bench_type", type=str, help="Type of benchmark to verify", default="detection"
+)
 def main(file_path, bench_type):
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         data = json.load(file)
 
     if bench_type == "detection":
@@ -67,8 +65,6 @@ def main(file_path, bench_type):
         verify_table_rec(data)
     elif bench_type == "texify":
         verify_texify(data)
-    elif bench_type == "inline_detection":
-        verify_inline_det(data)
     else:
         raise ValueError("Invalid benchmark type")
 
