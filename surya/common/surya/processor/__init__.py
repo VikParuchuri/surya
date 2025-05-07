@@ -19,6 +19,9 @@ from surya.common.surya.processor.schema import (
     ProcessorOutput,
 )
 from surya.common.surya.schema import TaskNames
+from surya.logging import get_logger
+
+logger = get_logger()
 
 # Task agnostic tokens - Every task will use these in some form or another
 EOS_TOKEN = "</S>"
@@ -93,7 +96,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         }
 
         if self.image_token_id is None:
-            print("Warning: Image token not found in special tokens")
+            logger.warning("Warning: Image token not found in special tokens")
 
         self.blank_bbox_token_id = blank_bbox_token_id
         self.bbox_pad_token_id = self.blank_bbox_token_id

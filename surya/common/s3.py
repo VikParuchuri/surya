@@ -7,10 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from platformdirs import user_cache_dir
 from tqdm import tqdm
 
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 # Lock file expiration time in seconds (10 minutes)
 LOCK_EXPIRATION = 600
@@ -41,7 +43,7 @@ def download_file(remote_path: str, local_path: str, chunk_size: int = 1024 * 10
     except Exception as e:
         if local_path.exists():
             local_path.unlink()
-        print(f"Download error for file {remote_path}: {str(e)}")
+        logger.error(f"Download error for file {remote_path}: {str(e)}")
         raise
 
 
@@ -132,15 +134,15 @@ class S3DownloaderMixin:
                 download_directory(pretrained_model_name_or_path, local_path)
                 success = True  # If download succeeded
             except Exception as e:
-                print(
+                logger.error(
                     f"Error downloading model from {pretrained_model_name_or_path}. Attempt {attempt + 1} of {retries}. Error: {e}"
                 )
                 attempt += 1
                 if attempt < retries:
-                    print(f"Retrying in {delay} seconds...")
+                    logger.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)  # Wait before retrying
                 else:
-                    print(
+                    logger.error(
                         f"Failed to download {pretrained_model_name_or_path} after {retries} attempts."
                     )
                     raise e  # Reraise exception after max retries

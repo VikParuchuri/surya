@@ -7,7 +7,10 @@ from surya.detection.processor import SegformerImageProcessor
 
 from surya.detection.model.config import EfficientViTConfig
 from surya.detection.model.encoderdecoder import EfficientViTForSemanticSegmentation
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 class DetectionModelLoader(ModelLoader):
@@ -41,13 +44,13 @@ class DetectionModelLoader(ModelLoader):
             torch._dynamo.config.cache_size_limit = 1
             torch._dynamo.config.suppress_errors = False
 
-            print(
+            logger.info(
                 f"Compiling detection model {self.checkpoint} on device {device} with dtype {dtype}"
             )
             compile_args = {"backend": "openxla"} if device == "xla" else {}
             model = torch.compile(model, **compile_args)
 
-        print(
+        logger.debug(
             f"Loaded detection model {self.checkpoint} on device {device} with dtype {dtype}"
         )
         return model

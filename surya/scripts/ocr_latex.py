@@ -5,9 +5,13 @@ import json
 import time
 from collections import defaultdict
 
+from surya.logging import configure_logging, get_logger
 from surya.scripts.config import CLILoader
 from surya.recognition import RecognitionPredictor
 from surya.common.surya.schema import TaskNames
+
+configure_logging()
+logger = get_logger()
 
 
 @click.command(help="OCR LaTeX equations.")
@@ -29,9 +33,9 @@ def ocr_latex_cli(input_path: str, **kwargs):
     latex_predictions = [p.text_lines[0].text for p in predictions_by_image]
 
     if loader.debug:
-        print(f"OCR took {time.time() - start:.2f} seconds")
+        logger.debug(f"OCR took {time.time() - start:.2f} seconds")
         max_chars = max([len(latex) for latex in latex_predictions])
-        print(f"Max chars: {max_chars}")
+        logger.debug(f"Max chars: {max_chars}")
 
     out_preds = defaultdict(list)
     for name, pred, image in zip(loader.names, latex_predictions, loader.images):
@@ -46,4 +50,4 @@ def ocr_latex_cli(input_path: str, **kwargs):
     ) as f:
         json.dump(out_preds, f, ensure_ascii=False)
 
-    print(f"Wrote results to {loader.result_path}")
+    logger.info(f"Wrote results to {loader.result_path}")

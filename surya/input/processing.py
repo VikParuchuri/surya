@@ -4,7 +4,11 @@ import cv2
 import numpy as np
 import pypdfium2
 from PIL import Image
+
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 def convert_if_not_rgb(images: List[Image.Image]) -> List[Image.Image]:
@@ -45,7 +49,7 @@ def slice_bboxes_from_image(image: np.ndarray, bboxes):
 
         line = image[bbox[1] : bbox[3], bbox[0] : bbox[2]].copy()
         if line.size == 0:
-            print(f"Warning: found an empty line with bbox {bbox}")
+            logger.warning(f"Warning: found an empty line with bbox {bbox}")
         lines.append(line)
     return lines
 
@@ -92,6 +96,6 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
 
         cropped_polygon[mask == 0] = settings.RECOGNITION_PAD_VALUE
     except cv2.error as e:
-        print(f"Warning: issue while processing polygon: {e}")
+        logger.warning(f"Warning: issue while processing polygon: {e}")
 
     return cropped_polygon

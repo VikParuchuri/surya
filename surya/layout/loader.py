@@ -10,7 +10,10 @@ from surya.layout.model.config import (
     DonutSwinLayoutConfig,
 )
 from surya.layout.model.encoderdecoder import SuryaLayoutModel
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 class LayoutModelLoader(ModelLoader):
@@ -48,14 +51,14 @@ class LayoutModelLoader(ModelLoader):
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
 
-            print(
+            logger.info(
                 f"Compiling layout model {self.checkpoint} on device {device} with dtype {dtype}"
             )
             compile_args = {"backend": "openxla"} if device == "xla" else {}
             model.encoder = torch.compile(model.encoder, **compile_args)
             model.decoder = torch.compile(model.decoder, **compile_args)
 
-        print(
+        logger.debug(
             f"Loaded layout model {self.checkpoint} on device {device} with dtype {dtype}"
         )
         return model
