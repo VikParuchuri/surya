@@ -136,32 +136,11 @@ from surya.recognition import RecognitionPredictor
 from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages or pass None (recommended to use None)
 recognition_predictor = RecognitionPredictor()
 detection_predictor = DetectionPredictor()
 
-predictions = recognition_predictor([image], [langs], detection_predictor)
+predictions = recognition_predictor([image], det_predictor=detection_predictor)
 ```
-
-### Compilation
-
-The following models have support for compilation. You will need to set the following environment variables to enable compilation:
-
-- Recognition: `COMPILE_RECOGNITION=true`
-- Detection: `COMPILE_DETECTOR=true`
-- Layout: `COMPILE_LAYOUT=true`
-- Table recognition: `COMPILE_TABLE_REC=true`
-
-Alternatively, you can also set `COMPILE_ALL=true` which will compile all models.
-
-Here are the speedups on an A10 GPU:
-
-| Model             | Time per page (s) | Compiled time per page (s) | Speedup (%) |
-| ----------------- | ----------------- | -------------------------- | ----------- |
-| Recognition       | 0.657556          | 0.56265                    | 14.43314334 |
-| Detection         | 0.108808          | 0.10521                    | 3.306742151 |
-| Layout            | 0.27319           | 0.27063                    | 0.93707676  |
-| Table recognition | 0.0219            | 0.01938                    | 11.50684932 |
 
 
 ## Text line detection
@@ -333,6 +312,26 @@ You can also run a special interactive app that lets you select equations and OC
 pip install streamlit==1.40 streamlit-drawable-canvas-jsretry
 texify_gui
 ```
+
+## Compilation
+
+The following models have support for compilation. You will need to set the following environment variables to enable compilation:
+
+- Recognition: `COMPILE_RECOGNITION=true`
+- Detection: `COMPILE_DETECTOR=true`
+- Layout: `COMPILE_LAYOUT=true`
+- Table recognition: `COMPILE_TABLE_REC=true`
+
+Alternatively, you can also set `COMPILE_ALL=true` which will compile all models.
+
+Here are the speedups on an A10 GPU:
+
+| Model             | Time per page (s) | Compiled time per page (s) | Speedup (%) |
+| ----------------- | ----------------- | -------------------------- | ----------- |
+| Recognition       | 0.657556          | 0.56265                    | 14.43314334 |
+| Detection         | 0.108808          | 0.10521                    | 3.306742151 |
+| Layout            | 0.27319           | 0.27063                    | 0.93707676  |
+| Table recognition | 0.0219            | 0.01938                    | 11.50684932 |
 
 # Limitations
 
