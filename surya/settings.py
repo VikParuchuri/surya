@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     # Text detection
     DETECTOR_BATCH_SIZE: Optional[int] = None  # Defaults to 2 for CPU/MPS, 32 otherwise
-    DETECTOR_MODEL_CHECKPOINT: str = "datalab-to/line_det_2.20"
+    DETECTOR_MODEL_CHECKPOINT: str = "s3://text_detection/2025_05_07"
     DETECTOR_BENCH_DATASET_NAME: str = "vikp/doclaynet_bench"
     DETECTOR_IMAGE_CHUNK_HEIGHT: int = (
         1400  # Height at which to slice images vertically
