@@ -118,7 +118,7 @@ class S3DownloaderMixin:
         pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
             "s3://", ""
         )
-        cache_dir = Path(user_cache_dir("datalab")) / "models"
+        cache_dir = settings.MODEL_CACHE_DIR
         local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
         os.makedirs(local_path, exist_ok=True)
 
