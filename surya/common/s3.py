@@ -109,20 +109,33 @@ def download_directory(remote_path: str, local_dir: str):
 
 
 class S3DownloaderMixin:
+    s3_prefix = "s3://"
+
+    @classmethod
+    def get_local_path(cls, pretrained_model_name_or_path) -> str:
+        if pretrained_model_name_or_path.startswith(cls.s3_prefix):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
+                cls.s3_prefix, ""
+            )
+            cache_dir = settings.MODEL_CACHE_DIR
+            local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
+            os.makedirs(local_path, exist_ok=True)
+        else:
+            local_path = ""
+        return local_path
+
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         # Allow loading models directly from the hub, or using s3
-        if not pretrained_model_name_or_path.startswith("s3://"):
+        if not pretrained_model_name_or_path.startswith(cls.s3_prefix):
             return super().from_pretrained(
                 pretrained_model_name_or_path, *args, **kwargs
             )
 
+        local_path = cls.get_local_path(pretrained_model_name_or_path)
         pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
-            "s3://", ""
+            cls.s3_prefix, ""
         )
-        cache_dir = settings.MODEL_CACHE_DIR
-        local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
-        os.makedirs(local_path, exist_ok=True)
 
         # Retry logic for downloading the model folder
         retries = 3

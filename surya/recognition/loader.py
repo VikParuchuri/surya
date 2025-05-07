@@ -45,7 +45,7 @@ class RecognitionModelLoader(ModelLoader):
         model = model.eval()
 
         logger.debug(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation} Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
+            f"Loaded recognition model {self.checkpoint} from {SuryaModel.get_local_path(self.checkpoint)} onto device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation}."
         )
         return model
 

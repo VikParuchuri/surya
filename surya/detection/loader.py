@@ -51,7 +51,7 @@ class DetectionModelLoader(ModelLoader):
             model = torch.compile(model, **compile_args)
 
         logger.debug(
-            f"Loaded detection model {self.checkpoint} on device {device} with dtype {dtype}"
+            f"Loaded detection model {self.checkpoint} from {EfficientViTForSemanticSegmentation.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
         )
         return model
 

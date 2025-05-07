@@ -44,7 +44,7 @@ class OCRErrorModelLoader(ModelLoader):
             torch._dynamo.config.suppress_errors = False
 
             logger.info(
-                f"Compiling detection model {self.checkpoint} on device {device} with dtype {dtype}"
+                f"Compiling detection model {self.checkpoint} from {DistilBertForSequenceClassification.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
             )
             compile_args = {"backend": "openxla"} if device == "xla" else {}
             model = torch.compile(model, **compile_args)

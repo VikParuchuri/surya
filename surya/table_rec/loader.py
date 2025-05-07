@@ -60,7 +60,7 @@ class TableRecModelLoader(ModelLoader):
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         logger.debug(
-            f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}"
+            f"Loaded table recognition model {self.checkpoint} from {TableRecEncoderDecoderModel.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
         )
         return model
 
