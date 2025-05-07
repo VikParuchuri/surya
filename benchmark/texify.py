@@ -19,6 +19,10 @@ from rapidfuzz.distance import Levenshtein
 
 def normalize_text(text):
     soup = BeautifulSoup(text, "html.parser")
+    # Unwrap math tags
+    for tag in soup.find_all():
+        if tag.name == "math":
+            tag.unwrap()
     text = soup.get_text()
     text = re.sub(r"\n", " ", text)
     text = re.sub(r"\s+", " ", text)
@@ -37,7 +41,7 @@ def score_text(predictions, references):
 
 def inference_texify(source_data, predictor: RecognitionPredictor):
     images = [sd["image"] for sd in source_data]
-    tasks = [TaskNames.block_without_boxes] * len(images)
+    tasks = [TaskNames.ocr_with_boxes] * len(images)
     bboxes = [[[0, 0, image.width, image.height]] for image in images]
     texify_predictions: List[OCRResult] = predictor(images, tasks, bboxes=bboxes)
     out_data = [
