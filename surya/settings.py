@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     PARALLEL_DOWNLOAD_WORKERS: int = (
         10  # Number of workers for parallel model downloads
     )
-    MODEL_CACHE_DIR: str = Path(user_cache_dir("datalab")) / "models"
+    MODEL_CACHE_DIR: str = str(Path(user_cache_dir("datalab")) / "models")
 
     # Paths
     DATA_DIR: str = "data"
