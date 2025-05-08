@@ -13,7 +13,6 @@ from surya.common.surya.schema import TaskNames
 from surya.settings import settings
 from surya.recognition import RecognitionPredictor, OCRResult
 import json
-import io
 from rapidfuzz.distance import Levenshtein
 
 
@@ -41,7 +40,7 @@ def score_text(predictions, references):
 
 def inference_texify(source_data, predictor: RecognitionPredictor):
     images = [sd["image"] for sd in source_data]
-    tasks = [TaskNames.ocr_with_boxes] * len(images)
+    tasks = [TaskNames.block_without_boxes] * len(images)
     bboxes = [[[0, 0, image.width, image.height]] for image in images]
     texify_predictions: List[OCRResult] = predictor(images, tasks, bboxes=bboxes)
     out_data = [
@@ -53,12 +52,6 @@ def inference_texify(source_data, predictor: RecognitionPredictor):
     ]
 
     return out_data
-
-
-def image_to_bmp(image):
-    img_out = io.BytesIO()
-    image.save(img_out, format="BMP")
-    return img_out
 
 
 @click.command(help="Benchmark the performance of texify.")
