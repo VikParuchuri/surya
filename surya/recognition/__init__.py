@@ -78,17 +78,17 @@ class RecognitionPredictor(BasePredictor):
     tasks = {
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
-            "img_size": (1024, 256),
+            "img_size": (1024, 256),  # 370 max tokens
             "max_tokens": 224,
         },
         TaskNames.ocr_without_boxes: {
             "needs_bboxes": False,
-            "img_size": (1024, 256),
+            "img_size": (1024, 256),  # 370 max tokens
             "max_tokens": 224,
         },
         TaskNames.block_without_boxes: {
             "needs_bboxes": False,
-            "img_size": (1024, 768),
+            "img_size": (1024, 512),  # 703 max tokens
             "max_tokens": 768,
         },
     }

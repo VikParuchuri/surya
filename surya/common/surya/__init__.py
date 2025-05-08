@@ -131,7 +131,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         encoding_2d = self.get_2d_learned_embeddings(
             grid_thw,
             device=embeddings.device,
-            bbox_size=self.config.image_embed_encoding_size,
+            bbox_size=self.config.image_embed_encoding_multiplier,
         )
         assert embeddings.shape[0] == encoding_2d.shape[0], (
             f"Mismatch in image embedding seq len: {embeddings.shape} vs {encoding_2d.shape}"
@@ -180,7 +180,7 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         self,
         grid_thw,
         device: str | torch.device = "cpu",
-        bbox_size: int = 1024,
+        bbox_size: int = 256,
     ):
         all_embeddings = []
         for grid_t, grid_h, grid_w in grid_thw:
