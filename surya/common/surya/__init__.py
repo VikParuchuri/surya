@@ -191,16 +191,22 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
 
             # Scale to 0-1024
             llm_grid_h = (
-                torch.arange(llm_grid_h, device=device) / llm_grid_h * bbox_size
+                torch.arange(llm_grid_h, device=device)
+                / max(1, (llm_grid_h - 1))
+                * bbox_size
             )
             llm_grid_w = (
-                torch.arange(llm_grid_w, device=device) / llm_grid_w * bbox_size
+                torch.arange(llm_grid_w, device=device)
+                / max(1, (llm_grid_w - 1))
+                * bbox_size
             )
 
-            llm_grid_w = llm_grid_w.to(torch.long)
-            llm_grid_h = llm_grid_h.to(torch.long)
-            llm_grid_w = self.img_w_embed(llm_grid_w)
-            llm_grid_h = self.img_h_embed(llm_grid_h)
+            llm_grid_w_idx = llm_grid_w.to(torch.long)
+            llm_grid_h_idx = llm_grid_h.to(torch.long)
+
+            llm_grid_w = self.img_w_embed(llm_grid_w_idx)
+            llm_grid_h = self.img_h_embed(llm_grid_h_idx)
+
             full_grid = llm_grid_h[:, None] + llm_grid_w[None, :]
 
             flattened = full_grid.flatten(

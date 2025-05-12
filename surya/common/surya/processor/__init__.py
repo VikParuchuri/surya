@@ -159,21 +159,10 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         min_pixels = min_width * min_height
 
         if current_pixels > max_pixels:
-            # Calculate scaling factor to match max_pixels
             scale_factor = (max_pixels / current_pixels) ** 0.5
 
-            # Apply scaling while maintaining aspect ratio
-            new_width = int(width * scale_factor)
-            new_height = int(height * scale_factor)
-
-            # Ensure we don't exceed max dimensions
-            if new_width > max_width or new_height > max_height:
-                scale_w = max_width / new_width
-                scale_h = max_height / new_height
-                additional_scale = min(scale_w, scale_h)
-
-                new_width = math.floor(new_width * additional_scale)
-                new_height = math.floor(new_height * additional_scale)
+            new_width = math.floor(width * scale_factor)
+            new_height = math.floor(height * scale_factor)
         elif current_pixels == 0:
             return img
         elif current_pixels < min_pixels:
@@ -207,7 +196,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         h_bar = math.ceil(height / factor) * factor
         w_bar = math.ceil(width / factor) * factor
-        image = cv2.resize(image, (w_bar, h_bar), interpolation=cv2.INTER_LANCZOS4)
+        if h_bar != height or w_bar != width:
+            image = cv2.resize(image, (w_bar, h_bar), interpolation=cv2.INTER_CUBIC)
 
         # Handle scaling and normalization
         image = self._image_processor(image)
