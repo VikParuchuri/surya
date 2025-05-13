@@ -7,10 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from platformdirs import user_cache_dir
 from tqdm import tqdm
 
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 # Lock file expiration time in seconds (10 minutes)
 LOCK_EXPIRATION = 600
@@ -41,7 +43,7 @@ def download_file(remote_path: str, local_path: str, chunk_size: int = 1024 * 10
     except Exception as e:
         if local_path.exists():
             local_path.unlink()
-        print(f"Download error for file {remote_path}: {str(e)}")
+        logger.error(f"Download error for file {remote_path}: {str(e)}")
         raise
 
 
@@ -107,20 +109,33 @@ def download_directory(remote_path: str, local_dir: str):
 
 
 class S3DownloaderMixin:
+    s3_prefix = "s3://"
+
+    @classmethod
+    def get_local_path(cls, pretrained_model_name_or_path) -> str:
+        if pretrained_model_name_or_path.startswith(cls.s3_prefix):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
+                cls.s3_prefix, ""
+            )
+            cache_dir = settings.MODEL_CACHE_DIR
+            local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
+            os.makedirs(local_path, exist_ok=True)
+        else:
+            local_path = ""
+        return local_path
+
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         # Allow loading models directly from the hub, or using s3
-        if not pretrained_model_name_or_path.startswith("s3://"):
+        if not pretrained_model_name_or_path.startswith(cls.s3_prefix):
             return super().from_pretrained(
                 pretrained_model_name_or_path, *args, **kwargs
             )
 
+        local_path = cls.get_local_path(pretrained_model_name_or_path)
         pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
-            "s3://", ""
+            cls.s3_prefix, ""
         )
-        cache_dir = settings.MODEL_CACHE_DIR
-        local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
-        os.makedirs(local_path, exist_ok=True)
 
         # Retry logic for downloading the model folder
         retries = 3
@@ -132,15 +147,15 @@ class S3DownloaderMixin:
                 download_directory(pretrained_model_name_or_path, local_path)
                 success = True  # If download succeeded
             except Exception as e:
-                print(
+                logger.error(
                     f"Error downloading model from {pretrained_model_name_or_path}. Attempt {attempt + 1} of {retries}. Error: {e}"
                 )
                 attempt += 1
                 if attempt < retries:
-                    print(f"Retrying in {delay} seconds...")
+                    logger.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)  # Wait before retrying
                 else:
-                    print(
+                    logger.error(
                         f"Failed to download {pretrained_model_name_or_path} after {retries} attempts."
                     )
                     raise e  # Reraise exception after max retries

@@ -19,6 +19,9 @@ from surya.common.surya.processor.schema import (
     ProcessorOutput,
 )
 from surya.common.surya.schema import TaskNames
+from surya.logging import get_logger
+
+logger = get_logger()
 
 # Task agnostic tokens - Every task will use these in some form or another
 EOS_TOKEN = "</S>"
@@ -93,7 +96,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         }
 
         if self.image_token_id is None:
-            print("Warning: Image token not found in special tokens")
+            logger.warning("Warning: Image token not found in special tokens")
 
         self.blank_bbox_token_id = blank_bbox_token_id
         self.bbox_pad_token_id = self.blank_bbox_token_id
@@ -138,25 +141,41 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
     def scale_to_fit(
         img: np.ndarray,
         max_size: Tuple[int, int],
-        min_size: Tuple[int, int] = (84, 84),
+        min_size: Tuple[int, int] = (168, 168),
     ):
-        # Scales an image to min/max bounds properly
+        # Get current dimensions
         height, width = img.shape[:2]
+
+        # Check for empty or invalid image
+        if width == 0 or height == 0:
+            return img
+
         max_width, max_height = max_size
-        min_pixels = min_size[0] * min_size[1]
-        img_pixels = width * height
+        min_width, min_height = min_size
+
+        # Calculate pixel counts
+        current_pixels = width * height
         max_pixels = max_width * max_height
+        min_pixels = min_width * min_height
 
-        if (width > max_width or height > max_height) and img_pixels > max_pixels:
-            # Shrink image as needed
-            new_size = (min(max_width, width), min(max_height, height))
-            img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
-        elif img_pixels < min_pixels:
-            # Increase image size as needed
-            new_size = (max(min_size[0], width), max(min_size[1], height))
-            img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
+        if current_pixels > max_pixels:
+            scale_factor = (max_pixels / current_pixels) ** 0.5
 
-        return img
+            new_width = math.floor(width * scale_factor)
+            new_height = math.floor(height * scale_factor)
+        elif current_pixels == 0:
+            return img
+        elif current_pixels < min_pixels:
+            scale_factor = (min_pixels / current_pixels) ** 0.5
+
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+        else:
+            return img
+
+        return cv2.resize(
+            img, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4
+        )
 
     def _image_processor(self, image: np.ndarray):
         image = image.astype(np.float64) * self.rescale_factor
@@ -177,7 +196,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
 
         h_bar = math.ceil(height / factor) * factor
         w_bar = math.ceil(width / factor) * factor
-        image = cv2.resize(image, (w_bar, h_bar), interpolation=cv2.INTER_LINEAR)
+        if h_bar != height or w_bar != width:
+            image = cv2.resize(image, (w_bar, h_bar), interpolation=cv2.INTER_CUBIC)
 
         # Handle scaling and normalization
         image = self._image_processor(image)

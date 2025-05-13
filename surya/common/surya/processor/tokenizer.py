@@ -9,7 +9,10 @@ from transformers import PreTrainedTokenizer, Qwen2Tokenizer
 
 from surya.common.s3 import S3DownloaderMixin
 from surya.common.surya.schema import TASK_NAMES, TaskNames
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 def create_token_regex(tokens):
@@ -50,7 +53,7 @@ class InnerOCRTokenizer:
         self.MATH_TAG_PATTERN = create_token_regex(special_tokens["math_external"])
         self.SYSTEM_TAG_PATTERN = create_token_regex(special_tokens.get("system", []))
         if not special_tokens.get("system", []):
-            print("Warning: No system tokens found in special_tokens")
+            logger.warning("Warning: No system tokens found in special_tokens")
 
         self.MATH_TAG_START = "<math"
         self.MATH_END_TAG = "</math>"
@@ -147,7 +150,7 @@ class InnerOCRTokenizer:
         try:
             text = byte_array.decode("utf-16le", errors="ignore")
         except Exception as e:
-            print(f"Error decoding utf16: {e}")
+            logger.warning(f"Error decoding utf16: {e}")
             text = ""
 
         return text

@@ -8,7 +8,10 @@ from surya.common.surya.config import SuryaModelConfig
 from surya.common.surya import SuryaModel
 from surya.common.surya.processor import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 class RecognitionModelLoader(ModelLoader):
@@ -41,8 +44,8 @@ class RecognitionModelLoader(ModelLoader):
         ).to(device)
         model = model.eval()
 
-        print(
-            f"Loaded recognition model {self.checkpoint} on device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation} Quantizing kv cache: {settings.RECOGNITION_MODEL_QUANTIZE}."
+        logger.debug(
+            f"Loaded recognition model {self.checkpoint} from {SuryaModel.get_local_path(self.checkpoint)} onto device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation}."
         )
         return model
 

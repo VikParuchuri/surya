@@ -3,10 +3,13 @@ from typing import Optional
 import torch
 
 from surya.common.load import ModelLoader
+from surya.logging import get_logger
 from surya.ocr_error.model.config import DistilBertConfig
 from surya.ocr_error.model.encoder import DistilBertForSequenceClassification
 from surya.ocr_error.tokenizer import DistilBertTokenizer
 from surya.settings import settings
+
+logger = get_logger()
 
 
 class OCRErrorModelLoader(ModelLoader):
@@ -40,8 +43,8 @@ class OCRErrorModelLoader(ModelLoader):
             torch._dynamo.config.cache_size_limit = 1
             torch._dynamo.config.suppress_errors = False
 
-            print(
-                f"Compiling detection model {self.checkpoint} on device {device} with dtype {dtype}"
+            logger.info(
+                f"Compiling detection model {self.checkpoint} from {DistilBertForSequenceClassification.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
             )
             compile_args = {"backend": "openxla"} if device == "xla" else {}
             model = torch.compile(model, **compile_args)

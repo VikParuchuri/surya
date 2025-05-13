@@ -143,7 +143,7 @@ class Qwen2Attention(nn.Module):
         )
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
-        self.is_causal = False
+        self.is_causal = True
         self.q_proj = nn.Linear(
             config.hidden_size, config.num_attention_heads * self.head_dim, bias=True
         )
@@ -188,10 +188,6 @@ class Qwen2Attention(nn.Module):
                 or (past_key_value.get_seq_length(self.layer_idx) == 0),
             )
         )
-        if is_prefill:
-            self.is_causal = False
-        else:
-            self.is_causal = True
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache

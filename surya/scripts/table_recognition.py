@@ -4,16 +4,25 @@ import copy
 import json
 from collections import defaultdict
 
+from surya.logging import configure_logging, get_logger
 from surya.scripts.config import CLILoader
 from surya.layout import LayoutPredictor
 from surya.table_rec import TableRecPredictor
 from surya.debug.draw import draw_bboxes_on_image
 from surya.common.util import rescale_bbox, expand_bbox
 
+configure_logging()
+logger = get_logger()
+
 
 @click.command(help="Detect layout of an input file or folder (PDFs or image).")
 @CLILoader.common_options
-@click.option("--skip_table_detection", is_flag=True, help="Tables are already cropped, so don't re-detect tables.", default=False)
+@click.option(
+    "--skip_table_detection",
+    is_flag=True,
+    help="Tables are already cropped, so don't re-detect tables.",
+    default=False,
+)
 def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs):
     loader = CLILoader(input_path, kwargs, highres=True)
 
@@ -35,14 +44,20 @@ def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs)
     table_imgs = []
     table_counts = []
 
-    for layout_pred, img, highres_img in zip(layout_predictions, loader.images, loader.highres_images):
+    for layout_pred, img, highres_img in zip(
+        layout_predictions, loader.images, loader.highres_images
+    ):
         # The table may already be cropped
         if skip_table_detection:
             table_imgs.append(highres_img)
             table_counts.append(1)
         else:
             # The bbox for the entire table
-            bbox = [l.bbox for l in layout_pred.bboxes if l.label in ["Table", "TableOfContents"]]
+            bbox = [
+                line.bbox
+                for line in layout_pred.bboxes
+                if line.label in ["Table", "TableOfContents"]
+            ]
             # Number of tables per page
             table_counts.append(len(bbox))
 
@@ -81,22 +96,37 @@ def table_recognition_cli(input_path: str, skip_table_detection: bool, **kwargs)
         table_predictions[orig_name].append(out_pred)
 
         if loader.save_images:
-            rows = [l.bbox for l in pred.rows]
-            cols = [l.bbox for l in pred.cols]
-            row_labels = [f"Row {l.row_id}" for l in pred.rows]
-            col_labels = [f"Col {l.col_id}" for l in pred.cols]
-            cells = [l.bbox for l in pred.cells]
+            rows = [line.bbox for line in pred.rows]
+            cols = [line.bbox for line in pred.cols]
+            row_labels = [f"Row {line.row_id}" for line in pred.rows]
+            col_labels = [f"Col {line.col_id}" for line in pred.cols]
+            cells = [line.bbox for line in pred.cells]
 
             rc_image = copy.deepcopy(table_img)
-            rc_image = draw_bboxes_on_image(rows, rc_image, labels=row_labels, label_font_size=20, color="blue")
-            rc_image = draw_bboxes_on_image(cols, rc_image, labels=col_labels, label_font_size=20, color="red")
-            rc_image.save(os.path.join(loader.result_path, f"{name}_page{pnum + 1}_table{table_idx}_rc.png"))
+            rc_image = draw_bboxes_on_image(
+                rows, rc_image, labels=row_labels, label_font_size=20, color="blue"
+            )
+            rc_image = draw_bboxes_on_image(
+                cols, rc_image, labels=col_labels, label_font_size=20, color="red"
+            )
+            rc_image.save(
+                os.path.join(
+                    loader.result_path, f"{name}_page{pnum + 1}_table{table_idx}_rc.png"
+                )
+            )
 
             cell_image = copy.deepcopy(table_img)
             cell_image = draw_bboxes_on_image(cells, cell_image, color="green")
-            cell_image.save(os.path.join(loader.result_path, f"{name}_page{pnum + 1}_table{table_idx}_cells.png"))
+            cell_image.save(
+                os.path.join(
+                    loader.result_path,
+                    f"{name}_page{pnum + 1}_table{table_idx}_cells.png",
+                )
+            )
 
-    with open(os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8") as f:
+    with open(
+        os.path.join(loader.result_path, "results.json"), "w+", encoding="utf-8"
+    ) as f:
         json.dump(table_predictions, f, ensure_ascii=False)
 
-    print(f"Wrote results to {loader.result_path}")
+    logger.info(f"Wrote results to {loader.result_path}")

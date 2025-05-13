@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 
 from surya.common.load import ModelLoader
+from surya.logging import get_logger
 from surya.settings import settings
 from surya.table_rec.model.config import (
     SuryaTableRecConfig,
@@ -11,6 +12,8 @@ from surya.table_rec.model.config import (
 )
 from surya.table_rec.model.encoderdecoder import TableRecEncoderDecoderModel
 from surya.table_rec.processor import SuryaTableRecProcessor
+
+logger = get_logger()
 
 
 class TableRecModelLoader(ModelLoader):
@@ -49,15 +52,15 @@ class TableRecModelLoader(ModelLoader):
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
 
-            print(
+            logger.info(
                 f"Compiling table recognition model {self.checkpoint} on device {device} with dtype {dtype}"
             )
             compile_args = {"backend": "openxla"} if device == "xla" else {}
             model.encoder = torch.compile(model.encoder, **compile_args)
             model.decoder = torch.compile(model.decoder, **compile_args)
 
-        print(
-            f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}"
+        logger.debug(
+            f"Loaded table recognition model {self.checkpoint} from {TableRecEncoderDecoderModel.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
         )
         return model
 

@@ -7,8 +7,12 @@ from collections import defaultdict
 from surya.common.surya.schema import TaskNames
 from surya.detection import DetectionPredictor
 from surya.debug.text import draw_text_on_image
+from surya.logging import configure_logging, get_logger
 from surya.recognition import RecognitionPredictor
 from surya.scripts.config import CLILoader
+
+configure_logging()
+logger = get_logger()
 
 
 @click.command(help="OCR text.")
@@ -34,11 +38,11 @@ def ocr_text_cli(input_path: str, task_name: str, disable_math: bool, **kwargs):
     )
 
     if loader.debug:
-        print(f"OCR took {time.time() - start:.2f} seconds")
+        logger.debug(f"OCR took {time.time() - start:.2f} seconds")
         max_chars = max(
             [len(line.text) for p in predictions_by_image for line in p.text_lines]
         )
-        print(f"Max chars: {max_chars}")
+        logger.debug(f"Max chars: {max_chars}")
 
     if loader.save_images:
         for idx, (name, image, pred) in enumerate(
@@ -60,4 +64,4 @@ def ocr_text_cli(input_path: str, task_name: str, disable_math: bool, **kwargs):
     ) as f:
         json.dump(out_preds, f, ensure_ascii=False)
 
-    print(f"Wrote results to {loader.result_path}")
+    logger.info(f"Wrote results to {loader.result_path}")
