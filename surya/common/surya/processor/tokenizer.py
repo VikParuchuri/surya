@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from tokenizers import AddedToken
 
-from transformers import PreTrainedTokenizer, Qwen2Tokenizer
+from transformers import PreTrainedTokenizer, Qwen2Tokenizer as Qwen2OriginalTokenizer
 
 from surya.common.s3 import S3DownloaderMixin
 from surya.common.surya.schema import TASK_NAMES, TaskNames
@@ -27,7 +27,7 @@ class InnerOCRTokenizer:
     def __init__(
         self,
         special_tokens: Dict[str, list] | None = None,
-        qwen_tokenizer: Qwen2Tokenizer | None = None,
+        qwen_tokenizer: Qwen2OriginalTokenizer | None = None,
         **kwargs,
     ):
         self.qwen_tokenizer = qwen_tokenizer
@@ -219,6 +219,10 @@ class InnerOCRTokenizer:
         decode_buffer()
 
         return decoded_text
+
+
+class Qwen2Tokenizer(S3DownloaderMixin, Qwen2OriginalTokenizer):
+    pass
 
 
 class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):

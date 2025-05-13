@@ -1,10 +1,11 @@
 from transformers import PretrainedConfig
 
+from surya.common.s3 import S3DownloaderMixin
 from surya.common.surya.encoder.config import SuryaEncoderConfig
 from surya.common.surya.decoder.config import SuryaDecoderConfig
 
 
-class SuryaModelConfig(PretrainedConfig):
+class SuryaModelConfig(S3DownloaderMixin, PretrainedConfig):
     model_type = "surya-multimodal-foundation"
     is_composition = True
 
