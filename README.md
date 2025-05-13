@@ -96,11 +96,11 @@ surya_ocr DATA_PATH
 ```
 
 - `DATA_PATH` can be an image, pdf, or folder of images/pdfs
-- `--langs` is an optional (but recommended) argument that specifies the language(s) to use for OCR.  You can comma separate multiple languages. Use the language name or two-letter ISO code from [here](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).  Surya supports the 90+ languages found in `surya/languages.py`.
-- `--lang_file` if you want to use a different language for different PDFs/images, you can optionally specify languages in a file.  The format is a JSON dict with the keys being filenames and the values as a list, like `{"file1.pdf": ["en", "hi"], "file2.pdf": ["en"]}`.
+- `--task_name` will specify which task to use for predicting the lines.  `ocr_with_boxes` is the default, which will format text and give you bboxes.  If you get bad performance, try `ocr_without_boxes`, which will give you potentially better performance but no bboxes.  For blocks like equations and paragraphs, try `block_without_boxes`.
 - `--images` will save images of the pages and detected text lines (optional)
 - `--output_dir` specifies the directory to save results to instead of the default
 - `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
+- `--disable_math` - by default, surya will recognize math in text.  This can lead to false positives - you can disable this with this flag.
 
 The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
 
@@ -109,7 +109,18 @@ The `results.json` file will contain a json dictionary where the keys are the in
   - `confidence` - the confidence of the model in the detected text (0-1)
   - `polygon` - the polygon for the text line in (x1, y1), (x2, y2), (x3, y3), (x4, y4) format.  The points are in clockwise order from the top left.
   - `bbox` - the axis-aligned rectangle for the text line in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.
-- `languages` - the languages specified for the page
+  - `chars` - the individual characters in the line
+    - `text` - the text of the character
+    - `bbox` - the character bbox (same format as line bbox)
+    - `polygon` - the character polygon (same format as line polygon)
+    - `confidence` - the confidence of the model in the detected character (0-1)
+    - `bbox_valid` - if the character is a special token or math, the bbox may not be valid
+  - `words` - the individual words in the line (computed from the characters)
+    - `text` - the text of the word
+    - `bbox` - the word bbox (same format as line bbox)
+    - `polygon` - the word polygon (same format as line polygon)
+    - `confidence` - mean character confidence
+    - `bbox_valid` - if the word is a special token or math, the bbox may not be valid
 - `page` - the page number in the file
 - `image_bbox` - the bbox for the image in (x1, y1, x2, y2) format.  (x1, y1) is the top left corner, and (x2, y2) is the bottom right corner.  All line bboxes will be contained within this bbox.
 
@@ -125,32 +136,11 @@ from surya.recognition import RecognitionPredictor
 from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-langs = ["en"] # Replace with your languages or pass None (recommended to use None)
 recognition_predictor = RecognitionPredictor()
 detection_predictor = DetectionPredictor()
 
-predictions = recognition_predictor([image], [langs], detection_predictor)
+predictions = recognition_predictor([image], det_predictor=detection_predictor)
 ```
-
-### Compilation
-
-The following models have support for compilation. You will need to set the following environment variables to enable compilation:
-
-- Recognition: `COMPILE_RECOGNITION=true`
-- Detection: `COMPILE_DETECTOR=true`
-- Layout: `COMPILE_LAYOUT=true`
-- Table recognition: `COMPILE_TABLE_REC=true`
-
-Alternatively, you can also set `COMPILE_ALL=true` which will compile all models.
-
-Here are the speedups on an A10 GPU:
-
-| Model             | Time per page (s) | Compiled time per page (s) | Speedup (%) |
-| ----------------- | ----------------- | -------------------------- | ----------- |
-| Recognition       | 0.657556          | 0.56265                    | 14.43314334 |
-| Detection         | 0.108808          | 0.10521                    | 3.306742151 |
-| Layout            | 0.27319           | 0.27063                    | 0.93707676  |
-| Table recognition | 0.0219            | 0.01938                    | 11.50684932 |
 
 
 ## Text line detection
@@ -300,11 +290,7 @@ surya_latex_ocr DATA_PATH
 - `--output_dir` specifies the directory to save results to instead of the default
 - `--page_range` specifies the page range to process in the PDF, specified as a single number, a comma separated list, a range, or comma separated ranges - example: `0,5-10,20`.
 
-The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  Each page dictionary contains:
-
-- `text` - the detected LaTeX text - it will be in KaTeX compatible LaTeX, with `<math display="block">...</math>` and `<math>...</math>` as delimiters.
-- `confidence` - the prediction confidence from 0-1.
-- `page` - the page number in the file
+The `results.json` file will contain a json dictionary where the keys are the input filenames without extensions.  Each value will be a list of dictionaries, one per page of the input document.  See the OCR section above for the format of the output.
 
 ### From python
 
@@ -327,12 +313,30 @@ pip install streamlit==1.40 streamlit-drawable-canvas-jsretry
 texify_gui
 ```
 
+## Compilation
+
+The following models have support for compilation. You will need to set the following environment variables to enable compilation:
+
+- Detection: `COMPILE_DETECTOR=true`
+- Layout: `COMPILE_LAYOUT=true`
+- Table recognition: `COMPILE_TABLE_REC=true`
+
+Alternatively, you can also set `COMPILE_ALL=true` which will compile all models.
+
+Here are the speedups on an A10 GPU:
+
+| Model             | Time per page (s) | Compiled time per page (s) | Speedup (%) |
+| ----------------- | ----------------- | -------------------------- | ----------- |
+| Detection         | 0.108808          | 0.10521                    | 3.306742151 |
+| Layout            | 0.27319           | 0.27063                    | 0.93707676  |
+| Table recognition | 0.0219            | 0.01938                    | 11.50684932 |
+
 # Limitations
 
 - This is specialized for document OCR.  It will likely not work on photos or other images.
 - It is for printed text, not handwriting (though it may work on some handwriting).
 - The text detection model has trained itself to ignore advertisements.
-- You can find language support for OCR in `surya/languages.py`.  Text detection, layout analysis, and reading order will work with any language.
+- You can find language support for OCR in `surya/recognition/languages.py`.  Text detection, layout analysis, and reading order will work with any language.
 
 ## Troubleshooting
 

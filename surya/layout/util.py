@@ -1,7 +1,7 @@
 import torch
 
 
-def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler, skew_min=.001):
+def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler, skew_min=0.001):
     w_scale = img_size[0] / bbox_scaler
     h_scale = img_size[1] / bbox_scaler
 
@@ -22,12 +22,19 @@ def prediction_to_polygon(pred, img_size, bbox_scaler, skew_scaler, skew_min=.00
     skew_x[torch.abs(skew_x) < skew_min] = 0
     skew_y[torch.abs(skew_y) < skew_min] = 0
 
-    polygon = [x1 - skew_x, y1 - skew_y, x2 - skew_x, y1 + skew_y, x2 + skew_x, y2 + skew_y, x1 + skew_x, y2 - skew_y]
+    polygon = [
+        x1 - skew_x,
+        y1 - skew_y,
+        x2 - skew_x,
+        y1 + skew_y,
+        x2 + skew_x,
+        y2 + skew_y,
+        x1 + skew_x,
+        y2 - skew_y,
+    ]
     poly = []
     for i in range(4):
-        poly.append([
-            polygon[2 * i].item() * w_scale,
-            polygon[2 * i + 1].item() * h_scale
-        ])
+        poly.append(
+            [polygon[2 * i].item() * w_scale, polygon[2 * i + 1].item() * h_scale]
+        )
     return poly
-

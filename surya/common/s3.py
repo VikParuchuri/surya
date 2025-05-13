@@ -7,10 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from platformdirs import user_cache_dir
 from tqdm import tqdm
 
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
+
+# Lock file expiration time in seconds (10 minutes)
+LOCK_EXPIRATION = 600
+
 
 def join_urls(url1: str, url2: str):
     url1 = url1.rstrip("/")
@@ -28,7 +34,7 @@ def download_file(remote_path: str, local_path: str, chunk_size: int = 1024 * 10
         response = requests.get(remote_path, stream=True, allow_redirects=True)
         response.raise_for_status()  # Raise an exception for bad status codes
 
-        with open(local_path, 'wb') as f:
+        with open(local_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     f.write(chunk)
@@ -37,8 +43,9 @@ def download_file(remote_path: str, local_path: str, chunk_size: int = 1024 * 10
     except Exception as e:
         if local_path.exists():
             local_path.unlink()
-        print(f"Download error for file {remote_path}: {str(e)}")
+        logger.error(f"Download error for file {remote_path}: {str(e)}")
         raise
+
 
 def check_manifest(local_dir: str):
     local_dir = Path(local_dir)
@@ -52,7 +59,7 @@ def check_manifest(local_dir: str):
         for file in manifest["files"]:
             if not os.path.exists(local_dir / file):
                 return False
-    except Exception as e:
+    except Exception:
         return False
 
     return True
@@ -77,9 +84,13 @@ def download_directory(remote_path: str, local_dir: str):
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
 
-        pbar = tqdm(desc=f"Downloading {model_name} model...", total=len(manifest["files"]))
+        pbar = tqdm(
+            desc=f"Downloading {model_name} model...", total=len(manifest["files"])
+        )
 
-        with ThreadPoolExecutor(max_workers=settings.PARALLEL_DOWNLOAD_WORKERS) as executor:
+        with ThreadPoolExecutor(
+            max_workers=settings.PARALLEL_DOWNLOAD_WORKERS
+        ) as executor:
             futures = []
             for file in manifest["files"]:
                 remote_file = join_urls(s3_url, file)
@@ -98,17 +109,33 @@ def download_directory(remote_path: str, local_dir: str):
 
 
 class S3DownloaderMixin:
+    s3_prefix = "s3://"
+
+    @classmethod
+    def get_local_path(cls, pretrained_model_name_or_path) -> str:
+        if pretrained_model_name_or_path.startswith(cls.s3_prefix):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
+                cls.s3_prefix, ""
+            )
+            cache_dir = settings.MODEL_CACHE_DIR
+            local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
+            os.makedirs(local_path, exist_ok=True)
+        else:
+            local_path = ""
+        return local_path
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         # Allow loading models directly from the hub, or using s3
-        if not pretrained_model_name_or_path.startswith("s3://"):
-            return super().from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+        if not pretrained_model_name_or_path.startswith(cls.s3_prefix):
+            return super().from_pretrained(
+                pretrained_model_name_or_path, *args, **kwargs
+            )
 
-        pretrained_model_name_or_path = pretrained_model_name_or_path.replace("s3://", "")
-        cache_dir = Path(user_cache_dir('datalab')) / "models"
-        local_path = os.path.join(cache_dir, pretrained_model_name_or_path)
-        os.makedirs(local_path, exist_ok=True)
+        local_path = cls.get_local_path(pretrained_model_name_or_path)
+        pretrained_model_name_or_path = pretrained_model_name_or_path.replace(
+            cls.s3_prefix, ""
+        )
 
         # Retry logic for downloading the model folder
         retries = 3
@@ -120,13 +147,17 @@ class S3DownloaderMixin:
                 download_directory(pretrained_model_name_or_path, local_path)
                 success = True  # If download succeeded
             except Exception as e:
-                print(f"Error downloading model from {pretrained_model_name_or_path}. Attempt {attempt+1} of {retries}. Error: {e}")
+                logger.error(
+                    f"Error downloading model from {pretrained_model_name_or_path}. Attempt {attempt + 1} of {retries}. Error: {e}"
+                )
                 attempt += 1
                 if attempt < retries:
-                    print(f"Retrying in {delay} seconds...")
+                    logger.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)  # Wait before retrying
                 else:
-                    print(f"Failed to download {pretrained_model_name_or_path} after {retries} attempts.")
+                    logger.error(
+                        f"Failed to download {pretrained_model_name_or_path} after {retries} attempts."
+                    )
                     raise e  # Reraise exception after max retries
 
         return super().from_pretrained(local_path, *args, **kwargs)

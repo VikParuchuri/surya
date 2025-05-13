@@ -2,11 +2,14 @@ from typing import List
 import PIL
 
 from surya.input.processing import open_pdf, get_page_images
+from surya.logging import get_logger
 from surya.settings import settings
 import os
 import filetype
 from PIL import Image
 import json
+
+logger = get_logger()
 
 
 def get_name_from_path(path):
@@ -18,7 +21,9 @@ def load_pdf(pdf_path, page_range: List[int] | None = None, dpi=settings.IMAGE_D
     last_page = len(doc)
 
     if page_range:
-        assert all([0 <= page < last_page for page in page_range]), f"Invalid page range: {page_range}"
+        assert all([0 <= page < last_page for page in page_range]), (
+            f"Invalid page range: {page_range}"
+        )
     else:
         page_range = list(range(last_page))
 
@@ -34,7 +39,9 @@ def load_image(image_path):
     return [image], [name]
 
 
-def load_from_file(input_path, page_range: List[int] | None = None, dpi=settings.IMAGE_DPI):
+def load_from_file(
+    input_path, page_range: List[int] | None = None, dpi=settings.IMAGE_DPI
+):
     input_type = filetype.guess(input_path)
     if input_type and input_type.extension == "pdf":
         return load_pdf(input_path, page_range, dpi=dpi)
@@ -42,8 +49,14 @@ def load_from_file(input_path, page_range: List[int] | None = None, dpi=settings
         return load_image(input_path)
 
 
-def load_from_folder(folder_path, page_range: List[int] | None = None, dpi=settings.IMAGE_DPI):
-    image_paths = [os.path.join(folder_path, image_name) for image_name in os.listdir(folder_path) if not image_name.startswith(".")]
+def load_from_folder(
+    folder_path, page_range: List[int] | None = None, dpi=settings.IMAGE_DPI
+):
+    image_paths = [
+        os.path.join(folder_path, image_name)
+        for image_name in os.listdir(folder_path)
+        if not image_name.startswith(".")
+    ]
     image_paths = [ip for ip in image_paths if not os.path.isdir(ip)]
 
     images = []
@@ -60,7 +73,7 @@ def load_from_folder(folder_path, page_range: List[int] | None = None, dpi=setti
                 images.extend(image)
                 names.extend(name)
             except PIL.UnidentifiedImageError:
-                print(f"Could not load image {path}")
+                logger.warning(f"Could not load image {path}")
                 continue
     return images, names
 

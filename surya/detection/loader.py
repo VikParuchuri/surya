@@ -7,7 +7,10 @@ from surya.detection.processor import SegformerImageProcessor
 
 from surya.detection.model.config import EfficientViTConfig
 from surya.detection.model.encoderdecoder import EfficientViTForSemanticSegmentation
+from surya.logging import get_logger
 from surya.settings import settings
+
+logger = get_logger()
 
 
 class DetectionModelLoader(ModelLoader):
@@ -18,9 +21,9 @@ class DetectionModelLoader(ModelLoader):
             self.checkpoint = settings.DETECTOR_MODEL_CHECKPOINT
 
     def model(
-            self,
-            device: Optional[torch.device | str] = None,
-            dtype: Optional[torch.dtype | str] = None
+        self,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype | str] = None,
     ) -> EfficientViTForSemanticSegmentation:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
@@ -37,22 +40,24 @@ class DetectionModelLoader(ModelLoader):
         model = model.eval()
 
         if settings.COMPILE_ALL or settings.COMPILE_DETECTOR:
-            torch.set_float32_matmul_precision('high')
+            torch.set_float32_matmul_precision("high")
             torch._dynamo.config.cache_size_limit = 1
             torch._dynamo.config.suppress_errors = False
 
-            print(f"Compiling detection model {self.checkpoint} on device {device} with dtype {dtype}")
-            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
+            logger.info(
+                f"Compiling detection model {self.checkpoint} on device {device} with dtype {dtype}"
+            )
+            compile_args = {"backend": "openxla"} if device == "xla" else {}
             model = torch.compile(model, **compile_args)
 
-        print(f"Loaded detection model {self.checkpoint} on device {device} with dtype {dtype}")
+        logger.debug(
+            f"Loaded detection model {self.checkpoint} from {EfficientViTForSemanticSegmentation.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
+        )
         return model
 
-    def processor(self) -> SegformerImageProcessor:
+    def processor(
+        self,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype | str] = None,
+    ) -> SegformerImageProcessor:
         return SegformerImageProcessor.from_pretrained(self.checkpoint)
-
-class InlineDetectionModelLoader(DetectionModelLoader):
-    def __init__(self, checkpoint: Optional[str] = None):
-        if checkpoint is None:
-            checkpoint = settings.INLINE_MATH_MODEL_CHECKPOINT
-        super().__init__(checkpoint)

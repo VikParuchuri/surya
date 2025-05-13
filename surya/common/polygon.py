@@ -10,7 +10,7 @@ class PolygonBox(BaseModel):
     polygon: List[List[float]]
     confidence: Optional[float] = None
 
-    @field_validator('polygon', mode='before')
+    @field_validator("polygon", mode="before")
     @classmethod
     def convert_bbox_to_polygon(cls, value):
         if isinstance(value, (list, tuple)) and len(value) == 4:
@@ -24,7 +24,9 @@ class PolygonBox(BaseModel):
                     [x_min, y_max],
                 ]
                 return polygon
-            elif all(isinstance(point, (list, tuple)) and len(point) == 2 for point in value):
+            elif all(
+                isinstance(point, (list, tuple)) and len(point) == 2 for point in value
+            ):
                 value = [[float(v) for v in point] for point in value]
                 return value
         elif isinstance(value, np.ndarray):
@@ -32,7 +34,8 @@ class PolygonBox(BaseModel):
                 return value.tolist()
 
         raise ValueError(
-            f"Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)].  All values must be numeric. You passed {value} of type {type(value)}.  The first value is of type {type(value[0])}.")
+            f"Input must be either a bbox [x_min, y_min, x_max, y_max] or a polygon with 4 corners [(x,y), (x,y), (x,y), (x,y)].  All values must be numeric. You passed {value} of type {type(value)}.  The first value is of type {type(value[0])}."
+        )
 
     @property
     def height(self):
@@ -61,11 +64,9 @@ class PolygonBox(BaseModel):
         width_scaler = img_width / page_width
         height_scaler = img_height / page_height
 
-        new_corners = copy.deepcopy(self.polygon)
-        for corner in new_corners:
+        for corner in self.polygon:
             corner[0] = int(corner[0] * width_scaler)
             corner[1] = int(corner[1] * height_scaler)
-        self.polygon = new_corners
 
     def round(self, divisor):
         for corner in self.polygon:
@@ -86,6 +87,16 @@ class PolygonBox(BaseModel):
         y2 = max(self.bbox[3], other.bbox[3])
         self.polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
+    def merge_left(self, other):
+        x1 = min(self.bbox[0], other.bbox[0])
+        self.polygon[0][0] = x1
+        self.polygon[3][0] = x1
+
+    def merge_right(self, other):
+        x2 = max(self.bbox[2], other.bbox[2])
+        self.polygon[1][0] = x2
+        self.polygon[2][0] = x2
+
     def expand(self, x_margin: float, y_margin: float):
         new_polygon = []
         x_margin = x_margin * self.width
@@ -105,13 +116,25 @@ class PolygonBox(BaseModel):
         new_poly = []
         for i in range(4):
             if i == 0:
-                new_corner = [max(self.polygon[0][0], other.polygon[0][0]), max(self.polygon[0][1], other.polygon[0][1])]
+                new_corner = [
+                    max(self.polygon[0][0], other.polygon[0][0]),
+                    max(self.polygon[0][1], other.polygon[0][1]),
+                ]
             elif i == 1:
-                new_corner = [min(self.polygon[1][0], other.polygon[1][0]), max(self.polygon[1][1], other.polygon[1][1])]
+                new_corner = [
+                    min(self.polygon[1][0], other.polygon[1][0]),
+                    max(self.polygon[1][1], other.polygon[1][1]),
+                ]
             elif i == 2:
-                new_corner = [min(self.polygon[2][0], other.polygon[2][0]), min(self.polygon[2][1], other.polygon[2][1])]
+                new_corner = [
+                    min(self.polygon[2][0], other.polygon[2][0]),
+                    min(self.polygon[2][1], other.polygon[2][1]),
+                ]
             elif i == 3:
-                new_corner = [max(self.polygon[3][0], other.polygon[3][0]), min(self.polygon[3][1], other.polygon[3][1])]
+                new_corner = [
+                    max(self.polygon[3][0], other.polygon[3][0]),
+                    min(self.polygon[3][1], other.polygon[3][1]),
+                ]
             new_poly.append(new_corner)
 
         return new_poly
@@ -122,10 +145,18 @@ class PolygonBox(BaseModel):
         return x_overlap * y_overlap
 
     def x_overlap(self, other, x_margin=0):
-        return max(0, min(self.bbox[2] + x_margin, other.bbox[2] + x_margin) - max(self.bbox[0] - x_margin, other.bbox[0] - x_margin))
+        return max(
+            0,
+            min(self.bbox[2] + x_margin, other.bbox[2] + x_margin)
+            - max(self.bbox[0] - x_margin, other.bbox[0] - x_margin),
+        )
 
     def y_overlap(self, other, y_margin=0):
-        return max(0, min(self.bbox[3] + y_margin, other.bbox[3] + y_margin) - max(self.bbox[1] - y_margin, other.bbox[1] - y_margin))
+        return max(
+            0,
+            min(self.bbox[3] + y_margin, other.bbox[3] + y_margin)
+            - max(self.bbox[1] - y_margin, other.bbox[1] - y_margin),
+        )
 
     def intersection_pct(self, other, x_margin=0, y_margin=0):
         assert 0 <= x_margin <= 1
@@ -148,6 +179,23 @@ class PolygonBox(BaseModel):
         if y_shift is not None:
             for corner in self.polygon:
                 corner[1] += y_shift
+
+    def clamp(self, bbox: List[float]):
+        for corner in self.polygon:
+            corner[0] = max(min(corner[0], bbox[2]), bbox[0])
+            corner[1] = max(min(corner[1], bbox[3]), bbox[1])
+
+    @property
+    def center(self):
+        return [(self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2]
+
+    def distance(self, other):
+        center = self.center
+        other_center = other.center
+
+        return (
+            (center[0] - other_center[0]) ** 2 + (center[1] - other_center[1]) ** 2
+        ) ** 0.5
 
     def __hash__(self):
         return hash(tuple(self.bbox))

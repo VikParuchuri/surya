@@ -3,10 +3,17 @@ from typing import Optional
 import torch
 
 from surya.common.load import ModelLoader
+from surya.logging import get_logger
 from surya.settings import settings
-from surya.table_rec.model.config import SuryaTableRecConfig, SuryaTableRecDecoderConfig, DonutSwinTableRecConfig
+from surya.table_rec.model.config import (
+    SuryaTableRecConfig,
+    SuryaTableRecDecoderConfig,
+    DonutSwinTableRecConfig,
+)
 from surya.table_rec.model.encoderdecoder import TableRecEncoderDecoderModel
 from surya.table_rec.processor import SuryaTableRecProcessor
+
+logger = get_logger()
 
 
 class TableRecModelLoader(ModelLoader):
@@ -17,9 +24,7 @@ class TableRecModelLoader(ModelLoader):
             self.checkpoint = settings.TABLE_REC_MODEL_CHECKPOINT
 
     def model(
-            self,
-            device=settings.TORCH_DEVICE_MODEL,
-            dtype=settings.MODEL_DTYPE
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE
     ) -> TableRecEncoderDecoderModel:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
@@ -35,25 +40,33 @@ class TableRecModelLoader(ModelLoader):
         encoder = DonutSwinTableRecConfig(**encoder_config)
         config.encoder = encoder
 
-        model = TableRecEncoderDecoderModel.from_pretrained(self.checkpoint, config=config, torch_dtype=dtype)
+        model = TableRecEncoderDecoderModel.from_pretrained(
+            self.checkpoint, config=config, torch_dtype=dtype
+        )
 
         model = model.to(device)
         model = model.eval()
 
         if settings.COMPILE_ALL or settings.COMPILE_TABLE_REC:
-            torch.set_float32_matmul_precision('high')
+            torch.set_float32_matmul_precision("high")
             torch._dynamo.config.cache_size_limit = 16
             torch._dynamo.config.suppress_errors = False
 
-            print(f"Compiling table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
-            compile_args = {'backend': 'openxla'} if device == 'xla' else {}
+            logger.info(
+                f"Compiling table recognition model {self.checkpoint} on device {device} with dtype {dtype}"
+            )
+            compile_args = {"backend": "openxla"} if device == "xla" else {}
             model.encoder = torch.compile(model.encoder, **compile_args)
             model.decoder = torch.compile(model.decoder, **compile_args)
 
-        print(f"Loaded table recognition model {self.checkpoint} on device {device} with dtype {dtype}")
+        logger.debug(
+            f"Loaded table recognition model {self.checkpoint} from {TableRecEncoderDecoderModel.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
+        )
         return model
 
-    def processor(self) -> SuryaTableRecProcessor:
+    def processor(
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE
+    ) -> SuryaTableRecProcessor:
         processor = SuryaTableRecProcessor(self.checkpoint)
 
         processor.token_pad_id = 0
