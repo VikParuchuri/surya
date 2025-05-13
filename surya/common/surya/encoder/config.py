@@ -28,7 +28,7 @@ class SuryaEncoderConfig(PretrainedConfig):
         tokens_per_second=4,
         window_size=112,
         out_hidden_size=1280,
-        fullatt_block_indexes=(7,),
+        fullatt_block_indexes=(3, 7),
         initializer_range=0.02,
         image_size=4096,
         **kwargs,
