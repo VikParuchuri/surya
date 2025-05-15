@@ -16,9 +16,6 @@ from transformers import QuantizedCacheConfig
 from surya.common.surya import SuryaModelOutput
 from surya.common.util import mark_step
 from surya.common.predictor import BasePredictor
-from surya.input.processing import (
-    convert_if_not_rgb,
-)
 
 from surya.foundation.loader import FoundationModelLoader
 from surya.foundation.util import (
