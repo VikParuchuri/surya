@@ -49,8 +49,9 @@ class LayoutPredictor(FoundationPredictor):
         )
 
         bbox_size = self.model.config.bbox_size
+        # Need to reverse the tuples because the function expects (h, w) and PIL does (w,h)
         predicted_polygons = prediction_to_polygon_batch(
-            batch_bboxes, orig_sizes, bbox_size, bbox_size // 2
+            batch_bboxes, [o[::-1] for o in orig_sizes], bbox_size, bbox_size // 2
         )
 
         results = []
