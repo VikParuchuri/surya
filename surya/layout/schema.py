@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from surya.common.polygon import PolygonBox
 
-
 class LayoutBox(PolygonBox):
     label: str
     position: int

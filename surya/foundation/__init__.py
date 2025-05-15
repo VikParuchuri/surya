@@ -80,6 +80,11 @@ class FoundationPredictor(BasePredictor):
             "img_size": (1024, 512),  # 703 max tokens
             "max_tokens": 768,
         },
+        TaskNames.layout: {
+            "needs_bboxes": True,
+            "img_size": (1024, 1024),
+            "max_tokens": 100,
+        }
     }
 
     # This is since both LayoutPredictor and RecognitionPredictor subclass this predictor
