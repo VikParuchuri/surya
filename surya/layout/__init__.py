@@ -6,7 +6,7 @@ from surya.input.processing import convert_if_not_rgb
 from surya.foundation import FoundationPredictor
 from surya.common.surya.schema import TaskNames
 from surya.layout.schema import LayoutBox, LayoutResult
-from surya.recognition.util import prediction_to_polygon_batch
+from surya.foundation.util import prediction_to_polygon_batch
 from surya.settings import settings
 
 

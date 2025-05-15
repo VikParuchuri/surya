@@ -21,8 +21,8 @@ from surya.recognition.util import (
     sort_text_lines,
     clean_close_polygons,
     words_from_chars,
-    prediction_to_polygon_batch,
 )
+from surya.foundation.util import prediction_to_polygon_batch
 from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.common.surya.schema import TaskNames
 from surya.common.surya.processor import NOMATH_TOKEN
