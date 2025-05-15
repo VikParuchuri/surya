@@ -369,6 +369,7 @@ class FoundationPredictor(BasePredictor):
         task_names: List[TaskNames],
         batch_size: int,
         math_mode: bool = True,
+        pbar_message: str = "Recognizing Text"
     ) -> tuple:
         predicted_tokens = [[] for _ in range(len(processed_images))]
         scores = [[] for _ in range(len(processed_images))]
@@ -393,7 +394,7 @@ class FoundationPredictor(BasePredictor):
 
         pbar = tqdm(
             total=len(self.prompt_queue),
-            desc="Recognizing Text",
+            desc=pbar_message,
             disable=self.disable_tqdm,
         )
 
