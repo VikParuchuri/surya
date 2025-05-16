@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the following metadata."
+title: "Surya: A lightweight framework for analyzing documents and PDFs at scale"
+authors:
+  - family-names: Paruchuri
+    given-names: Vikas
+  - family-names: Menta
+    given-names: Tarun Ram
+  - name: Datalab Team
+date-released: 2025-05-13
+url: https://github.com/VikParuchuri/surya
+version: 0.14.0
+repository-code: https://github.com/VikParuchuri/surya
