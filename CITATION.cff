@@ -4,8 +4,6 @@ title: "Surya: A lightweight framework for analyzing documents and PDFs at scale
 authors:
   - family-names: Paruchuri
     given-names: Vikas
-  - family-names: Menta
-    given-names: Tarun Ram
   - name: Datalab Team
 date-released: 2025-05-13
 url: https://github.com/VikParuchuri/surya
