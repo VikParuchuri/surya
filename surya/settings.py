@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_13"
+    RECOGNITION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_16"
     RECOGNITION_MODEL_QUANTIZE: bool = False
     RECOGNITION_MAX_TOKENS: Optional[int] = None
     RECOGNITION_BATCH_SIZE: Optional[int] = (
