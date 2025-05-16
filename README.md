@@ -568,7 +568,7 @@ If you use surya (or the associated models) in your work or research, please con
 ```bibtex
 @misc{paruchuri2025surya,
   author       = {Vikas Paruchuri and Datalab Team},
-  title        = {Surya: A lightweight framework for analyzing documents and PDFs at scale},
+  title        = {Surya: A lightweight document OCR and analysis toolkit},
   year         = {2025},
   howpublished = {\url{https://github.com/VikParuchuri/surya}},
   note         = {GitHub repository},
