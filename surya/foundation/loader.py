@@ -14,8 +14,9 @@ from surya.settings import settings
 logger = get_logger()
 
 
-class RecognitionModelLoader(ModelLoader):
+class FoundationModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
+
         super().__init__(checkpoint)
 
         if self.checkpoint is None:

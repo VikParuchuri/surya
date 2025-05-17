@@ -37,6 +37,7 @@ NOMATH_TOKEN = "<NO-MATH>"
 OCR_WITH_BOXES_BOS_TOKEN = "<OCR-WB>"
 OCR_WITHOUT_BOXES_BOS_TOKEN = "<OCR-WOB>"
 BLOCK_WITHOUT_BOXES_TOKEN = "<BLOCKS-WOB>"
+LAYOUT_BOS_TOKEN = "<LAYOUT>"
 
 
 class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
@@ -93,6 +94,9 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             TaskNames.block_without_boxes: self.special_token_mapping.get(
                 BLOCK_WITHOUT_BOXES_TOKEN
             ),
+            TaskNames.layout: self.special_token_mapping.get(
+                LAYOUT_BOS_TOKEN
+            )
         }
 
         if self.image_token_id is None:
@@ -345,6 +349,16 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         mixed_input: List[dict],
         bos_token_id: int,
         task: str = "block_without_boxes",
+    ):
+        return self._process_ocr_with_boxes(
+            mixed_input, bos_token_id=bos_token_id, task=task
+        )
+
+    def _process_layout(
+        self,
+        mixed_input: List[dict],
+        bos_token_id: int,
+        task: str = "layout"
     ):
         return self._process_ocr_with_boxes(
             mixed_input, bos_token_id=bos_token_id, task=task
