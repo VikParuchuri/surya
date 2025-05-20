@@ -23,7 +23,6 @@ class LayoutPredictor(FoundationPredictor):
         self.ID2LABEL = {
             self.processor.ocr_tokenizer(tag, "layout")['input_ids'][0][0]: tag for tag in self.processor.ocr_tokenizer.special_tokens['layout']
         }
-        print(self.ID2LABEL)
 
     def __call__(
         self,
@@ -59,6 +58,7 @@ class LayoutPredictor(FoundationPredictor):
             layout_boxes = []
             polygons = polygons.cpu().numpy().tolist()
             for idx, (tok, poly, score) in enumerate(zip(tokens, polygons, scores)):
+                # TODO EOS token handling
                 if tok not in self.ID2LABEL:
                     break
                 label = self.ID2LABEL[tok]
