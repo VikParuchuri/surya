@@ -1,10 +1,11 @@
 import logging
 import warnings
+from surya.settings import settings
 
 
 def configure_logging():
     # Setup surya logger
-    logger = logging.getLogger("surya")
+    logger = get_logger()
 
     if not logger.handlers:
         handler = logging.StreamHandler()
@@ -14,7 +15,7 @@ def configure_logging():
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(settings.LOGLEVEL)
     warnings.simplefilter(action="ignore", category=FutureWarning)
 
 

@@ -41,6 +41,10 @@ from surya.recognition.cache import (
     ContinuousBatchingQuantizedCache,
 )
 from surya.settings import settings
+from surya.logging import get_logger, configure_logging
+
+configure_logging()
+logger = get_logger()
 
 
 @dataclass
@@ -73,6 +77,8 @@ class RecognitionPredictor(BasePredictor):
     batch_size = settings.RECOGNITION_BATCH_SIZE
     torch_dtype = settings.MODEL_DTYPE_BFLOAT
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
+    encoder_chunk_size: int = 4096
+    encoder_chunk_sizes = {"cpu": 4096, "mps": 4096, "cuda": 32768, "xla": 32768}
     min_prefill_ratio: int = 0.2
     min_trim_length: int = 50
     tasks = {
@@ -103,6 +109,13 @@ class RecognitionPredictor(BasePredictor):
         self.device_pad_token = torch.tensor(
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
         )
+
+    def get_encoder_chunk_size(self):
+        chunk_size = self.encoder_chunk_size
+        if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
+            if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
+                chunk_size = self.encoder_chunk_sizes[settings.TORCH_DEVICE_MODEL]
+        return chunk_size
 
     def setup_cache(self, batch_size: int):
         self.kv_cache = None
@@ -328,6 +341,7 @@ class RecognitionPredictor(BasePredictor):
         return new_input, processed_output
 
     def prefill(self, current_inputs: Optional[ContinuousBatchInput] = None):
+        logger.debug(f"Prefilling {self.num_empty_slots} slots")
         prompts: List[RecognitionPrompt] = [
             self.prompt_queue.popleft()
             for _ in range(min(self.num_empty_slots, len(self.prompt_queue)))
@@ -380,6 +394,7 @@ class RecognitionPredictor(BasePredictor):
                 past_key_values=prefill_cache,
                 use_cache=True,
                 logits_to_keep=1,
+                encoder_chunk_size=self.get_encoder_chunk_size(),
             )
 
         # Process outputs
@@ -462,6 +477,7 @@ class RecognitionPredictor(BasePredictor):
         if trim_start < self.min_trim_length:
             return current_inputs
 
+        logger.debug(f"Trimming cache from left by {trim_start} tokens.")
         trimmed_attention_mask = attention_mask[:, trim_start:]
         current_inputs.attention_mask = trimmed_attention_mask
 
