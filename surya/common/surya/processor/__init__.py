@@ -268,7 +268,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         input_ids = self.ocr_tokenizer(input_text, tasks=task)["input_ids"][0]
         input_ids = [self.offsets["ocr"] + id for id in input_ids]
 
-        if not math_mode:
+        if task != 'layout' and not math_mode:
             input_ids.insert(0, self.nomath_token)
 
         return ProcessorOutput(
