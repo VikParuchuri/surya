@@ -145,8 +145,14 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
                 curr_seq_len += curr_chunk_len
                 curr_chunk_len = 0
                 grid_chunks.append(i + 1)
-        chunks.append(pixel_values.shape[0])
-        grid_chunks.append(len(grid_thw))
+
+        if curr_chunk_len > 0:
+            chunks.append(pixel_values.shape[0])
+            grid_chunks.append(len(grid_thw))
+
+        assert curr_chunk_len + curr_seq_len == pixel_values.shape[0], (
+            f"Mismatch in encoder chunking, {curr_chunk_len} + {curr_seq_len} != {pixel_values.shape[0]}"
+        )
 
         logger.debug(
             f"Chunking encoder sequence into {len(chunks) - 1} chunks of size {encoder_chunk_size} with lengths {chunks} and grids {grid_chunks}"
