@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         10  # Number of workers for parallel model downloads
     )
     MODEL_CACHE_DIR: str = str(Path(user_cache_dir("datalab")) / "models")
+    LOGLEVEL: str = "INFO"  # Logging level
 
     # Paths
     DATA_DIR: str = "data"
