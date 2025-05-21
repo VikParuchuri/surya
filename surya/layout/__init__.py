@@ -44,7 +44,8 @@ class LayoutPredictor(FoundationPredictor):
             input_texts=input_texts,
             task_names=task_names,
             batch_size=batch_size,
-            math_mode=False
+            math_mode=False,
+            pbar_message="Recognizing Layout"
         )
 
         bbox_size = self.model.config.bbox_size
