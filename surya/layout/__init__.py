@@ -219,5 +219,8 @@ class LayoutPredictor(BasePredictor):
             batch_results = slicer.join(batch_results, tile_positions)
             results.extend(batch_results)
 
+        self.model.decoder.model._clear_cache()
+        torch.cuda.empty_cache()
+
         assert len(results) == len(images)
         return results

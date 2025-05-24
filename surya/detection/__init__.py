@@ -151,3 +151,5 @@ class DetectionPredictor(BasePredictor):
                     preds[idx] = heatmaps
 
             yield preds, [orig_sizes[j] for j in batch_image_idxs]
+
+        torch.cuda.empty_cache()
