@@ -572,6 +572,10 @@ class RecognitionPredictor(BasePredictor):
             current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
+        
+        del self.kv_cache
+        self.kv_cache = None
+        torch.cuda.empty_cache()
 
         return predicted_tokens, batch_bboxes, scores
 
