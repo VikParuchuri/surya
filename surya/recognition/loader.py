@@ -43,7 +43,6 @@ class RecognitionModelLoader(ModelLoader):
             self.checkpoint, torch_dtype=dtype, config=config
         ).to(device)
         model = model.eval()
-        model.decoder.merge_kv()
 
         logger.debug(
             f"Loaded recognition model {self.checkpoint} from {SuryaModel.get_local_path(self.checkpoint)} onto device {model.device} with dtype {dtype}, using decoder attention mechanism {model.config.decoder._attn_implementation}, encoder attention mechanism {model.config.vision_encoder._attn_implementation}."

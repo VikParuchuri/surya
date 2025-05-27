@@ -158,29 +158,6 @@ class Qwen2Attention(nn.Module):
         )
         self.merged_kv = False
 
-    def merge_kv(self):
-        """Merge k_proj and v_proj into a single kv_proj."""
-        # Ensure weights and biases are on the same device/dtype
-        device = self.k_proj.weight.device
-        dtype = self.k_proj.weight.dtype
-
-        # Concatenate weights and biases
-        W_kv = torch.cat([self.k_proj.weight.data, self.v_proj.weight.data], dim=0)
-        b_kv = torch.cat([self.k_proj.bias.data, self.v_proj.bias.data], dim=0)
-
-        # Create merged projection on correct device and dtype
-        self.kv_proj = nn.Linear(
-            self.config.hidden_size, 2 * self.config.num_key_value_heads * self.head_dim, bias=True
-        ).to(device=device, dtype=dtype)
-
-        self.kv_proj.weight.data.copy_(W_kv)
-        self.kv_proj.bias.data.copy_(b_kv)
-
-        # Clean up
-        del self.k_proj
-        del self.v_proj
-        self.merged_kv = True
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -449,10 +426,6 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
-
-    def merge_kv(self):
-        for layer in self.layers:
-            layer.self_attn.merge_kv()
 
     def forward(
         self,
