@@ -1,5 +1,6 @@
 import copy
 from typing import List
+import torch
 
 from surya.common.polygon import PolygonBox
 from surya.settings import settings
@@ -54,6 +55,26 @@ def expand_bbox(bbox, expansion_factor=.01):
         bbox[2] * expansion_high,
         bbox[3] * expansion_high
     ]
+
+def is_flash_attn_2_supported() -> bool:
+    if not torch.cuda.is_available():
+        return False
+    
+    # Check CUDA version >= 12.0
+    cuda_version_str = torch.version.cuda
+    if cuda_version_str is None:
+        return False
+    cuda_version = tuple(map(int, cuda_version_str.split('.')))
+    if cuda_version < (12, 0):
+        return False
+    
+    # Check GPU compute capability (Ampere, Ada, Hopper GPUs)
+    major, minor = torch.cuda.get_device_capability()
+    compute_capability = major + minor / 10
+    if compute_capability < 8.0:
+        return False
+    
+    return True
 
 
 if settings.TORCH_DEVICE_MODEL == 'xla':
