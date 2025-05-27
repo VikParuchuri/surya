@@ -156,6 +156,30 @@ class Qwen2Attention(nn.Module):
         self.o_proj = nn.Linear(
             config.num_attention_heads * self.head_dim, config.hidden_size, bias=False
         )
+        self.merged_kv = False
+
+    def merge_kv(self):
+        """Merge k_proj and v_proj into a single kv_proj."""
+        # Ensure weights and biases are on the same device/dtype
+        device = self.k_proj.weight.device
+        dtype = self.k_proj.weight.dtype
+
+        # Concatenate weights and biases
+        W_kv = torch.cat([self.k_proj.weight.data, self.v_proj.weight.data], dim=0)
+        b_kv = torch.cat([self.k_proj.bias.data, self.v_proj.bias.data], dim=0)
+
+        # Create merged projection on correct device and dtype
+        self.kv_proj = nn.Linear(
+            self.config.hidden_size, 2 * self.config.num_key_value_heads * self.head_dim, bias=True
+        ).to(device=device, dtype=dtype)
+
+        self.kv_proj.weight.data.copy_(W_kv)
+        self.kv_proj.bias.data.copy_(b_kv)
+
+        # Clean up
+        del self.k_proj
+        del self.v_proj
+        self.merged_kv = True
 
     def forward(
         self,
@@ -167,11 +191,21 @@ class Qwen2Attention(nn.Module):
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
-        hidden_shape = (*input_shape, -1, self.head_dim)
+        head_dim = self.head_dim
+        hidden_shape_q = (*input_shape, self.config.num_attention_heads, head_dim)
+        hidden_shape_kv = (*input_shape, self.config.num_key_value_heads, head_dim)
 
-        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        # Project Q
+        query_states = self.q_proj(hidden_states).view(hidden_shape_q).transpose(1, 2)
+
+        if not self.merged_kv:
+            key_states = self.k_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
+            value_states = self.v_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
+        else:
+            kv = self.kv_proj(hidden_states)
+            kv = kv.view(*input_shape, 2 * self.config.num_key_value_heads, head_dim).transpose(1, 2)
+            key_states = kv[:, :self.config.num_key_value_heads, :, :]
+            value_states = kv[:, self.config.num_key_value_heads:, :, :]
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(
@@ -415,6 +449,10 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
+
+    def merge_kv(self):
+        for layer in self.layers:
+            layer.self_attn.merge_kv()
 
     def forward(
         self,
