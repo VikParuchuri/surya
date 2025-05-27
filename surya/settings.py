@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         10  # Number of workers for parallel model downloads
     )
     MODEL_CACHE_DIR: str = str(Path(user_cache_dir("datalab")) / "models")
+    LOGLEVEL: str = "INFO"  # Logging level
 
     # Paths
     DATA_DIR: str = "data"
@@ -75,7 +76,7 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_13"
+    RECOGNITION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_16"
     RECOGNITION_MODEL_QUANTIZE: bool = False
     RECOGNITION_MAX_TOKENS: Optional[int] = None
     RECOGNITION_BATCH_SIZE: Optional[int] = (

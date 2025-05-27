@@ -59,7 +59,7 @@ There is a hosted API for all surya models available [here](https://www.datalab.
 
 I want surya to be as widely accessible as possible, while still funding my development/training costs. Research and personal usage is always okay, but there are some restrictions on commercial usage.
 
-The weights for the models are licensed `cc-by-nc-sa-4.0`, but I will waive that for any organization under $5M USD in gross revenue in the most recent 12-month period AND under $5M in lifetime VC/angel funding raised. You also must not be competitive with the [Datalab API](https://www.datalab.to/).  If you want to remove the GPL license requirements (dual-license) and/or use the weights commercially over the revenue limit, check out the options [here](https://www.datalab.to).
+The weights for the models are licensed `cc-by-nc-sa-4.0`, but I will waive that for any organization under \$2M USD in gross revenue in the most recent 12-month period AND under \$2M in lifetime VC/angel funding raised. You also must not be competitive with the [Datalab API](https://www.datalab.to/).  If you want to remove the GPL license requirements (dual-license) and/or use the weights commercially over the revenue limit, check out the options [here](https://www.datalab.to).
 
 # Installation
 
@@ -560,3 +560,16 @@ This work would not have been possible without amazing open source AI work:
 - [CRAFT](https://github.com/clovaai/CRAFT-pytorch), a great scene text detection model
 
 Thank you to everyone who makes open source AI possible.
+
+# Citation
+
+If you use surya (or the associated models) in your work or research, please consider citing us using the following BibTeX entry:
+
+```bibtex
+@misc{paruchuri2025surya,
+  author       = {Vikas Paruchuri and Datalab Team},
+  title        = {Surya: A lightweight document OCR and analysis toolkit},
+  year         = {2025},
+  howpublished = {\url{https://github.com/VikParuchuri/surya}},
+  note         = {GitHub repository},
+}

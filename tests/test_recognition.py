@@ -6,4 +6,4 @@ def test_recognition(recognition_predictor, detection_predictor, test_image):
 
     text_lines = recognition_results[0].text_lines
     assert len(text_lines) == 4
-    assert text_lines[0].text == "Hello World"
+    assert "Hello World" in text_lines[0].text

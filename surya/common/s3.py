@@ -85,7 +85,8 @@ def download_directory(remote_path: str, local_dir: str):
             manifest = json.load(f)
 
         pbar = tqdm(
-            desc=f"Downloading {model_name} model...", total=len(manifest["files"])
+            desc=f"Downloading {model_name} model to {local_dir}",
+            total=len(manifest["files"]),
         )
 
         with ThreadPoolExecutor(

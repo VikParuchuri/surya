@@ -168,8 +168,8 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         elif current_pixels < min_pixels:
             scale_factor = (min_pixels / current_pixels) ** 0.5
 
-            new_width = int(width * scale_factor)
-            new_height = int(height * scale_factor)
+            new_width = math.ceil(width * scale_factor)
+            new_height = math.ceil(height * scale_factor)
         else:
             return img
 
