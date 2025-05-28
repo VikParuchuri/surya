@@ -8,11 +8,11 @@ from surya.common.surya.config import SuryaModelConfig
 from surya.common.surya import SuryaModel
 from surya.common.surya.processor import SuryaOCRProcessor
 from surya.common.surya.processor.tokenizer import SuryaOCRTokenizer
+from surya.common.util import is_flash_attn_2_supported
 from surya.logging import get_logger
 from surya.settings import settings
 
 logger = get_logger()
-
 
 class RecognitionModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
@@ -22,17 +22,22 @@ class RecognitionModelLoader(ModelLoader):
             self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
 
     def model(
-        self, device=settings.TORCH_DEVICE_MODEL, dtype=settings.MODEL_DTYPE_BFLOAT
+        self, device=settings.TORCH_DEVICE_MODEL, dtype=None,
     ) -> SuryaModel:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
         if dtype is None:
-            dtype = settings.MODEL_DTYPE_BFLOAT
+            # See https://github.com/pytorch/pytorch/issues/118122 - T4 (device version 7.5) will return true since it supports
+            # emulated bf16, but falls back to very slow kernels, especially for SDPA
+            if torch.cuda.is_bf16_supported(including_emulation=False):
+                dtype = settings.MODEL_DTYPE_BFLOAT
+            else:
+                dtype = settings.MODEL_DTYPE
 
         torch.set_float32_matmul_precision("high")
         config = SuryaModelConfig.from_pretrained(self.checkpoint)
 
-        if is_flash_attn_2_available():
+        if is_flash_attn_2_available() and is_flash_attn_2_supported():
             config.decoder._attn_implementation = "flash_attention_2"
             config.vision_encoder._attn_implementation = "flash_attention_2"
         else:

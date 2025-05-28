@@ -156,6 +156,7 @@ class Qwen2Attention(nn.Module):
         self.o_proj = nn.Linear(
             config.num_attention_heads * self.head_dim, config.hidden_size, bias=False
         )
+        self.merged_kv = False
 
     def forward(
         self,
@@ -178,9 +179,6 @@ class Qwen2Attention(nn.Module):
             query_states, key_states, cos, sin
         )
 
-        # IMPORTANT: Do not use causal mask for prefill; Matches training
-        # This is required for flash attn, which doesn't support a 4D mask as input
-        # The `is_causal` argument is ignored by SDPA since we pass a 4D attention mask
         is_prefill = all(
             (
                 input_shape[1] > 1,

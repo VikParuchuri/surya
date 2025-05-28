@@ -270,6 +270,100 @@ class Qwen2_5_VLVisionSdpaAttention(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         self.proj = nn.Linear(dim, dim)
 
+    def unpack_qkv_with_mask(self, q, k, v, cu_seqlens):
+        """
+        Unpacks q, k, v sequences into batch-major form and constructs an additive attention mask.
+
+        Args:
+            q, k, v: Tensors of shape (total_seq_len, num_heads, head_dim)
+            cu_seqlens: Tensor of shape (batch_size + 1,) with cumulative sequence lengths
+
+        Returns:
+            batched_q: Tensor of shape (batch_size, max_seq_len, num_heads, head_dim)
+            batched_k: Tensor of shape (batch_size, max_seq_len, num_heads, head_dim)
+            batched_v: Tensor of shape (batch_size, max_seq_len, num_heads, head_dim)
+            attention_mask: Tensor of shape (batch_size, 1, max_seq_len, max_seq_len)
+                            with 0 for valid tokens and -inf for padding (for additive attention)
+        """
+        device = q.device
+        dtype = q.dtype
+
+        batch_size = cu_seqlens.shape[0] - 1
+        num_heads = q.shape[1]
+        head_dim = q.shape[2]
+
+        seq_lengths = cu_seqlens[1:] - cu_seqlens[:-1]
+        max_seq_len = seq_lengths.max().item()
+
+        batch_indices = []
+        position_indices = []
+
+        for i, seq_len in enumerate(seq_lengths):
+            batch_indices.extend([i] * seq_len)
+            position_indices.extend(list(range(seq_len)))
+
+        batch_indices = torch.tensor(batch_indices, device=device)
+        position_indices = torch.tensor(position_indices, device=device)
+
+        batched_q = torch.zeros((batch_size, max_seq_len, num_heads, head_dim), device=device, dtype=dtype)
+        batched_k = torch.zeros_like(batched_q)
+        batched_v = torch.zeros_like(batched_q)
+
+        # Create additive attention mask: shape (batch_size, 1, max_seq_len, max_seq_len)
+        # Each batch has a (max_seq_len, max_seq_len) matrix:
+        # - Rows = queries, Columns = keys
+        # - If query or key is padding, set to -inf
+        attention_mask = torch.full(
+            (batch_size, max_seq_len, max_seq_len),
+            fill_value=float('-inf'),
+            device=device,
+            dtype=dtype
+        )
+        for b in range(batch_size):
+            valid_len = seq_lengths[b].item()
+            attention_mask[b, :valid_len, :valid_len] = 0  # Unmasked
+
+        attention_mask = attention_mask.unsqueeze(1)  # (batch_size, 1, max_seq_len, max_seq_len)
+
+        batched_q[batch_indices, position_indices] = q
+        batched_k[batch_indices, position_indices] = k
+        batched_v[batch_indices, position_indices] = v
+
+        return batched_q, batched_k, batched_v, attention_mask
+
+    def repack_hidden_states(self, batched_output, cu_seqlens):
+        """
+        Reverses the unpacking operation using indexing to convert batched outputs 
+        back to a flat tensor of shape (total_seq_len, hidden_dim).
+
+        Args:
+            batched_output: Tensor of shape (batch_size, max_seq_len, hidden_dim)
+            cu_seqlens: Tensor of shape (batch_size + 1,) with cumulative sequence lengths
+
+        Returns:
+            packed_output: Tensor of shape (total_seq_len, hidden_dim)
+        """
+        device = batched_output.device
+        dtype = batched_output.dtype
+
+        batch_size, max_seq_len, hidden_dim = batched_output.shape
+        seq_lengths = cu_seqlens[1:] - cu_seqlens[:-1]
+        total_seq_len = seq_lengths.sum().item()
+
+        batch_indices = []
+        position_indices = []
+
+        for i, seq_len in enumerate(seq_lengths):
+            batch_indices.extend([i] * seq_len)
+            position_indices.extend(list(range(seq_len)))
+
+        batch_indices = torch.tensor(batch_indices, device=device)
+        position_indices = torch.tensor(position_indices, device=device)
+
+        packed_output = batched_output[batch_indices, position_indices]
+
+        return packed_output  # Shape: (total_seq_len, hidden_dim)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -298,28 +392,22 @@ class Qwen2_5_VLVisionSdpaAttention(nn.Module):
             cos, sin = position_embeddings
         q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
 
-        attention_mask = torch.zeros(
-            [1, seq_length, seq_length], device=q.device, dtype=torch.bool
-        )
-        for i in range(1, len(cu_seqlens)):
-            attention_mask[
-                ...,
-                cu_seqlens[i - 1] : cu_seqlens[i],
-                cu_seqlens[i - 1] : cu_seqlens[i],
-            ] = True
-        q = q.transpose(0, 1)
-        k = k.transpose(0, 1)
-        v = v.transpose(0, 1)
+        q, k, v, attention_mask = self.unpack_qkv_with_mask(q, k, v, cu_seqlens)
+        batch_size, max_seqlen = q.shape[:2]
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
         attn_output = F.scaled_dot_product_attention(
-            q.unsqueeze(0),
-            k.unsqueeze(0),
-            v.unsqueeze(0),
+            q,
+            k,
+            v,
             attention_mask,
             dropout_p=0.0,
         )
-        attn_output = attn_output.squeeze(0).transpose(0, 1)
-        attn_output = attn_output.reshape(seq_length, -1)
+        attn_output = attn_output.permute(0, 2, 1, 3).reshape(batch_size, max_seqlen, -1)     # Bring back to (batch_size, max_seqlen, hidden_dim)
         attn_output = self.proj(attn_output)
+        attn_output = self.repack_hidden_states(attn_output, cu_seqlens)
+
         return attn_output
 
 

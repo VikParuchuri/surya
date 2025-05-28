@@ -193,6 +193,12 @@ class SuryaADETRDecoderSdpaCrossAttention(nn.Module):
         attn_output = self.o_proj(attn_output)
         return attn_output
 
+    def _clear_cache(self):
+        if self.value_states is not None:
+            del self.value_states
+        if self.key_states is not None:
+            del self.key_states
+
     def _setup_cache(self, batch_size, device, dtype=None):
         # Setup initial caches
         self.value_states = None
@@ -296,6 +302,12 @@ class SuryaADETRDecoderSdpaAttention(nn.Module):
             cache_shape = (batch_size, self.num_key_value_heads, self.max_boxes, self.head_dim)
             self.value_states = torch.zeros(cache_shape, dtype=dtype, device=device)
             self.key_states = torch.zeros(cache_shape, dtype=dtype, device=device)
+
+    def _clear_cache(self):
+        if self.value_states is not None:
+            del self.value_states
+        if self.key_states is not None:
+            del self.key_states
 
     def _update_static_cache(self, key_states, value_states, **cache_kwargs):
         cache_position = cache_kwargs.get("cache_position")
@@ -478,6 +490,14 @@ class SuryaADETRDecoderPreTrainedModel(PreTrainedModel):
                 layer.temporal_block._setup_cache(batch, device, dtype)
             if layer.cross_attn_block:
                 layer.cross_attn_block._setup_cache(batch, device, dtype)
+
+    def _clear_cache(self):
+        layers = getattr(self, "model", self).layers
+        for layer in layers:
+            if layer.temporal_block:
+                layer.temporal_block._clear_cache()
+            if layer.cross_attn_block:
+                layer.cross_attn_block._clear_cache()
 
     def reset_cache(self, batch, device, dtype):
         pass
