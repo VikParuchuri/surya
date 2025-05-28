@@ -7,16 +7,16 @@ import torch
 from surya.common.polygon import PolygonBox
 from surya.recognition.schema import TextLine, TextWord, TextChar
 
-MATH_SYMBOLS = ["+", "-", "*", "/", "=", "^", "_", "\\"]
+MATH_SYMBOLS = ["+", "-", "*", "/", "=", "^", "_", "\\", "(", ")", "{", "}"]
 
 
 def unwrap_math(text: str) -> str:
-    if len(text) > 100:
+    if len(text) > 50:
         return text
 
     # Detected as math, but does not contain LaTeX commands
     if (
-        re.match(r"<math.*?>.*?</math>", text)
+        re.match(r'^\s*<math(?:\s+display="inline")?.*?</math>\s*$', text, re.DOTALL)
         and text.count("<math") == 1
         and not any([symb in text for symb in MATH_SYMBOLS])
     ):
