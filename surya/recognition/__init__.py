@@ -33,6 +33,7 @@ from surya.recognition.util import (
     words_from_chars,
     detect_repeat_token,
     prediction_to_polygon_batch,
+    unwrap_math,
 )
 from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.common.surya.schema import TaskNames
@@ -85,7 +86,7 @@ class RecognitionPredictor(BasePredictor):
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
             "img_size": (1024, 256),  # 370 max tokens
-            "max_tokens": 224,
+            "max_tokens": 256,
         },
         TaskNames.ocr_without_boxes: {
             "needs_bboxes": False,
@@ -272,6 +273,10 @@ class RecognitionPredictor(BasePredictor):
 
             # Task input is the same for all tasks for now
             text = text or ""
+
+            # Remove input text that exceeds max generation tokens (likely invalid)
+            if len(text) > self.tasks[task_name]["max_tokens"]:
+                text = ""
             inputs = [
                 {"type": "image", "image": image, "rotated": False},
                 {"type": "text", "text": text.strip(), "math": math_mode},
@@ -596,7 +601,12 @@ class RecognitionPredictor(BasePredictor):
         return predicted_tokens, batch_bboxes, scores
 
     def get_bboxes_text(
-        self, flat: dict, predicted_tokens: list, scores: list, predicted_polygons: list
+        self,
+        flat: dict,
+        predicted_tokens: list,
+        scores: list,
+        predicted_polygons: list,
+        drop_repeated_text: bool = False,
     ) -> list:
         char_predictions = []
         needs_boxes = [
@@ -618,8 +628,21 @@ class RecognitionPredictor(BasePredictor):
                 needs_boxes,
             )
         ):
+            blank_bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
             if self.processor.no_output_token in image_tokens:
                 char_predictions.append(None)
+                continue
+
+            # If the image is very out of distribution, we can get nonsense repeats, and we may need to drop the text entirely
+            if drop_repeated_text and detect_repeat_token(image_tokens):
+                char_predictions.append(
+                    TextChar(
+                        text="",
+                        polygon=blank_bbox,
+                        confidence=0,
+                        bbox_valid=False,
+                    )
+                )
                 continue
 
             image_polygons = image_polygons[: len(image_tokens)].cpu().numpy().tolist()
@@ -685,7 +708,6 @@ class RecognitionPredictor(BasePredictor):
             img_chars = []
             for sequence in detokenize_sequences:
                 token_ids, seq_score, bboxes, token_type = sequence
-                blank_bbox = [[0, 0], [0, 1], [1, 1], [1, 0]]
                 if token_type == "ocr":
                     text = self.processor.ocr_tokenizer.decode(
                         token_ids, task=TaskNames.ocr_with_boxes
@@ -754,6 +776,7 @@ class RecognitionPredictor(BasePredictor):
         sort_lines: bool = False,
         math_mode: bool = True,
         return_words: bool = False,
+        drop_repeated_text: bool = False,
     ) -> List[OCRResult]:
         allowed_tasks = self.tasks.keys()
         if task_names is None:
@@ -878,6 +901,7 @@ class RecognitionPredictor(BasePredictor):
                         text_line, self.processor.ocr_tokenizer.special_tokens
                     )
                     text = "".join([char.text for char in text_line])
+                    text = unwrap_math(text)
                     lines.append(
                         TextLine(
                             text=text,
