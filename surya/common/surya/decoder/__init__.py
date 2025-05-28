@@ -168,13 +168,11 @@ class Qwen2Attention(nn.Module):
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
-        head_dim = self.head_dim
-        hidden_shape_q = (*input_shape, self.config.num_attention_heads, head_dim)
-        hidden_shape_kv = (*input_shape, self.config.num_key_value_heads, head_dim)
+        hidden_shape = (*input_shape, -1, self.head_dim)
 
-        query_states = self.q_proj(hidden_states).view(hidden_shape_q).transpose(1, 2)
-        key_states = self.k_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
-        value_states = self.v_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
+        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(
