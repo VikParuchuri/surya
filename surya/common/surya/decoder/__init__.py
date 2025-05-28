@@ -172,26 +172,15 @@ class Qwen2Attention(nn.Module):
         hidden_shape_q = (*input_shape, self.config.num_attention_heads, head_dim)
         hidden_shape_kv = (*input_shape, self.config.num_key_value_heads, head_dim)
 
-        # Project Q
         query_states = self.q_proj(hidden_states).view(hidden_shape_q).transpose(1, 2)
-
-        if not self.merged_kv:
-            key_states = self.k_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
-            value_states = self.v_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
-        else:
-            kv = self.kv_proj(hidden_states)
-            kv = kv.view(*input_shape, 2 * self.config.num_key_value_heads, head_dim).transpose(1, 2)
-            key_states = kv[:, :self.config.num_key_value_heads, :, :]
-            value_states = kv[:, self.config.num_key_value_heads:, :, :]
+        key_states = self.k_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
+        value_states = self.v_proj(hidden_states).view(hidden_shape_kv).transpose(1, 2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(
             query_states, key_states, cos, sin
         )
 
-        # IMPORTANT: Do not use causal mask for prefill; Matches training
-        # This is required for flash attn, which doesn't support a 4D mask as input
-        # The `is_causal` argument is ignored by SDPA since we pass a 4D attention mask
         is_prefill = all(
             (
                 input_shape[1] > 1,
