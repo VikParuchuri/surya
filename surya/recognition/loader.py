@@ -27,7 +27,9 @@ class RecognitionModelLoader(ModelLoader):
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
         if dtype is None:
-            if torch.cuda.is_bf16_supported():
+            # See https://github.com/pytorch/pytorch/issues/118122 - T4 (device version 7.5) will return true since it supports
+            # emulated bf16, but falls back to very slow kernels, especially for SDPA
+            if torch.cuda.is_bf16_supported(including_emulation=False):
                 dtype = settings.MODEL_DTYPE_BFLOAT
             else:
                 dtype = settings.MODEL_DTYPE

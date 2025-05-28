@@ -75,7 +75,7 @@ class RecognitionPrompt:
 class RecognitionPredictor(BasePredictor):
     model_loader_cls = RecognitionModelLoader
     batch_size = settings.RECOGNITION_BATCH_SIZE
-    torch_dtype = settings.MODEL_DTYPE_BFLOAT
+    torch_dtype = None      # No default, loader picks the dtype based on device properties - bf16/fp16
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
     encoder_chunk_size: int = 4096
     encoder_chunk_sizes = {"cpu": 4096, "mps": 4096, "cuda": 32768, "xla": 32768}
