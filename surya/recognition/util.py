@@ -1,3 +1,4 @@
+import re
 from typing import List, Tuple
 
 import numpy
@@ -5,6 +6,25 @@ import torch
 
 from surya.common.polygon import PolygonBox
 from surya.recognition.schema import TextLine, TextWord, TextChar
+
+MATH_SYMBOLS = ["+", "-", "*", "=", "^", "_", "\\", "{", "}"]
+
+
+def unwrap_math(text: str) -> str:
+    if len(text) > 50:
+        return text
+
+    # Detected as math, but does not contain LaTeX commands
+    if (
+        re.match(r'^\s*<math(?:\s+display="inline")?.*?</math>\s*$', text, re.DOTALL)
+        and text.count("<math") == 1
+        and not any([symb in text for symb in MATH_SYMBOLS])
+    ):
+        # Remove math tags
+        text = re.sub(r"<math.*?>", "", text)
+        text = re.sub(r"</math>", "", text)
+
+    return text
 
 
 def detect_repeat_token(predicted_tokens: List[int], max_repeats: int = 40):
