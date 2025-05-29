@@ -14,6 +14,7 @@ from surya.settings import settings
 
 logger = get_logger()
 
+
 class RecognitionModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
         super().__init__(checkpoint)
@@ -22,7 +23,9 @@ class RecognitionModelLoader(ModelLoader):
             self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
 
     def model(
-        self, device=settings.TORCH_DEVICE_MODEL, dtype=None,
+        self,
+        device=settings.TORCH_DEVICE_MODEL,
+        dtype=None,
     ) -> SuryaModel:
         if device is None:
             device = settings.TORCH_DEVICE_MODEL
@@ -37,7 +40,7 @@ class RecognitionModelLoader(ModelLoader):
         torch.set_float32_matmul_precision("high")
         config = SuryaModelConfig.from_pretrained(self.checkpoint)
 
-        if is_flash_attn_2_available() and is_flash_attn_2_supported():
+        if is_flash_attn_2_available() and is_flash_attn_2_supported(device):
             config.decoder._attn_implementation = "flash_attention_2"
             config.vision_encoder._attn_implementation = "flash_attention_2"
         else:
