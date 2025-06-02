@@ -115,7 +115,7 @@ class RecognitionPredictor(BasePredictor):
         if settings.RECOGNITION_CHUNK_SIZE is not None:
             return settings.RECOGNITION_CHUNK_SIZE
 
-        chunk_size = settings.encoder_chunk_size
+        chunk_size = self.encoder_chunk_size
         if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
             if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
                 chunk_size = self.encoder_chunk_sizes[settings.TORCH_DEVICE_MODEL]
