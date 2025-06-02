@@ -1,26 +1,36 @@
+import math
+import numpy as np
 from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from surya.common.polygon import PolygonBox
 
 
-class TextChar(PolygonBox):
+class BaseChar(PolygonBox):
     text: str
+    confidence: Optional[float] = 0
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def validate_confidence(cls, v: float) -> float:
+        if v is None:
+            return 0
+        elif math.isnan(v) or np.isnan(v):
+            return 0
+        return v
+
+
+class TextChar(BaseChar):
     bbox_valid: bool = True  # This is false when the given bbox is not valid
-    confidence: Optional[float] = None
 
 
-class TextWord(PolygonBox):
-    text: str
+class TextWord(BaseChar):
     bbox_valid: bool = True
-    confidence: Optional[float] = None
 
 
-class TextLine(PolygonBox):
-    text: str
+class TextLine(BaseChar):
     chars: List[TextChar]  # Individual characters in the line
-    confidence: Optional[float] = None
     original_text_good: bool = False
     words: List[TextWord] | None = None
 

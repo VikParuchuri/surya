@@ -1,4 +1,5 @@
 import time
+from PIL import ImageDraw, Image
 
 
 def test_recognition(recognition_predictor, detection_predictor, test_image):
@@ -34,3 +35,17 @@ def test_recognition_input_text(recognition_predictor, detection_predictor, test
     text_lines = recognition_results[0].text_lines
     assert len(text_lines) == 4
     assert "Hello World" in text_lines[0].text
+
+
+def test_recognition_drop_repeats(recognition_predictor, detection_predictor):
+    image = Image.new("RGB", (1024, 128), "white")
+    draw = ImageDraw.Draw(image)
+    text = "a" * 80
+    draw.text((5, 5), text, fill="black", font_size=24)
+
+    recognition_results = recognition_predictor(
+        [image], None, bboxes=[[[0, 0, 1024, 128]]], drop_repeated_text=True
+    )
+    assert len(recognition_results) == 1
+    result = recognition_results[0].text_lines
+    assert result[0].text == ""

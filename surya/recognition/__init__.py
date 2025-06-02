@@ -76,9 +76,9 @@ class RecognitionPrompt:
 class RecognitionPredictor(BasePredictor):
     model_loader_cls = RecognitionModelLoader
     batch_size = settings.RECOGNITION_BATCH_SIZE
-    torch_dtype = None      # No default, loader picks the dtype based on device properties - bf16/fp16
+    torch_dtype = None  # No default, loader picks the dtype based on device properties - bf16/fp16
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
-    encoder_chunk_size: int = 4096
+    encoder_chunk_size: int = 4096  # Default chunk size
     encoder_chunk_sizes = {"cpu": 4096, "mps": 4096, "cuda": 32768, "xla": 32768}
     min_prefill_ratio: int = 0.2
     min_trim_length: int = 50
@@ -86,7 +86,7 @@ class RecognitionPredictor(BasePredictor):
         TaskNames.ocr_with_boxes: {
             "needs_bboxes": True,
             "img_size": (1024, 256),  # 370 max tokens
-            "max_tokens": 256,
+            "max_tokens": 224,
         },
         TaskNames.ocr_without_boxes: {
             "needs_bboxes": False,
@@ -111,8 +111,11 @@ class RecognitionPredictor(BasePredictor):
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
         )
 
-    def get_encoder_chunk_size(self):
-        chunk_size = self.encoder_chunk_size
+    def get_encoder_chunk_size(self) -> int:
+        if settings.RECOGNITION_CHUNK_SIZE is not None:
+            return settings.RECOGNITION_CHUNK_SIZE
+
+        chunk_size = settings.encoder_chunk_size
         if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
             if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
                 chunk_size = self.encoder_chunk_sizes[settings.TORCH_DEVICE_MODEL]
@@ -239,6 +242,8 @@ class RecognitionPredictor(BasePredictor):
             == len(all_polygons)
             == len(all_text)
             == len(all_task_names)
+        ), (
+            f"Mismatch in lengths: {len(all_slices)}, {sum(slice_map)}, {len(all_polygons)}, {len(all_text)}, {len(all_task_names)}"
         )
 
         return {
@@ -593,7 +598,7 @@ class RecognitionPredictor(BasePredictor):
             current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
-        
+
         del self.kv_cache
         self.kv_cache = None
         torch.cuda.empty_cache()
@@ -636,12 +641,14 @@ class RecognitionPredictor(BasePredictor):
             # If the image is very out of distribution, we can get nonsense repeats, and we may need to drop the text entirely
             if drop_repeated_text and detect_repeat_token(image_tokens):
                 char_predictions.append(
-                    TextChar(
-                        text="",
-                        polygon=blank_bbox,
-                        confidence=0,
-                        bbox_valid=False,
-                    )
+                    [
+                        TextChar(
+                            text="",
+                            polygon=blank_bbox,
+                            confidence=0,
+                            bbox_valid=False,
+                        )
+                    ]
                 )
                 continue
 
@@ -772,7 +779,7 @@ class RecognitionPredictor(BasePredictor):
         highres_images: List[Image.Image] | None = None,
         bboxes: List[List[List[int]]] | None = None,
         polygons: List[List[List[List[int]]]] | None = None,
-        input_text: List[str | None] | None = None,
+        input_text: List[List[str | None]] | None = None,
         sort_lines: bool = False,
         math_mode: bool = True,
         return_words: bool = False,
@@ -857,7 +864,11 @@ class RecognitionPredictor(BasePredictor):
             batch_bboxes, image_sizes, bbox_size, bbox_size // 2
         )
         char_predictions = self.get_bboxes_text(
-            flat, predicted_tokens, scores, predicted_polygons
+            flat,
+            predicted_tokens,
+            scores,
+            predicted_polygons,
+            drop_repeated_text=drop_repeated_text,
         )
 
         char_predictions = sorted(zip(indices, char_predictions), key=lambda x: x[0])
@@ -886,7 +897,11 @@ class RecognitionPredictor(BasePredictor):
                         )
                     )
                 else:
-                    confidence = float(np.mean([char.confidence for char in text_line]))
+                    confidence = (
+                        float(np.mean([char.confidence for char in text_line]))
+                        if len(text_line) > 0
+                        else 0
+                    )
                     poly_box = PolygonBox(polygon=polygon)
                     for char in text_line:
                         char.rescale(
