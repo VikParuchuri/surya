@@ -894,7 +894,11 @@ class RecognitionPredictor(BasePredictor):
                         )
                     )
                 else:
-                    confidence = float(np.mean([char.confidence for char in text_line]))
+                    confidence = (
+                        float(np.mean([char.confidence for char in text_line]))
+                        if len(text_line) > 0
+                        else 0
+                    )
                     poly_box = PolygonBox(polygon=polygon)
                     for char in text_line:
                         char.rescale(
