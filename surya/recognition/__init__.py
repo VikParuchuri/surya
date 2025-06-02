@@ -78,7 +78,7 @@ class RecognitionPredictor(BasePredictor):
     batch_size = settings.RECOGNITION_BATCH_SIZE
     torch_dtype = None  # No default, loader picks the dtype based on device properties - bf16/fp16
     default_batch_sizes = {"cpu": 32, "mps": 64, "cuda": 256, "xla": 128}
-    encoder_chunk_size: int = 4096
+    encoder_chunk_size: int = 4096  # Default chunk size
     encoder_chunk_sizes = {"cpu": 4096, "mps": 4096, "cuda": 32768, "xla": 32768}
     min_prefill_ratio: int = 0.2
     min_trim_length: int = 50
@@ -111,8 +111,11 @@ class RecognitionPredictor(BasePredictor):
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
         )
 
-    def get_encoder_chunk_size(self):
-        chunk_size = self.encoder_chunk_size
+    def get_encoder_chunk_size(self) -> int:
+        if settings.RECOGNITION_CHUNK_SIZE is not None:
+            return settings.RECOGNITION_CHUNK_SIZE
+
+        chunk_size = settings.encoder_chunk_size
         if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
             if settings.TORCH_DEVICE_MODEL in self.encoder_chunk_sizes:
                 chunk_size = self.encoder_chunk_sizes[settings.TORCH_DEVICE_MODEL]
