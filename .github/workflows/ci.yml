@@ -2,12 +2,12 @@ name: Unit tests
 
 on: [push]
 
-env:
-  TORCH_DEVICE: "cpu"
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [t4_gpu, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
