@@ -7,10 +7,7 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: t4_gpu
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11

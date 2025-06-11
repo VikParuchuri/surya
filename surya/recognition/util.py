@@ -27,6 +27,35 @@ def unwrap_math(text: str) -> str:
     return text
 
 
+MATH_BLOCK = re.compile(r"(<math\b[^>]*>)(.*?)</math>", flags=re.I | re.S)
+STRIP_TAGS = re.compile(r"</?(?:br|u|del|mark|i|b|sup|sub)\b[^>]*>", flags=re.I | re.S)
+
+
+def clean_math_tags(html: str) -> str:
+    # strip unwanted tags inside every well‑formed <math>…</math>
+    def _inner(m):
+        inner = STRIP_TAGS.sub("", m.group(2))
+        return f"{m.group(1)}{inner}</math>" if inner.strip() else ""
+
+    cleaned = MATH_BLOCK.sub(_inner, html)
+
+    # drop only orphan *closing* </math> tags
+    depth = 0
+    parts = []
+    for token in re.split(r"(</?math[^>]*>)", cleaned, flags=re.I):
+        if token.lower().startswith("<math"):
+            depth += 1
+            parts.append(token)
+        elif token.lower() == "</math>":
+            if depth:  # keep it only if it matches an open
+                depth -= 1
+                parts.append(token)
+            # else: skip orphan closing tag
+        else:
+            parts.append(token)
+    return "".join(parts)
+
+
 def detect_repeat_token(predicted_tokens: List[int], max_repeats: int = 40):
     if len(predicted_tokens) < max_repeats:
         return False
