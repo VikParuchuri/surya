@@ -34,6 +34,7 @@ from surya.recognition.util import (
     detect_repeat_token,
     prediction_to_polygon_batch,
     unwrap_math,
+    clean_math_tags,
 )
 from surya.recognition.schema import TextLine, OCRResult, TextChar
 from surya.common.surya.schema import TaskNames
@@ -917,6 +918,7 @@ class RecognitionPredictor(BasePredictor):
                     )
                     text = "".join([char.text for char in text_line])
                     text = unwrap_math(text)
+                    text = clean_math_tags(text)
                     lines.append(
                         TextLine(
                             text=text,
