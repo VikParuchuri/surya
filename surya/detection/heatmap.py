@@ -5,7 +5,6 @@ import numpy as np
 from PIL import Image
 
 from surya.common.util import clean_boxes
-from surya.detection.affinity import get_vertical_lines
 from surya.detection import TextDetectionResult
 from surya.common.polygon import PolygonBox
 from surya.settings import settings
@@ -62,7 +61,11 @@ def detect_boxes(linemap, text_threshold, low_text):
         ex, ey = min(img_w, x + w + niter + buffer), min(img_h, y + h + niter + buffer)
 
         mask = labels[sy:ey, sx:ex] == k
-        line_max = np.max(linemap[sy:ey, sx:ex][mask])
+        selected_linemap = linemap[sy:ey, sx:ex][mask]
+        if selected_linemap.size == 0:
+            continue
+
+        line_max = np.max(selected_linemap)
 
         # thresholding
         if line_max < text_threshold:
@@ -136,27 +139,6 @@ def get_and_clean_boxes(
     return bboxes
 
 
-def parallel_get_lines(preds, orig_sizes, include_maps=False):
-    heatmap, affinity_map = preds
-    heat_img, aff_img = None, None
-    if include_maps:
-        heat_img = Image.fromarray((heatmap * 255).astype(np.uint8))
-        aff_img = Image.fromarray((affinity_map * 255).astype(np.uint8))
-    affinity_size = list(reversed(affinity_map.shape))
-    heatmap_size = list(reversed(heatmap.shape))
-    bboxes = get_and_clean_boxes(heatmap, heatmap_size, orig_sizes)
-    vertical_lines = get_vertical_lines(affinity_map, affinity_size, orig_sizes)
-
-    result = TextDetectionResult(
-        bboxes=bboxes,
-        vertical_lines=vertical_lines,
-        heatmap=heat_img,
-        affinity_map=aff_img,
-        image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]],
-    )
-    return result
-
-
 def parallel_get_boxes(preds, orig_sizes, include_maps=False):
     heatmap, affinity_map = preds
     heat_img, aff_img = None, None
@@ -176,7 +158,6 @@ def parallel_get_boxes(preds, orig_sizes, include_maps=False):
 
     result = TextDetectionResult(
         bboxes=bboxes,
-        vertical_lines=[],
         heatmap=heat_img,
         affinity_map=aff_img,
         image_bbox=[0, 0, orig_sizes[0], orig_sizes[1]],
