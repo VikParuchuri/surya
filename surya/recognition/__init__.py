@@ -500,12 +500,14 @@ class RecognitionPredictor(BasePredictor):
 
     def prediction_loop(
         self,
-        flat: dict,
+        images: List[Image.Image],
+        input_texts: List[str],
+        task_names: List[TaskNames],
         recognition_batch_size: int | None = None,
         math_mode: bool = True,
     ) -> tuple:
-        predicted_tokens = [[] for _ in range(len(flat["slices"]))]
-        scores = [[] for _ in range(len(flat["slices"]))]
+        predicted_tokens = [[] for _ in range(len(images))]
+        scores = [[] for _ in range(len(images))]
 
         if recognition_batch_size is None:
             recognition_batch_size = self.get_batch_size()
@@ -514,7 +516,7 @@ class RecognitionPredictor(BasePredictor):
 
         batch_max_tokens = {}
         for idx, (img, txt, task) in enumerate(
-            zip(flat["slices"], flat["input_text"], flat["task_names"])
+            zip(images, input_texts, task_names)
         ):
             self.prompt_queue.append(
                 RecognitionPrompt(
@@ -533,8 +535,8 @@ class RecognitionPredictor(BasePredictor):
             disable=self.disable_tqdm,
         )
 
-        batch_bboxes = torch.zeros(len(flat["slices"]), overall_max_tokens, 6)
-        batch_pos = [0] * len(flat["slices"])
+        batch_bboxes = torch.zeros(len(images), overall_max_tokens, 6)
+        batch_pos = [0] * len(images)
 
         while self.prompt_queue or self.num_active_slots > 0:
             if (
