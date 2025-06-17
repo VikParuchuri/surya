@@ -9,6 +9,7 @@ from surya.detection import DetectionPredictor
 from surya.ocr_error import OCRErrorPredictor
 from surya.layout import LayoutPredictor
 from surya.recognition import RecognitionPredictor
+from surya.foundation import FoundationPredictor
 from surya.table_rec import TableRecPredictor
 
 
@@ -35,7 +36,8 @@ def detection_predictor() -> DetectionPredictor:
 
 @pytest.fixture(scope="session")
 def recognition_predictor() -> RecognitionPredictor:
-    recognition_predictor = RecognitionPredictor()
+    foundation_predictor = FoundationPredictor()
+    recognition_predictor = RecognitionPredictor(foundation_predictor)
     yield recognition_predictor
     del recognition_predictor
 

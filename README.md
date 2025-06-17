@@ -132,11 +132,13 @@ Setting the `RECOGNITION_BATCH_SIZE` env var properly will make a big difference
 
 ```python
 from PIL import Image
+from surya.foundation import FoudnationPredictor
 from surya.recognition import RecognitionPredictor
 from surya.detection import DetectionPredictor
 
 image = Image.open(IMAGE_PATH)
-recognition_predictor = RecognitionPredictor()
+foundation_predictor = FoundationPredictor()
+recognition_predictor = RecognitionPredictor(foundation_predictor)
 detection_predictor = DetectionPredictor()
 
 predictions = recognition_predictor([image], det_predictor=detection_predictor)
