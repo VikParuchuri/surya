@@ -229,7 +229,7 @@ class SuryaOCRTokenizer(S3DownloaderMixin, PreTrainedTokenizer):
     def __init__(
         self,
         special_tokens: Dict[str, list] | None = None,
-        model_checkpoint: str = settings.RECOGNITION_MODEL_CHECKPOINT,
+        model_checkpoint: str = settings.FOUNDATION_MODEL_CHECKPOINT,
         **kwargs,
     ):
         if special_tokens is None:

@@ -76,13 +76,14 @@ class Settings(BaseSettings):
     COMPILE_DETECTOR: bool = False
 
     # Text recognition
-    RECOGNITION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_16"
-    RECOGNITION_MODEL_QUANTIZE: bool = False
-    RECOGNITION_MAX_TOKENS: Optional[int] = None
+    FOUNDATION_MODEL_CHECKPOINT: str = "s3://text_recognition/2025_05_16"
+    FOUNDATION_MODEL_QUANTIZE: bool = False
+    FOUNDATION_MAX_TOKENS: Optional[int] = None
+    RECOGNITION_CHUNK_SIZE: Optional[int] = None
+
     RECOGNITION_BATCH_SIZE: Optional[int] = (
         None  # Defaults to 8 for CPU/MPS, 256 otherwise
     )
-    RECOGNITION_CHUNK_SIZE: Optional[int] = None
     RECOGNITION_RENDER_FONTS: Dict[str, str] = {
         "all": os.path.join(FONT_DIR, "GoNotoCurrent-Regular.ttf"),
         "zh": os.path.join(FONT_DIR, "GoNotoCJKCore.ttf"),

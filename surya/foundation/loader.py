@@ -14,13 +14,12 @@ from surya.settings import settings
 
 logger = get_logger()
 
-
-class RecognitionModelLoader(ModelLoader):
+class FoundationModelLoader(ModelLoader):
     def __init__(self, checkpoint: Optional[str] = None):
         super().__init__(checkpoint)
 
         if self.checkpoint is None:
-            self.checkpoint = settings.RECOGNITION_MODEL_CHECKPOINT
+            self.checkpoint = settings.FOUNDATION_MODEL_CHECKPOINT
 
     def model(
         self,
