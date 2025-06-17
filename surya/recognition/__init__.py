@@ -857,7 +857,7 @@ class RecognitionPredictor(BasePredictor):
 
         # Make predictions
         predicted_tokens, batch_bboxes, scores = self.prediction_loop(
-            flat, recognition_batch_size=recognition_batch_size, math_mode=math_mode
+            flat["slices"], flat["input_text"], flat["task_names"], recognition_batch_size=recognition_batch_size, math_mode=math_mode
         )
 
         # Get text and bboxes in structured form
