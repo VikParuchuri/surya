@@ -173,6 +173,7 @@ def flash_attn_decode(
     This is the opposite of what is required by flash attention, but keeps parity with the HF convention
     """
     query_states, key_states, value_states = query_states.transpose(1,2), key_states.transpose(1,2), value_states.transpose(1,2)
+    # Note  - This get the left padding count only, while ignoring right padding counts, which is what FA2 wants
     cache_leftpad = (attention_mask == 0).cumprod(dim=1).sum(dim=1)
     cache_leftpad = cache_leftpad.to(torch.int32)
     
