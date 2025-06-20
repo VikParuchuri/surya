@@ -27,10 +27,11 @@ class ContinuousBatchingCache(StaticCache):
         # batch_size is deprecated in newer versions
         super().__init__(config, batch_size=None, max_cache_len=max_cache_len, device=device, dtype=dtype, max_batch_size=batch_size)
         self.text_sliding_window = text_sliding_window
+        self.num_layers = config.num_hidden_layers
 
         # TODO Setup these as buffers since its a nn.Module
         self.attention_mask = torch.zeros((self.batch_size, self.max_cache_len), device=device, dtype=torch.int)
-        self.text_token_counts = [0] * self.batch_size
+        self.text_token_counts = [[0 for _ in range(batch_size)] for _ in range(self.num_layers)]
 
     def _shift_attention_mask_left(self, batch_idx: int, shift_amount: int):
         self.attention_mask[batch_idx, :-shift_amount] = self.attention_mask[batch_idx, shift_amount:]
@@ -111,7 +112,7 @@ class ContinuousBatchingCache(StaticCache):
             if new_text_len == 0:
                 continue  # skip padded batch entry
 
-            curr_text_cache_len = self.text_token_counts[cache_idx]
+            curr_text_cache_len = self.text_token_counts[layer_idx][cache_idx]
 
             k_new = key_states[batch_idx, :, :new_text_len, :]  # (H, new_text_len, D)
             v_new = value_states[batch_idx, :, :new_text_len, :]
@@ -127,8 +128,9 @@ class ContinuousBatchingCache(StaticCache):
                 k_cache[cache_idx, :, -shift:, :] = k_new
                 v_cache[cache_idx, :, -shift:, :] = v_new
 
-                self._shift_attention_mask_left(cache_idx, shift)
-                self.text_token_counts[cache_idx] += new_text_len
+                self.text_token_counts[layer_idx][cache_idx] += new_text_len
+                if layer_idx == (self.num_layers - 1):
+                    self._shift_attention_mask_left(cache_idx, shift)
             else:
                 # Expand text region to exactly text_sliding_window tokens
                 # Shift entire cache left to make room for the full sliding window
@@ -146,7 +148,8 @@ class ContinuousBatchingCache(StaticCache):
                     k_cache[cache_idx :, :-shift_amount, :] = k_cache[cache_idx :, shift_amount:, :]
                     v_cache[cache_idx :, :-shift_amount, :] = v_cache[cache_idx :, shift_amount:, :]
 
-                    self._shift_attention_mask_left(b, shift_amount)
+                    if layer_idx == (self.num_layers - 1):
+                        self._shift_attention_mask_left(cache_idx, shift_amount)
                 
                 # Now place the most recent 'keep' text tokens at the start of text region
                 old_text_start = self.max_cache_len - curr_text_cache_len - shift_amount
@@ -157,7 +160,7 @@ class ContinuousBatchingCache(StaticCache):
                 k_cache[cache_idx :, desired_text_start + keep:self.max_cache_len, :] = k_new
                 v_cache[cache_idx :, desired_text_start + keep:self.max_cache_len, :] = v_new
                 
-                self.text_token_counts[cache_idx] = self.text_sliding_window
+                self.text_token_counts[layer_idx][cache_idx] = self.text_sliding_window
 
         self.key_cache[layer_idx] = k_cache
         self.value_cache[layer_idx] = v_cache
