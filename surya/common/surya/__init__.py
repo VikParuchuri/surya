@@ -296,6 +296,8 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
         logits_to_keep=None,
         encoder_chunk_size=None,
         cache_idxs=None,
+        valid_tokens=None,
+        prefill=False,
         **kwargs: KwargsForCausalLM,
     ):
         # Process the mixed batch if provided
@@ -351,6 +353,8 @@ class SuryaModel(S3DownloaderMixin, PreTrainedModel):
             return_dict=True,
             use_cache=use_cache,
             cache_idxs=cache_idxs,
+            valid_tokens=valid_tokens,
+            prefill=prefill
             **kwargs,
         )
 
