@@ -29,8 +29,7 @@ class ContinuousBatchingCache(StaticCache):
         self.text_sliding_window = text_sliding_window
         self.num_layers = config.num_hidden_layers
 
-        # TODO Setup these as buffers since its a nn.Module
-        self.attention_mask = torch.zeros((self.batch_size, self.max_cache_len), device=device, dtype=torch.int)
+        self.register_buffer(f"attention_mask", torch.zeros((self.batch_size, self.max_cache_len), device=device, dtype=torch.int))
         self.text_token_counts = [torch.zeros(self.batch_size) for _ in range(self.num_layers)]
 
     def _shift_attention_mask_left(self, batch_idx: int, shift_amount: int):
