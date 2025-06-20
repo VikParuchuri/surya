@@ -274,7 +274,8 @@ class FoundationPredictor(BasePredictor):
         input_ids = processed_output.input_ids
         num_predicted_tokens += 1
         input_ids, valid_tokens = self.maybe_insert_beacon_tokens(input_ids, num_predicted_tokens)
-        position_ids = position_ids[:, -1:] + torch.arange(input_ids.shape[1])
+        # TODO we should only consider position_ids upto the valid range for each batch element
+        position_ids = position_ids[:, -1:] + torch.arange(1, input_ids.shape[1] + 1)
 
         new_input = ContinuousBatchInput(
             input_ids=input_ids,
@@ -284,6 +285,33 @@ class FoundationPredictor(BasePredictor):
         )
 
         return new_input, processed_output
+
+    def pad_and_shift_input_ids_position_ids(
+        self,
+        input_ids: torch.Tensor,
+        position_ids: torch.Tensor,
+        new_seq_len: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Pads new_input_ids to match the new seq len
+        and creates updated position_ids based on current_position_ids' last position.
+
+        Returns:
+            padded_input_ids (torch.Tensor): [batch_size, current_seq_len]
+            updated_position_ids (torch.Tensor): [batch_size, current_seq_len]
+        """
+        assert input_ids.shape[1] == 1, "During prefill the new input_ids must be of length 1"
+
+        if new_seq_len == input_ids.shape[1]:
+            return input_ids, position_ids[:, -1:] + 1
+
+        pad_len = new_seq_len - 1
+        padded_input_ids = torch.nn.functional.pad(input_ids, (0, pad_len), value=self.device_pad_token)
+
+        # Create updated position_ids starting from the last position + 1, increasing by 1 each step
+        updated_position_ids = position_ids[:, -1:] + torch.arange(1, new_seq_len + 1, device=self.model.device)
+
+        return padded_input_ids, updated_position_ids
 
     def prefill(self, current_inputs: Optional[ContinuousBatchInput] = None):
         logger.debug(f"Prefilling {self.num_empty_slots} slots")
@@ -337,7 +365,6 @@ class FoundationPredictor(BasePredictor):
         valid_tokens = torch.ones((input_ids.shape[0], 1), device=self.model.device)    # No extra tokens during prefill
         processed_outputs = self.process_outputs(outputs, valid_tokens=valid_tokens)
         # Update to account for the newly generated tokens
-        position_ids = position_ids[:, -1:] + 1
         self.kv_cache.attention_mask[idxs_to_merge] = attention_mask[:len(idxs_to_merge)]
 
         # Find text lenghts of each
@@ -369,11 +396,13 @@ class FoundationPredictor(BasePredictor):
             )
 
         # Merging inputs for next steps
-        # TODO If the current inputs contain padded position ids or input ids, we have to merge them with padding
         current_input_ids = current_inputs.input_ids
-        current_input_ids[idxs_to_merge] = processed_outputs.input_ids
-
         current_position_ids = current_inputs.position_ids
+
+        input_ids, position_ids = self.pad_and_shift_input_ids_position_ids(
+            processed_outputs.input_ids, position_ids, new_seq_len=current_input_ids.shape[1]
+        )
+        current_input_ids[idxs_to_merge] = input_ids
         current_position_ids[idxs_to_merge] = position_ids
 
         current_valid_tokens = current_inputs.valid_tokens
