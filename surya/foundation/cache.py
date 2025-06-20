@@ -1,186 +1,119 @@
+from typing import Any, Dict, List, Optional, Tuple
 import torch
-from transformers import DynamicCache, HQQQuantizedCache
-from typing import List, Tuple
 import torch.nn.functional as F
+from transformers import Cache, StaticCache
+from transformers import PretrainedConfig
+from transformers.utils import is_torchdynamo_compiling
 
+"""
+Special cache class for the surya foundation model that supports - 
+1) Static shape
+2) A custom sliding window, where image tokens stay in cache, and text tokens are popped
+3) Continuous batching - merging etc
+4) Attention mask management - To match with what's currently in the cache
 
-class ContinuousBatchingMixin:
-    def pad_left(
-        self, key_states: torch.Tensor, value_states: torch.Tensor, padding_size: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Size is assumed to be (batch_size, num_kv_heads, seq_length, head_dim) - To match huggingface
-        key_states_padded = F.pad(
-            key_states,
-            pad=(
-                0,
-                0,
-                padding_size,
-                0,
-            ),  # (left, right, top, bottom) for last two dimensions
-            mode="constant",
-            value=0,
-        )
-
-        value_states_padded = F.pad(
-            value_states,
-            pad=(
-                0,
-                0,
-                padding_size,
-                0,
-            ),  # (left, right, top, bottom) for last two dimensions
-            mode="constant",
-            value=0,
-        )
-
-        return key_states_padded, value_states_padded
-
-    # Trim the cache from the left - Useful when longer sequences are evicted and we have long padding on the left
-    def trim_left(self, trim_length: int):
-        self._seen_tokens -= trim_length
-        for layer_idx in range(len(self)):
-            # cache sape is (batch_size, num_kv_heads, seq_length, head_dim); Trimming from head dim
-            self.key_cache[layer_idx] = self.key_cache[layer_idx][:, :, trim_length:, :]
-            self.value_cache[layer_idx] = self.value_cache[layer_idx][
-                :, :, trim_length:, :
-            ]
-
-    def get_full_cache(self, layer_idx: int):
-        return self.key_cache[layer_idx], self.value_cache[layer_idx]
-
-    def set_full_cache(
-        self, layer_idx: int, key_cache: torch.Tensor, value_cache: torch.Tensor
-    ):
-        self.key_cache[layer_idx] = key_cache
-        self.value_cache[layer_idx] = value_cache
-
-    def merge(
+Heavily inspired from https://github.com/huggingface/transformers/blob/0725cd6953803b8aacfc85288cbfb83dea30c469/src/transformers/cache_utils.py#L1079
+"""
+class ContinuousBatchingCache(StaticCache):
+    def __init__(
         self,
-        new_cache: "ContinuousBatchingCache",
-        merge_idxs: List[int],
-        device: torch.device,
+        config: PretrainedConfig,
+        batch_size: int,
+        max_cache_len: int,
+        text_sliding_window: int,
+        device: int,
+        dtype: int
     ):
-        assert len(new_cache) == len(self), (
-            "The two caches should have the same number of layers"
-        )
+        # batch_size is deprecated in newer versions
+        super().__init__(config, batch_size=None, max_cache_len=max_cache_len, device=device, dtype=dtype, max_batch_size=batch_size)
+        self.text_sliding_window = text_sliding_window
 
-        # We should TECHNICALLY be able to pad these values to 0s now, since they will be attention masked
-        current_seq_length = self.get_seq_length()
-        new_cache_seq_length = new_cache.get_seq_length()
-        offset = (
-            current_seq_length - new_cache_seq_length
-        )  # Generally positive, but negative case is handled too
-        if offset > 0:
-            new_cache._seen_tokens += offset
-        elif offset < 0:
-            self._seen_tokens += abs(offset)
+        # TODO Setup these as buffers since its a nn.Module
+        self.attention_mask = torch.zeros((self.batch_size, self.max_cache_len), device=device, dtype=torch.int)
+        self.text_token_counts = [0] * self.batch_size
 
-        merge_idxs = torch.tensor(merge_idxs, dtype=torch.long, device=device)
+    def _shift_attention_mask_left(self, batch_idx: int, shift_amount: int):
+        self.attention_mask[batch_idx, :-shift_amount] = self.attention_mask[batch_idx, shift_amount:]
+        self.attention_mask[batch_idx, -shift_amount:] = 1
 
-        with torch.inference_mode():
-            # As long as we set the attention mask and position ids correctly, padding value can be anything
-            for layer_idx in range(len(self)):
-                new_k, new_v = new_cache.get_full_cache(layer_idx)
-                if offset > 0:
-                    new_k, new_v = self.pad_left(new_k, new_v, offset)
+    def update(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Static cache update
+        - adjust attention mask with new left padding
+        - respects per-batch text token limits
+        - per-batch valid token lengths (right-padded inputs)
 
-                old_k, old_v = self.get_full_cache(layer_idx)
-                if offset < 0:
-                    adjusted_key_cache, adjusted_value_cache = self.pad_left(
-                        old_k,
-                        old_v,
-                        abs(offset),
-                    )
-                else:
-                    adjusted_key_cache, adjusted_value_cache = (
-                        old_k,
-                        old_v,
-                    )
+        kv states are expected to have shape [batch_size, kv_heads, T_pad, head_dim]
+        They may have different `true` lengths, to account for multi token preds, or beacon tokens
+        Expects `valid_tokens` in cache_kwargs: a tensor of shape (B,) indicating the number
+        of actual (non-padded) tokens to add per batch element.
+        """
 
-                adjusted_key_cache.index_put_((merge_idxs,), new_k)
-                adjusted_value_cache.index_put_((merge_idxs,), new_v)
+        batch_size, _, padded_seq_len, _ = key_states.shape
 
-                self.set_full_cache(layer_idx, adjusted_key_cache, adjusted_value_cache)
+        valid_tokens: torch.Tensor = cache_kwargs.get("valid_tokens")  # shape: (B,)
+        assert valid_tokens is not None, "`valid_tokens` must be provided in `cache_kwargs`"
 
-        return offset
+        k_cache = self.key_cache[layer_idx]   # (B, H, L, D)
+        v_cache = self.value_cache[layer_idx] # (B, H, L, D)
 
+        for b in range(batch_size):
+            new_text_len = valid_tokens[b].item()
+            if new_text_len == 0:
+                continue  # skip padded batch entry
 
-class ContinuousBatchingCache(ContinuousBatchingMixin, DynamicCache):
-    pass
+            curr_text_cache_len = self.text_token_counts[b]
 
+            k_new = key_states[b, :, :new_text_len, :]  # (H, new_text_len, D)
+            v_new = value_states[b, :, :new_text_len, :]
 
-class ContinuousBatchingQuantizedCache(ContinuousBatchingMixin, HQQQuantizedCache):
-    def get_full_cache(self, layer_idx: int):
-        unquant_key_cache = self.key_cache[layer_idx]
-        unquant_value_cache = self.value_cache[layer_idx]
-        quant_key_cache = self._dequantize(self._quantized_key_cache[layer_idx])
-        quant_value_cache = self._dequantize(self._quantized_value_cache[layer_idx])
+            if curr_text_cache_len + new_text_len <= self.text_sliding_window:
+                # If we are under the sliding window length, shift the entire cache left
+                # Since we setup the max cache length with enough buffer, this will ONLY drop 
+                # left padding tokens out
+                shift = new_text_len
+                if curr_text_cache_len > 0:
+                    k_cache[b, :, :-shift, :] = k_cache[b, :, shift:, :]
+                    v_cache[b, :, :-shift, :] = v_cache[b, :, shift:, :]
+                k_cache[b, :, -shift:, :] = k_new
+                v_cache[b, :, -shift:, :] = v_new
 
-        # Concatenate the unquantized and quantized caches
-        full_key_cache = torch.cat([quant_key_cache, unquant_key_cache], dim=-2)
-        full_value_cache = torch.cat([quant_value_cache, unquant_value_cache], dim=-2)
-
-        return full_key_cache, full_value_cache
-
-    def set_full_cache(
-        self, layer_idx: int, key_cache: torch.Tensor, value_cache: torch.Tensor
-    ):
-        if key_cache.shape[-2] < self.residual_length:
-            # HF quantized cache is setup so prefill is always quantized
-            # So we treat this as a prefill case
-            self.key_cache[layer_idx] = torch.zeros(
-                0, dtype=key_cache.dtype, device=key_cache.device
-            )
-            self.value_cache[layer_idx] = torch.zeros(
-                0, dtype=value_cache.dtype, device=value_cache.device
-            )
-            self._quantized_key_cache[layer_idx] = self._quantize(
-                key_cache.contiguous(), axis=self.axis_key
-            )
-            self._quantized_value_cache[layer_idx] = self._quantize(
-                value_cache.contiguous(), axis=self.axis_value
-            )
-        else:
-            self.key_cache[layer_idx] = key_cache[:, :, self.residual_length :, :]
-            self.value_cache[layer_idx] = value_cache[:, :, self.residual_length :, :]
-
-            # Quantize the new cache
-            quant_key_cache = key_cache[:, :, : self.residual_length, :]
-            quant_value_cache = value_cache[:, :, : self.residual_length, :]
-            quant_key_cache = self._quantize(quant_key_cache, axis=self.axis_key)
-            quant_value_cache = self._quantize(quant_value_cache, axis=self.axis_value)
-
-            # Set the quantized cache
-            self._quantized_key_cache[layer_idx] = quant_key_cache
-            self._quantized_value_cache[layer_idx] = quant_value_cache
-
-    def trim_left(self, trim_length: int):
-        if trim_length == 0:
-            return
-
-        self._seen_tokens -= trim_length
-        to_keep = self._seen_tokens - trim_length
-        quantized_to_keep = to_keep - self.residual_length
-
-        for layer_idx in range(len(self.key_cache)):
-            if quantized_to_keep > 0:
-                dequant_key = self._dequantize(self._quantized_key_cache[layer_idx])[
-                    :, :, trim_length:, :
-                ]
-                dequant_value = self._dequantize(
-                    self._quantized_value_cache[layer_idx]
-                )[:, :, trim_length:, :]
-                self._quantized_key_cache[layer_idx] = self._quantize(
-                    dequant_key, axis=self.axis_key
-                )
-                self._quantized_value_cache[layer_idx] = self._quantize(
-                    dequant_value, axis=self.axis_value
-                )
+                self._shift_attention_mask_left(b, shift)
+                self.text_token_counts[b] += new_text_len
             else:
-                main_to_keep = self._seen_tokens - trim_length
-                main_start_idx = self.residual_length - main_to_keep
+                # Expand text region to exactly text_sliding_window tokens
+                # Shift entire cache left to make room for the full sliding window
+                
+                # Calculate how much to shift left to accommodate full sliding window
+                desired_text_start = self.max_cache_len - self.text_sliding_window
+                
+                # We need to figure out how many text tokens to keep and where to place them
+                keep = self.text_sliding_window - new_text_len
+                assert keep > 0, "Cannot add more new text tokens than the sliding window"
+                
+                # Shift entire cache left to make room for full text sliding window
+                shift_amount = self.text_sliding_window - curr_text_cache_len
+                if shift_amount > 0:        # Cannot be negative, may be exactly 0
+                    k_cache[b, :, :-shift_amount, :] = k_cache[b, :, shift_amount:, :]
+                    v_cache[b, :, :-shift_amount, :] = v_cache[b, :, shift_amount:, :]
 
-                full_key_cache = self.key_cache[layer_idx][:, :, main_start_idx:, :]
-                full_value_cache = self.value_cache[layer_idx][:, :, main_start_idx:, :]
+                    self._shift_attention_mask_left(b, shift_amount)
+                
+                # Now place the most recent 'keep' text tokens at the start of text region
+                old_text_start = self.max_cache_len - curr_text_cache_len - shift_amount
+                k_cache[b, :, desired_text_start:desired_text_start + keep, :] = k_cache[b, :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
+                v_cache[b, :, desired_text_start:desired_text_start + keep, :] = v_cache[b, :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
+                
+                # Add new tokens at the end
+                k_cache[b, :, desired_text_start + keep:self.max_cache_len, :] = k_new
+                v_cache[b, :, desired_text_start + keep:self.max_cache_len, :] = v_new
+                
+                self.text_token_counts[b] = self.text_sliding_window
 
-                self.set_full_cache(layer_idx, full_key_cache, full_value_cache)
+        return k_cache, v_cache
