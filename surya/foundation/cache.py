@@ -55,23 +55,26 @@ class ContinuousBatchingCache(StaticCache):
         of actual (non-padded) tokens to add per batch element.
         """
 
-        batch_size, _, padded_seq_len, _ = key_states.shape
-
         valid_tokens: torch.Tensor = cache_kwargs.get("valid_tokens")  # shape: (B,)
         assert valid_tokens is not None, "`valid_tokens` must be provided in `cache_kwargs`"
+
+        # Update only selected batch indices, useful for prefill in continuous batching
+        cache_idxs: List[int] = cache_kwargs.get("cache_idx", None)
+        if cache_idxs is None:
+            cache_idxs = list(range(self.batch_size))
 
         k_cache = self.key_cache[layer_idx]   # (B, H, L, D)
         v_cache = self.value_cache[layer_idx] # (B, H, L, D)
 
-        for b in range(batch_size):
-            new_text_len = valid_tokens[b].item()
+        for batch_idx, cache_idx in enumerate(cache_idxs):
+            new_text_len = valid_tokens[batch_idx].item()
             if new_text_len == 0:
                 continue  # skip padded batch entry
 
-            curr_text_cache_len = self.text_token_counts[b]
+            curr_text_cache_len = self.text_token_counts[cache_idx]
 
-            k_new = key_states[b, :, :new_text_len, :]  # (H, new_text_len, D)
-            v_new = value_states[b, :, :new_text_len, :]
+            k_new = key_states[batch_idx, :, :new_text_len, :]  # (H, new_text_len, D)
+            v_new = value_states[batch_idx, :, :new_text_len, :]
 
             if curr_text_cache_len + new_text_len <= self.text_sliding_window:
                 # If we are under the sliding window length, shift the entire cache left
@@ -79,13 +82,13 @@ class ContinuousBatchingCache(StaticCache):
                 # left padding tokens out
                 shift = new_text_len
                 if curr_text_cache_len > 0:
-                    k_cache[b, :, :-shift, :] = k_cache[b, :, shift:, :]
-                    v_cache[b, :, :-shift, :] = v_cache[b, :, shift:, :]
-                k_cache[b, :, -shift:, :] = k_new
-                v_cache[b, :, -shift:, :] = v_new
+                    k_cache[cache_idx, :, :-shift, :] = k_cache[cache_idx, :, shift:, :]
+                    v_cache[cache_idx, :, :-shift, :] = v_cache[cache_idx, :, shift:, :]
+                k_cache[cache_idx, :, -shift:, :] = k_new
+                v_cache[cache_idx, :, -shift:, :] = v_new
 
-                self._shift_attention_mask_left(b, shift)
-                self.text_token_counts[b] += new_text_len
+                self._shift_attention_mask_left(cache_idx, shift)
+                self.text_token_counts[cache_idx] += new_text_len
             else:
                 # Expand text region to exactly text_sliding_window tokens
                 # Shift entire cache left to make room for the full sliding window
@@ -100,20 +103,20 @@ class ContinuousBatchingCache(StaticCache):
                 # Shift entire cache left to make room for full text sliding window
                 shift_amount = self.text_sliding_window - curr_text_cache_len
                 if shift_amount > 0:        # Cannot be negative, may be exactly 0
-                    k_cache[b, :, :-shift_amount, :] = k_cache[b, :, shift_amount:, :]
-                    v_cache[b, :, :-shift_amount, :] = v_cache[b, :, shift_amount:, :]
+                    k_cache[cache_idx :, :-shift_amount, :] = k_cache[cache_idx :, shift_amount:, :]
+                    v_cache[cache_idx :, :-shift_amount, :] = v_cache[cache_idx :, shift_amount:, :]
 
                     self._shift_attention_mask_left(b, shift_amount)
                 
                 # Now place the most recent 'keep' text tokens at the start of text region
                 old_text_start = self.max_cache_len - curr_text_cache_len - shift_amount
-                k_cache[b, :, desired_text_start:desired_text_start + keep, :] = k_cache[b, :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
-                v_cache[b, :, desired_text_start:desired_text_start + keep, :] = v_cache[b, :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
+                k_cache[cache_idx :, desired_text_start:desired_text_start + keep, :] = k_cache[cache_idx :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
+                v_cache[cache_idx :, desired_text_start:desired_text_start + keep, :] = v_cache[cache_idx :, old_text_start + (curr_text_cache_len - keep):old_text_start + curr_text_cache_len, :]
                 
                 # Add new tokens at the end
-                k_cache[b, :, desired_text_start + keep:self.max_cache_len, :] = k_new
-                v_cache[b, :, desired_text_start + keep:self.max_cache_len, :] = v_new
+                k_cache[cache_idx :, desired_text_start + keep:self.max_cache_len, :] = k_new
+                v_cache[cache_idx :, desired_text_start + keep:self.max_cache_len, :] = v_new
                 
-                self.text_token_counts[b] = self.text_sliding_window
+                self.text_token_counts[cache_idx] = self.text_sliding_window
 
         return k_cache, v_cache
