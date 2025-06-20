@@ -43,6 +43,46 @@ class ContinuousBatchingCache(StaticCache):
         layer_idx: int,
         cache_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        prefill = cache_kwargs.get('prefill', False)
+        if prefill:
+            return self._prefill_update(
+                key_states,
+                value_states,
+                layer_idx,
+                cache_kwargs
+            )
+        else:
+            return self._decode_update(
+                key_states,
+                value_states,
+                layer_idx,
+                cache_kwargs
+            )
+
+    def _prefill_update(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        cache_idxs: List[int] = cache_kwargs.get("cache_idx", None)
+        assert cache_idxs is not None, "cache_idxs must be specified during prefill"
+
+        # key and value states will already be left padded during prefill
+        valid_batch_size = len(cache_idxs)
+        self.key_cache[layer_idx][cache_idxs] = key_states[:valid_batch_size]
+        self.value_cache[layer_idx][cache_idxs] = value_states[:valid_batch_size]
+
+        return self.key_cache[layer_idx], self.value_cache[layer_idx]
+
+    def _decode_update(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Static cache update
         - adjust attention mask with new left padding
@@ -119,4 +159,7 @@ class ContinuousBatchingCache(StaticCache):
                 
                 self.text_token_counts[cache_idx] = self.text_sliding_window
 
-        return k_cache, v_cache
+        self.key_cache[layer_idx] = k_cache
+        self.value_cache[layer_idx] = v_cache
+
+        return self.key_cache[layer_idx], self.value_cache[layer_idx]
