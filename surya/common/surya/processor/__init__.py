@@ -373,6 +373,7 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
         mixed_batch: List[dict],
         padding_side: Optional[str] = "left",
         device: Optional[torch.device] = None,
+        pad_to_max_len: Optional[int] = None
     ):
         all_image_tiles = []
         all_input_ids = []
@@ -392,13 +393,22 @@ class SuryaOCRProcessor(S3DownloaderMixin, ProcessorMixin):
             all_image_tiles.extend(image_tiles)
             all_grid_thw.extend(grid_thw)
 
-        # If max sequence length is None, this slicing does nothing
         batched_input_ids = pad_sequence(
             all_input_ids,
             batch_first=True,
             padding_side=padding_side,
             padding_value=self.pad_token_id,
         )
+        if pad_to_max_len is not None:
+            assert batched_input_ids.shape[1] < pad_to_max_len, "Input sequence is too long"
+
+            pad_len = pad_to_max_len - batched_input_ids.shape[1]
+            # Pad on the left (dim=1), so (left, right) = (pad_len, 0)
+            batched_input_ids = torch.nn.functional.pad(
+                batched_input_ids,
+                (pad_len, 0),
+                value=self.pad_token_id
+            )
 
         attention_mask = batched_input_ids.ne(self.pad_token_id)
 
