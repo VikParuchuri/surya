@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -160,6 +160,7 @@ class Qwen2Attention(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_value: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        cache_idxs: Optional[List[int]] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
@@ -184,7 +185,7 @@ class Qwen2Attention(nn.Module):
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
-            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
+            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position, "cache_idxs": cache_idxs}
             key_states, value_states = past_key_value.update(
                 key_states, value_states, self.layer_idx, cache_kwargs
             )
@@ -277,6 +278,7 @@ class Qwen2DecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
+        cache_idxs: Optional[List[int]] = None,
         position_embeddings: Optional[
             Tuple[torch.Tensor, torch.Tensor]
         ] = None,  # necessary, but kept here for BC
@@ -298,6 +300,7 @@ class Qwen2DecoderLayer(nn.Module):
             use_cache=use_cache,
             cache_position=cache_position,
             position_embeddings=position_embeddings,
+            cache_idxs=cache_idxs
             **kwargs,
         )
         hidden_states = residual + hidden_states
@@ -457,6 +460,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        cache_idxs: Optional[List[int]] = None,
         **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         use_cache = use_cache if use_cache is not None else self.config.use_cache
@@ -496,6 +500,7 @@ class SuryaDecoderModel(Qwen2PreTrainedModel):
                 use_cache=use_cache,
                 cache_position=cache_position,
                 position_embeddings=position_embeddings,
+                cache_idxs=cache_idxs,
                 **flash_attn_kwargs,
             )
 
