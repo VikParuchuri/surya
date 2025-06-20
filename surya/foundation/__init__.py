@@ -189,12 +189,12 @@ class FoundationPredictor(BasePredictor):
 
         # Update input boxes
         box_preds = next_bbox_logits * self.model.config.bbox_size
-        input_boxes = box_preds.to(torch.long)
+        box_preds = box_preds.to(torch.long)
 
         return ContinuousBatchOutput(
             input_ids=input_ids,
             preds=preds,
-            bbox_preds=input_boxes,
+            bbox_preds=box_preds,
             done=done,
             scores=scores,
         )
