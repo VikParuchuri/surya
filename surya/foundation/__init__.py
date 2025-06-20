@@ -326,6 +326,14 @@ class FoundationPredictor(BasePredictor):
 
         return new_input, processed_outputs, idxs_to_merge
 
+    def get_image_token_count(self, image: Image.Image) -> int:
+        height, width = image.size
+        grid_h, grid_w = height // self.processor.patch_size, width // self.processor.patch_size
+        image_toks = (grid_h * grid_w) / (self.processor.merge_size**2)
+        
+        # Extra 1 to account for rotation token when present.
+        return 1 + self.processor.num_registory_tokens + image_toks
+
     def prediction_loop(
         self,
         images: List[Image.Image],
@@ -346,8 +354,9 @@ class FoundationPredictor(BasePredictor):
         if batch_size is None:
             batch_size = self.get_batch_size()
         current_inputs = None
-        # TODO Calculate the max cache size from the images
-        self.setup_cache(batch_size, max_cache_len=1024+self.model.config.sliding_window)
+        
+        max_image_tokens = max(self.get_image_token_count(image) for image in images)
+        self.setup_cache(batch_size, max_cache_len=max_image_tokens + self.model.config.sliding_window)
 
         batch_max_tokens = {}
         for idx, (img, txt, task) in enumerate(
@@ -401,7 +410,6 @@ class FoundationPredictor(BasePredictor):
                             pbar.update(1)
             else:
                 updated_inputs, outputs = self.decode(current_inputs)
-                # TODO Find a cleaner way of popping from the dict
                 predicted_tokens_cpu = outputs.preds.cpu()
                 scores_cpu = outputs.scores.cpu()
 
