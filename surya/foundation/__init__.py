@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from collections import deque
 
 import cv2
@@ -35,6 +35,10 @@ logger = get_logger()
 class ContinuousBatchInput:
     input_ids: torch.Tensor
     position_ids: torch.Tensor
+    # input_ids and position_ids may be padded, valid_tokens tracks the 'real' counts
+    valid_tokens: torch.Tensor
+    # count the number of predicted tokens for each batch element so far
+    num_predicted_tokens: torch.Tensor
 
 
 @dataclass
@@ -93,11 +97,16 @@ class FoundationPredictor(BasePredictor):
         self.batch_prompt_mapping = None
         self.kv_cache = None
 
+        self.beacon_token_interval = self.model.config.beacon_token_interval
+
         # Setup various tokens on-device
         self.device_pad_token = torch.tensor(
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
         )
-        special_token_ids = torch.tensor(
+        self.device_beacon_token = torch.Tensor(
+            self.processor.beacon_token_id, device=self.model.device, dtype=torch.long
+        )
+        self.special_token_ids = torch.tensor(
             [self.config.image_token_id] + self.config.register_token_ids,
             device=self.device,
         )
@@ -167,11 +176,22 @@ class FoundationPredictor(BasePredictor):
 
         return batch
 
-    def process_outputs(self, outputs: SuryaModelOutput) -> ContinuousBatchOutput:
-        # Get logits and initial preds
-        next_token_logits = outputs["lm_logits"][:, -1:, :].clone().float()
-        next_bbox_logits = outputs["bbox_logits"][:, -1:, :].clone().float()
-        preds = torch.argmax(next_token_logits, dim=-1)
+    def process_outputs(self, outputs: SuryaModelOutput, valid_tokens: torch.Tensor) -> ContinuousBatchOutput:
+        lm_logits = outputs["lm_logits"].float()  # shape: [B, T, V]
+        bbox_logits = outputs["bbox_logits"].float()  # shape: [B, T, D]
+        
+        token_indices = valid_tokens - 1  # shape: [B]
+        token_indices = token_indices.view(-1, 1, 1).expand(-1, 1, lm_logits.size(-1))  # shape: [B, 1, V]
+
+        bbox_indices = valid_tokens - 1
+        bbox_indices = bbox_indices.view(-1, 1, 1).expand(-1, 1, bbox_logits.size(-1))  # shape: [B, 1, D]
+
+        # Gather logits at valid token positions
+        next_token_logits = torch.gather(lm_logits, dim=1, index=token_indices)  # shape: [B, 1, V]
+        next_bbox_logits = torch.gather(bbox_logits, dim=1, index=bbox_indices)  # shape: [B, 1, D]
+
+        # Get predictions
+        preds = torch.argmax(next_token_logits, dim=-1)  # shape: [B, 1]
 
         # Handle inference completion
         done = (preds == self.processor.eos_token_id) | (
@@ -199,9 +219,36 @@ class FoundationPredictor(BasePredictor):
             scores=scores,
         )
 
+    def maybe_insert_beacon_tokens(
+        self,
+        input_ids: torch.Tensor,
+        num_predicted_tokens: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch_size = input_ids.shape[0]
+
+        token = input_ids.squeeze(1)  # shape: [batch_size]
+        add_beacon = (num_predicted_tokens % self.beacon_token_interval== 0)
+        
+        # Output tensors
+        new_input_ids = torch.full((batch_size, 2), self.device_pad_token, dtype=input_ids.dtype, device=input_ids.device)
+
+        # Insert tokens
+        new_input_ids[add_beacon, 0] = self.device_beacon_token
+        new_input_ids[add_beacon, 1] = token[add_beacon]
+
+        # pad stays at position 1 for non-beacon rows
+        new_input_ids[~add_beacon, 0] = token[~add_beacon]
+
+        # Count valid tokens: 2 if beacon added, 1 otherwise
+        valid_token_counts = torch.where(add_beacon, torch.tensor(2, device=input_ids.device), torch.tensor(1, device=input_ids.device))
+
+        return new_input_ids, valid_token_counts
+
     def decode(self, current_inputs: Optional[ContinuousBatchInput] = None):
         input_ids = current_inputs.input_ids
         position_ids = current_inputs.position_ids
+        num_predicted_tokens = current_inputs.num_predicted_tokens
+        valid_tokens = current_inputs.valid_tokens
 
         # TODO Setup for multi token generation
         valid_tokens = [1] * self.kv_cache.batch_size
@@ -216,17 +263,24 @@ class FoundationPredictor(BasePredictor):
                 position_ids=position_ids,
                 use_cache=True,
                 past_key_values=self.kv_cache,
-                logits_to_keep=1,
+                logits_to_keep=torch.max(valid_tokens).item(),
                 prefill=False,
                 valid_tokens=valid_tokens
             )
 
-        processed_output: ContinuousBatchOutput = self.process_outputs(outputs)
+        # Only returns 1 token per batch element
+        processed_output: ContinuousBatchOutput = self.process_outputs(outputs, valid_tokens)
+        
+        input_ids = processed_output.input_ids
+        num_predicted_tokens += 1
+        input_ids, valid_tokens = self.maybe_insert_beacon_tokens(input_ids, num_predicted_tokens)
+        position_ids = position_ids[:, -1:] + torch.arange(input_ids.shape[1])
 
-        position_ids = position_ids[:, -1:] + 1
         new_input = ContinuousBatchInput(
-            input_ids=processed_output.input_ids,
+            input_ids=input_ids,
             position_ids=position_ids,
+            valid_tokens=valid_tokens,
+            num_predicted_tokens=num_predicted_tokens
         )
 
         return new_input, processed_output
@@ -280,7 +334,8 @@ class FoundationPredictor(BasePredictor):
             )
         
         # Process outputs
-        processed_outputs = self.process_outputs(outputs)
+        valid_tokens = torch.ones((input_ids.shape[0], 1), device=self.model.device)    # No extra tokens during prefill
+        processed_outputs = self.process_outputs(outputs, valid_tokens=valid_tokens)
         # Update to account for the newly generated tokens
         position_ids = position_ids[:, -1:] + 1
         self.kv_cache.attention_mask[idxs_to_merge] = attention_mask[:len(idxs_to_merge)]
@@ -303,6 +358,8 @@ class FoundationPredictor(BasePredictor):
             new_input = ContinuousBatchInput(
                 input_ids=processed_outputs.input_ids,
                 position_ids=position_ids,
+                valid_tokens=valid_tokens,
+                num_predicted_tokens=torch.ones((self.kv_cache.batch_size, 1), device=self.model.device)
             )
 
             return (
@@ -312,16 +369,24 @@ class FoundationPredictor(BasePredictor):
             )
 
         # Merging inputs for next steps
+        # TODO If the current inputs contain padded position ids or input ids, we have to merge them with padding
         current_input_ids = current_inputs.input_ids
         current_input_ids[idxs_to_merge] = processed_outputs.input_ids
 
         current_position_ids = current_inputs.position_ids
         current_position_ids[idxs_to_merge] = position_ids
 
+        current_valid_tokens = current_inputs.valid_tokens
+        current_valid_tokens[idxs_to_merge] = valid_tokens
+
+        current_num_predicted_tokens = current_inputs.num_predicted_tokens
+        current_num_predicted_tokens[idxs_to_merge] = torch.ones((len(idxs_to_merge), 1), device=self.model.device)
+
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
             position_ids=current_position_ids,
-            attention_mask=attention_mask
+            valid_tokens=current_valid_tokens,
+            num_predicted_tokens=current_num_predicted_tokens
         )
 
         return new_input, processed_outputs, idxs_to_merge
