@@ -23,7 +23,6 @@ from surya.foundation.util import (
 from surya.common.surya.schema import TaskNames
 from surya.foundation.cache import (
     ContinuousBatchingCache,
-    ContinuousBatchingQuantizedCache,
 )
 from surya.settings import settings
 from surya.logging import get_logger, configure_logging
@@ -35,7 +34,6 @@ logger = get_logger()
 @dataclass
 class ContinuousBatchInput:
     input_ids: torch.Tensor
-    attention_mask: torch.Tensor
     position_ids: torch.Tensor
 
 
@@ -82,17 +80,26 @@ class FoundationPredictor(BasePredictor):
             "img_size": (1024, 512),  # 703 max tokens
             "max_tokens": 768,
         },
+        TaskNames.layout: {
+            "needs_bboxes": False,
+            "img_size": (1024, 1024),
+            "max_tokens": 200,
+        },
     }
 
     def __init__(self, checkpoint=None, device=settings.TORCH_DEVICE_MODEL, dtype=None):
         super().__init__(checkpoint, device, dtype)
-        self.kv_cache = None
         self.prompt_queue = deque()
         self.batch_prompt_mapping = None
+        self.kv_cache = None
 
         # Setup various tokens on-device
         self.device_pad_token = torch.tensor(
             self.processor.pad_token_id, device=self.model.device, dtype=torch.long
+        )
+        special_token_ids = torch.tensor(
+            [self.config.image_token_id] + self.config.register_token_ids,
+            device=self.device,
         )
 
     def get_encoder_chunk_size(self) -> int:
@@ -105,8 +112,15 @@ class FoundationPredictor(BasePredictor):
                 chunk_size = self.encoder_chunk_sizes[settings.TORCH_DEVICE_MODEL]
         return chunk_size
 
-    def setup_cache(self, batch_size: int):
-        self.kv_cache = None
+    def setup_cache(self, batch_size: int, max_cache_len: int):
+        self.kv_cache = ContinuousBatchingCache(
+            self.model.config,
+            batch_size,
+            max_cache_len,
+            text_sliding_window=self.model.config.sliding_window,
+            device=self.model.device,
+            dtype=self.model.dtype
+        )
         self.prompt_queue.clear()
         self.batch_prompt_mapping = {i: None for i in range(batch_size)}
 
@@ -187,27 +201,31 @@ class FoundationPredictor(BasePredictor):
 
     def decode(self, current_inputs: Optional[ContinuousBatchInput] = None):
         input_ids = current_inputs.input_ids
-        attention_mask = current_inputs.attention_mask
         position_ids = current_inputs.position_ids
 
+        # TODO Setup for multi token generation
+        valid_tokens = [1] * self.kv_cache.batch_size
+        # Pre-shift the attention mask based on the cache update
+        self.kv_cache.maybe_shift_attention_mask(
+            valid_tokens=valid_tokens,
+        )
         with settings.INFERENCE_MODE():
             outputs = self.model(
                 input_ids=input_ids,
-                attention_mask=attention_mask,
+                attention_mask=self.kv_cache.attention_mask,
                 position_ids=position_ids,
                 use_cache=True,
                 past_key_values=self.kv_cache,
                 logits_to_keep=1,
+                prefill=False,
+                valid_tokens=valid_tokens
             )
 
         processed_output: ContinuousBatchOutput = self.process_outputs(outputs)
 
-        attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1)
-
         position_ids = position_ids[:, -1:] + 1
         new_input = ContinuousBatchInput(
             input_ids=processed_output.input_ids,
-            attention_mask=attention_mask,
             position_ids=position_ids,
         )
 
@@ -219,6 +237,10 @@ class FoundationPredictor(BasePredictor):
             self.prompt_queue.popleft()
             for _ in range(min(self.num_empty_slots, len(self.prompt_queue)))
         ]
+        non_active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is None]
+        idxs_to_merge = non_active_idxs[: len(prompts)]
+        for i, prompt in zip(idxs_to_merge, prompts):
+            self.batch_prompt_mapping[i] = prompt.id
 
         batch_input = self.prepare_input(
             task_names=[p.task_name for p in prompts],
@@ -228,33 +250,17 @@ class FoundationPredictor(BasePredictor):
                 p.math_mode for p in prompts
             ],  # Pass math mode to the processor
         )
+        # Padding the inputs to max cache len to keep the static shape
         processed_inputs = self.processor(
-            batch_input, padding_side="left", device=self.model.device
+            batch_input, padding_side="left", device=self.model.device, pad_to_max_len=self.kv_cache.max_cache_len
         ).to(device=self.model.device)
 
+        # TODO pad these to max batch size - Maybe not required for now
         input_ids = processed_inputs["input_ids"].to(dtype=torch.long)
         image_tiles = processed_inputs["image_tiles"].to(dtype=self.model.dtype)
         grid_thw = processed_inputs["grid_thw"].to(dtype=torch.long)
         attention_mask = processed_inputs["attention_mask"].to(dtype=torch.long)
         position_ids = processed_inputs["position_ids"].to(dtype=torch.long)
-
-        if settings.FOUNDATION_MODEL_QUANTIZE:
-            try:
-                import hqq  # noqa: F401
-            except Exception:
-                raise ImportError(
-                    "Please install hqq to use quantized recognition model"
-                )
-
-        # Use quantized cache if setting activated
-        cache_config = QuantizedCacheConfig(
-            "HQQ", 8, 1, 1, device=self.model.device, compute_dtype=self.model.dtype
-        )
-        prefill_cache = (
-            ContinuousBatchingCache()
-            if not settings.FOUNDATION_MODEL_QUANTIZE
-            else ContinuousBatchingQuantizedCache(cache_config)
-        )
 
         with settings.INFERENCE_MODE():
             outputs = self.model(
@@ -264,41 +270,38 @@ class FoundationPredictor(BasePredictor):
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 inputs_embeds=None,
-                past_key_values=prefill_cache,
+                past_key_values=self.kv_cache,
                 use_cache=True,
                 logits_to_keep=1,
                 encoder_chunk_size=self.get_encoder_chunk_size(),
+                cache_idxs=idxs_to_merge,
+                prefill=True,
+                valid_tokens=None   # Not required during prefill
             )
-
+        
         # Process outputs
         processed_outputs = self.process_outputs(outputs)
-
-        # Merge new kv cache with existing, update batch mapping
-        non_active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is None]
-        idxs_to_merge = non_active_idxs[: len(prompts)]
-
-        assert len(idxs_to_merge) == len(prompts), (
-            "Number of prompts should match number of empty slots"
-        )
-        for i, prompt in zip(idxs_to_merge, prompts):
-            self.batch_prompt_mapping[i] = prompt.id
-
-        if self.kv_cache:
-            offset = self.kv_cache.merge(
-                prefill_cache, idxs_to_merge, self.model.device
-            )
-        else:
-            self.kv_cache = prefill_cache
-            offset = 0
-
-        # Adjust attention mask and position ids to account for the newly generated tokens
-        attention_mask = F.pad(attention_mask, (0, 1), mode="constant", value=1)
+        # Update to account for the newly generated tokens
         position_ids = position_ids[:, -1:] + 1
+        self.kv_cache.attention_mask[idxs_to_merge] = attention_mask[:len(idxs_to_merge)]
+
+        # Find text lenghts of each
+        is_special = (input_ids.unsqueeze(-1) == self.special_token_ids).any(-1)  # (batch, seq_len)
+        text_lengths = []
+        for i in range(len(idxs_to_merge)):
+            special_positions = is_special[i].nonzero(as_tuple=True)[0]
+            if len(special_positions) > 0:
+                # Assuming special tokens are contiguous at the start
+                prefix_len = special_positions[-1].item() + 1
+            else:
+                prefix_len = 0
+            text_lengths.append(input_ids.shape[1] - prefix_len)
+
+        self.kv_cache.update_text_counts(idxs_to_merge, text_lengths)
 
         if current_inputs is None:
             new_input = ContinuousBatchInput(
                 input_ids=processed_outputs.input_ids,
-                attention_mask=attention_mask,
                 position_ids=position_ids,
             )
 
@@ -308,57 +311,20 @@ class FoundationPredictor(BasePredictor):
                 range(processed_outputs.input_ids.shape[0]),
             )
 
-        # Merging input_ids, attention masks and position ids
+        # Merging inputs for next steps
         current_input_ids = current_inputs.input_ids
         current_input_ids[idxs_to_merge] = processed_outputs.input_ids
-
-        current_attention_mask = current_inputs.attention_mask
-        if offset > 0:
-            attention_mask = F.pad(attention_mask, (offset, 0), value=0)
-        elif offset < 0:
-            current_attention_mask = F.pad(
-                current_attention_mask, (abs(offset), 0), value=0
-            )
-        current_attention_mask[idxs_to_merge] = attention_mask
 
         current_position_ids = current_inputs.position_ids
         current_position_ids[idxs_to_merge] = position_ids
 
         new_input = ContinuousBatchInput(
             input_ids=current_input_ids,
-            attention_mask=current_attention_mask,
             position_ids=current_position_ids,
+            attention_mask=attention_mask
         )
 
         return new_input, processed_outputs, idxs_to_merge
-
-    # Due to continuous batching, we left pad the attention mask and cache to match new sequences
-    # This function trims the attention mask and the kv cache from the left whenever possible to remove excess padding
-    def maybe_trim_cache_padding(self, current_inputs: ContinuousBatchInput):
-        attention_mask = current_inputs.attention_mask
-        active_idxs = [k for k, v in self.batch_prompt_mapping.items() if v is not None]
-
-        # No more samples running
-        if not active_idxs:
-            return current_inputs
-
-        active_attention_mask = attention_mask[active_idxs]
-        first_non_padding_idx = (active_attention_mask == 1).to(torch.int).argmax(dim=1)
-        trim_start = first_non_padding_idx.min()
-
-        # Trimming too much slows things down
-        if trim_start < self.min_trim_length:
-            return current_inputs
-
-        logger.debug(f"Trimming cache from left by {trim_start} tokens.")
-        trimmed_attention_mask = attention_mask[:, trim_start:]
-        current_inputs.attention_mask = trimmed_attention_mask
-
-        # Trim the cache accordingly
-        if self.kv_cache:
-            self.kv_cache.trim_left(trim_start)
-
-        return current_inputs
 
     def prediction_loop(
         self,
@@ -380,7 +346,8 @@ class FoundationPredictor(BasePredictor):
         if batch_size is None:
             batch_size = self.get_batch_size()
         current_inputs = None
-        self.setup_cache(batch_size)
+        # TODO Calculate the max cache size from the images
+        self.setup_cache(batch_size, max_cache_len=1024+self.model.config.sliding_window)
 
         batch_max_tokens = {}
         for idx, (img, txt, task) in enumerate(
@@ -467,7 +434,6 @@ class FoundationPredictor(BasePredictor):
 
             # Update inputs and mark XLA step
             current_inputs = updated_inputs
-            current_inputs = self.maybe_trim_cache_padding(current_inputs)
             mark_step()
         pbar.close()
 

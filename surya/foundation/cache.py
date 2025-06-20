@@ -31,7 +31,7 @@ class ContinuousBatchingCache(StaticCache):
 
         # TODO Setup these as buffers since its a nn.Module
         self.attention_mask = torch.zeros((self.batch_size, self.max_cache_len), device=device, dtype=torch.int)
-        self.text_token_counts = [[0 for _ in range(batch_size)] for _ in range(self.num_layers)]
+        self.text_token_counts = [torch.zeros(self.batch_size) for _ in range(self.num_layers)]
 
     def _shift_attention_mask_left(self, batch_idx: int, shift_amount: int):
         self.attention_mask[batch_idx, :-shift_amount] = self.attention_mask[batch_idx, shift_amount:]
@@ -60,6 +60,52 @@ class ContinuousBatchingCache(StaticCache):
                 cache_kwargs
             )
 
+    def update_text_counts(
+        self,
+        cache_idxs: List[int],
+        new_text_lens: List[int]
+    ):
+        assert len(cache_idxs) == len(new_text_lens)
+        new_text_len_tensor = torch.tensor(new_text_lens)
+        for layer_idx in self.num_layers:
+            self.text_token_counts[layer_idx][cache_idxs] = new_text_len_tensor
+
+    """
+    This matches the implemenation of the cache update, but needs to be called before the first
+    cache update since the attention mask is used for other operations before the cache update
+    """
+    def maybe_shift_attention_mask(
+        self,
+        valid_tokens: List[int] = None,
+        cache_idxs: Optional[List[int]] = None
+    ):
+        if cache_idxs is None:
+            cache_idxs = list(range(self.batch_size))
+
+        for batch_idx, cache_idx in enumerate(cache_idxs):
+            new_text_len = valid_tokens[batch_idx]
+            if new_text_len == 0:
+                continue  # skip padded batch entry
+
+            # Same token counts for all layers when we start, so we take 0th
+            curr_text_cache_len = self.text_token_counts[0][cache_idx].item()
+
+            if curr_text_cache_len + new_text_len <= self.text_sliding_window:
+                # If we are under the sliding window length, shift the entire cache left
+                # Since we setup the max cache length with enough buffer, this will ONLY drop 
+                # left padding tokens out
+                shift = new_text_len
+                self._shift_attention_mask_left(cache_idx, shift)
+            else:
+                # We need to figure out how many text tokens to keep and where to place them
+                keep = self.text_sliding_window - new_text_len
+                assert keep > 0, "Cannot add more new text tokens than the sliding window"
+                
+                # Shift entire cache left to make room for full text sliding window
+                shift_amount = self.text_sliding_window - curr_text_cache_len
+                if shift_amount > 0:        # Cannot be negative, may be exactly 0
+                    self._shift_attention_mask_left(cache_idx, shift_amount)
+                
     def _prefill_update(
         self,
         key_states: torch.Tensor,
@@ -112,7 +158,7 @@ class ContinuousBatchingCache(StaticCache):
             if new_text_len == 0:
                 continue  # skip padded batch entry
 
-            curr_text_cache_len = self.text_token_counts[layer_idx][cache_idx]
+            curr_text_cache_len = self.text_token_counts[layer_idx][cache_idx].item()
 
             k_new = key_states[batch_idx, :, :new_text_len, :]  # (H, new_text_len, D)
             v_new = value_states[batch_idx, :, :new_text_len, :]
