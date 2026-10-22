@@ -32,9 +32,11 @@ We also ship smaller models for line-level text detection and ocr error detectio
 
 ## Try Datalab's Managed Platform
 
-Our managed platform runs both Surya, and variants of our highest accuracy model, [Chandra](https://github.com/datalab-to/chandra).
+Our managed platform uses Surya, our highest accuracy model [Chandra](https://github.com/datalab-to/chandra), and other models.
 
-Get started with **$5 in free credits** — [sign up](https://www.datalab.to/?utm_source=gh-surya) (takes under 30 seconds) or try our free [public playground](https://www.datalab.to/playground?utm_source=gh-surya).
+The Datalab API turns documents into verifiable knowledge your agents act on. Every result traces back to its page and position, and one API can parse, extract, fill and edit documents.
+
+Get started with **about 5,000 free convert pages every month** (work email) — [sign up](https://www.datalab.to/?utm_source=gh-surya) (takes under 30 seconds) or try our free [public playground](https://www.datalab.to/playground?utm_source=gh-surya).
 
 ## Model Information
 
@@ -355,6 +357,7 @@ export SURYA_INFERENCE_URL=http://localhost:8000/v1
 
 - This is specialized for document OCR. Performance on photos or natural scenes is not the goal.
 - Layout / OCR / table_rec all need a running inference backend (vllm or llama.cpp). Detection runs purely on torch and works without it.
+- For hard documents (handwriting, complex tables, math) or large volumes, the hosted [Datalab API](https://www.datalab.to/?utm_source=gh-surya) uses Chandra and other models, with no infrastructure to manage.
 
 ## Troubleshooting
 
@@ -389,7 +392,7 @@ Pareto-optimal on the size-vs-score frontier, and best in class under 3B params.
 | Model                       | Params    | Score    |
 |-----------------------------|----------:|---------:|
 | Infinity-Parser2-Pro        |     35.1B |     87.6 |
-| Chandra OCR 2 (Datalab)     |      4.0B |     85.9 |
+| Chandra OCR 2 (Datalab)     |      4.0B |     85.8 |
 | dots.mocr                   |      3.0B |     83.9 |
 | **Surya OCR 2** (Datalab)   | **0.65B** | **83.3** |
 | LightOnOCR 2-1B \*          |      1.0B |     83.2 |
