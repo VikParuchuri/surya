@@ -36,6 +36,71 @@ ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "surya_screenshot")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Requests may only name files inside these roots. Uploads land in UPLOAD_DIR, so
+# that is always allowed; set SURYA_SCREENSHOT_ALLOWED_DIRS (os.pathsep-separated)
+# to also browse your own local corpus by path.
+ALLOWED_DIRS_ENV = "SURYA_SCREENSHOT_ALLOWED_DIRS"
+# Bind loopback by default; the app has no auth, so it must not be reachable off-box
+# unless the operator opts in via SURYA_SCREENSHOT_HOST.
+HOST_ENV = "SURYA_SCREENSHOT_HOST"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8504
+
+
+def allowed_dirs() -> List[str]:
+    """Resolved roots that a request-supplied file_path may live under."""
+    roots = [os.path.realpath(UPLOAD_DIR)]
+    for extra in os.environ.get(ALLOWED_DIRS_ENV, "").split(os.pathsep):
+        extra = extra.strip()
+        if extra:
+            roots.append(os.path.realpath(os.path.expanduser(extra)))
+    return roots
+
+
+def _is_within(root: str, target: str) -> bool:
+    """True if target is root or sits under it, compared per path component.
+
+    Both inputs must already be absolute and fully resolved. Component-wise
+    comparison is what stops "<root>_evil" from passing as "<root>".
+    """
+    try:
+        return os.path.commonpath([root, target]) == root
+    except ValueError:
+        # Different drives / mixed absolute-relative: not containable.
+        return False
+
+
+class PathNotAllowed(Exception):
+    """A request named a file outside every allowed root, or one that is absent.
+
+    Carries no path text: the message is returned to an unauthenticated caller,
+    so it must not confirm what exists on disk or echo absolute paths.
+    """
+
+
+def resolve_request_path(raw: str) -> str:
+    """Validate a request-supplied file_path and return a safe absolute path.
+
+    Resolves symlinks before the containment check, so a link inside an allowed
+    root cannot point out of it. Containment is checked *before* existence so the
+    routes cannot be used to probe for arbitrary paths.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        raise PathNotAllowed("file_path is required")
+
+    resolved = os.path.realpath(os.path.join(UPLOAD_DIR, os.path.expanduser(raw)))
+    roots = allowed_dirs()
+    if not any(_is_within(root, resolved) for root in roots):
+        raise PathNotAllowed(
+            "file_path is outside the allowed directories; upload the file, or "
+            f"add its directory to {ALLOWED_DIRS_ENV}"
+        )
+    if not os.path.isfile(resolved):
+        raise PathNotAllowed("file_path is not an available file")
+    return resolved
+
+
 _rec: Optional[RecognitionPredictor] = None
 
 
@@ -131,11 +196,10 @@ def index():
 
 @app.route("/info", methods=["POST"])
 def info():
-    path = (request.json or {}).get("file_path", "").strip()
-    if not path:
-        return jsonify({"error": "file_path is required"}), 400
-    if not os.path.exists(path):
-        return jsonify({"error": f"File not found: {path}"}), 400
+    try:
+        path = resolve_request_path((request.json or {}).get("file_path", ""))
+    except PathNotAllowed as e:
+        return jsonify({"error": str(e)}), 400
     try:
         return jsonify({"page_count": _page_count(path)})
     except Exception as e:
@@ -166,10 +230,11 @@ def upload():
 def page():
     """Render a single page for preview (no OCR)."""
     data = request.json or {}
-    path = data.get("file_path", "").strip()
     page_num = int(data.get("page", 0))
-    if not path or not os.path.exists(path):
-        return jsonify({"error": "valid file_path is required"}), 400
+    try:
+        path = resolve_request_path(data.get("file_path", ""))
+    except PathNotAllowed as e:
+        return jsonify({"error": str(e)}), 400
     try:
         img = _render_page(path, page_num, settings.IMAGE_DPI_HIGHRES)
         return jsonify(
@@ -187,10 +252,11 @@ def page():
 def process():
     """Run full-page OCR on one page; return the page image + OCR HTML + blocks."""
     data = request.json or {}
-    path = data.get("file_path", "").strip()
     page_num = int(data.get("page", 0))
-    if not path or not os.path.exists(path):
-        return jsonify({"error": "valid file_path is required"}), 400
+    try:
+        path = resolve_request_path(data.get("file_path", ""))
+    except PathNotAllowed as e:
+        return jsonify({"error": str(e)}), 400
     try:
         img = _render_page(path, page_num, settings.IMAGE_DPI_HIGHRES)
         page_result = get_rec()([img], full_page=True)[0]
@@ -219,7 +285,11 @@ def process():
 
 
 def main():
-    app.run(host="0.0.0.0", port=8504)
+    # Loopback by default. Export SURYA_SCREENSHOT_HOST=0.0.0.0 to expose it, but
+    # note the app is unauthenticated -- only do that on a trusted network.
+    host = os.environ.get(HOST_ENV, "").strip() or DEFAULT_HOST
+    port = int(os.environ.get("SURYA_SCREENSHOT_PORT", "") or DEFAULT_PORT)
+    app.run(host=host, port=port)
 
 
 if __name__ == "__main__":
