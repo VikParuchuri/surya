@@ -84,7 +84,7 @@ class DetectionPredictor(BasePredictor):
     def prepare_image(self, img):
         new_size = (self.processor.size["width"], self.processor.size["height"])
 
-        # This double resize actually necessary for downstream accuracy
+        # This double resize is actually necessary for downstream accuracy
         img.thumbnail(new_size, Image.Resampling.LANCZOS)
         img = img.resize(
             new_size, Image.Resampling.LANCZOS
